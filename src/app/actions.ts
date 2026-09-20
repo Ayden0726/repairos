@@ -322,3 +322,34 @@ export async function saveThemeAction(formData: FormData) {
   });
   revalidatePath("/");
 }
+
+export async function createStaffAction(formData: FormData) {
+  try {
+    const actor = await requirePermission("staff.manage");
+    await auth.createStaffUser(actor, {
+      name: formString(formData, "name"),
+      email: formString(formData, "email"),
+      password: formString(formData, "password"),
+      roleId: formString(formData, "roleId"),
+      phone: formString(formData, "phone") || undefined,
+    });
+    revalidatePath("/settings");
+    redirect("/settings?staff=created");
+  } catch (error) {
+    if ((error as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw error;
+    redirect(`/settings?error=${encodeURIComponent(toPublicError(error).error)}`);
+  }
+}
+
+export async function updateStaffStatusAction(formData: FormData) {
+  try {
+    const actor = await requirePermission("staff.manage");
+    const status = formString(formData, "status") === "SUSPENDED" ? "SUSPENDED" : "ACTIVE";
+    await auth.updateStaffStatus(actor, formString(formData, "userId"), status);
+    revalidatePath("/settings");
+    redirect(status === "SUSPENDED" ? "/settings?staff=suspended" : "/settings?staff=restored");
+  } catch (error) {
+    if ((error as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw error;
+    redirect(`/settings?error=${encodeURIComponent(toPublicError(error).error)}`);
+  }
+}

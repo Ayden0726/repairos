@@ -14,7 +14,7 @@ The stack is Next.js, TypeScript, Prisma, PostgreSQL, Redis and Caddy. Nothing i
 - **Used tech** — buy-in valuation, refurbishment tickets, ready-for-sale stock
 - **Calendar & roster** — drop-offs, consultations, shifts, due dates, supplier deliveries
 - **Finance** — Australian GST, invoices, deposits, refunds, Square as an optional provider
-- **Settings** — searchable admin centre for roles, statuses, job types, integrations, backups and health
+- **Settings** — searchable admin centre for staff accounts, roles, statuses, job types, integrations, backups and health
 
 ## Local development
 
@@ -42,6 +42,20 @@ Demo staff (password `Riverside!2026`):
 | Front desk | sophie@riversidetech.com.au |
 
 A fresh database without `SEED_DEMO` opens the first-run wizard and blocks normal use until an owner account exists.
+
+### Solo owner who is also the technician
+
+Use the owner account created in setup as your everyday login. Owner has every permission, so you can intake jobs, assign them to yourself, run timers and diagnostics, invoice and take payment from one account. You do not need a second “technician” login for yourself.
+
+When someone else joins, open **Settings → Users → Add staff account**, pick a role, set a temporary password and give it to them in person. There is no invite email.
+
+| Role | What they can do |
+| --- | --- |
+| Owner | Created once at setup. Full shop, including staff and settings. |
+| Admin | Second full-access login if you want a backup. |
+| Manager | Operations without role, update or privacy changes. |
+| Technician | Workshop work only. No pricing, refunds or settings. |
+| Front desk | Intake, customers, bookings and taking payment. |
 
 ```bash
 npm run typecheck

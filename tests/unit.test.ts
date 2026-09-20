@@ -60,6 +60,8 @@ describe("RBAC catalogue", () => {
     expect(ROLE_PERMISSIONS.technician).not.toContain("pricing.view");
     expect(ROLE_PERMISSIONS.technician).not.toContain("reports.financial");
     expect(ROLE_PERMISSIONS.technician).not.toContain("payments.refund");
+    expect(ROLE_PERMISSIONS.technician).not.toContain("staff.manage");
+    expect(ROLE_PERMISSIONS.owner).toContain("staff.manage");
     expect(ROLE_PERMISSIONS.owner.length).toBe(ALL_PERMISSION_KEYS.length);
   });
 });

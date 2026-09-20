@@ -5,12 +5,38 @@ import { runHealthChecks } from "@/server/services/health.service";
 import { PERMISSIONS } from "@/server/permissions";
 import { SettingsCentre } from "@/components/settings/settings-centre";
 
-export default async function SettingsPage() {
+const STAFF_NOTICES: Record<string, string> = {
+  created: "Staff account created. They can sign in with the email and password you set.",
+  suspended: "That account can no longer sign in.",
+  restored: "That account can sign in again.",
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; staff?: string }>;
+}) {
   const actor = await requirePermission("settings.view");
+  const params = await searchParams;
   const [roles, staff, statuses, types, priorities, labour, groups, methods, sms, printers, backups, incidents] =
     await Promise.all([
-      prisma.role.findMany({ include: { permissions: true } }),
-      prisma.user.findMany({ where: { archivedAt: null }, include: { role: true } }),
+      prisma.role.findMany({
+        include: { permissions: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.user.findMany({
+        where: { archivedAt: null },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          isOwner: true,
+          role: { select: { name: true, key: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
       prisma.ticketStatus.findMany({ orderBy: { sortOrder: "asc" } }),
       prisma.ticketType.findMany({ orderBy: { sortOrder: "asc" } }),
       prisma.ticketPriority.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -35,7 +61,11 @@ export default async function SettingsPage() {
   return (
     <SettingsCentre
       actorName={actor.name}
+      actorId={actor.id}
       canManage={actor.isOwner || actor.permissions.has("settings.manage")}
+      canManageStaff={actor.isOwner || actor.permissions.has("staff.manage")}
+      notice={params.staff ? STAFF_NOTICES[params.staff] : undefined}
+      error={params.error}
       permissions={[...PERMISSIONS]}
       data={{
         roles,

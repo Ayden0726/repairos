@@ -6,7 +6,7 @@ import { createSession, destroySession, getRawSession, promoteSessionAfter2fa } 
 import { consumeRecoveryCode, generateRecoveryCodes, generateTotpSecret, storeRecoveryCodes, verifyTotp, revealTotpSecret } from "../auth/totp";
 import { rateLimit } from "../redis";
 import { AppError, RateLimitError, UnauthorizedError, ValidationError } from "../errors";
-import { requestMeta, type Actor } from "../actor";
+import { assertCan, requestMeta, type Actor } from "../actor";
 import { getSetting } from "../config/settings";
 
 const loginSchema = z.object({
@@ -113,25 +113,51 @@ export async function createStaffUser(
   actor: Actor,
   input: { name: string; email: string; password: string; roleId: string; phone?: string },
 ) {
-  const problem = validatePasswordStrength(input.password);
+  assertCan(actor, "staff.manage");
+  const data = z
+    .object({
+      name: z.string().trim().min(1, "Name is required."),
+      email: z.string().email("Enter a valid email."),
+      password: z.string().min(1),
+      roleId: z.string().min(1, "Choose a role."),
+      phone: z.string().trim().optional(),
+    })
+    .parse(input);
+  const problem = validatePasswordStrength(data.password);
   if (problem) throw new ValidationError(problem);
-  const existing = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+  const role = await prisma.role.findUnique({ where: { id: data.roleId } });
+  if (!role) throw new ValidationError("Choose a valid role.");
+  if (role.key === "owner") {
+    throw new ValidationError("The owner login is created during setup. Add an Admin if you need a second full-access account.");
+  }
+  const email = data.email.toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new AppError("EXISTS", "A staff member with that email already exists.");
   const user = await prisma.user.create({
     data: {
-      name: input.name,
-      email: input.email.toLowerCase(),
-      phone: input.phone,
-      passwordHash: await hashPassword(input.password),
-      roleId: input.roleId,
+      name: data.name,
+      email,
+      phone: data.phone || null,
+      passwordHash: await hashPassword(data.password),
+      roleId: data.roleId,
       preferences: { create: {} },
     },
   });
-  await audit({ actor, action: "staff.create", entityType: "User", entityId: user.id, newValue: { email: user.email } });
+  await audit({ actor, action: "staff.create", entityType: "User", entityId: user.id, newValue: { email: user.email, role: role.key } });
   return user;
 }
 
 export async function updateStaffStatus(actor: Actor, userId: string, status: "ACTIVE" | "SUSPENDED") {
+  assertCan(actor, "staff.manage");
+  if (userId === actor.id) throw new ValidationError("You cannot suspend your own account.");
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || target.archivedAt) throw new ValidationError("That staff member was not found.");
+  if (status === "SUSPENDED" && target.isOwner) {
+    const otherOwners = await prisma.user.count({
+      where: { isOwner: true, status: "ACTIVE", archivedAt: null, id: { not: userId } },
+    });
+    if (otherOwners === 0) throw new ValidationError("You cannot suspend the only owner.");
+  }
   const user = await prisma.user.update({ where: { id: userId }, data: { status } });
   await audit({ actor, action: "staff.status", entityType: "User", entityId: userId, newValue: { status } });
   return user;

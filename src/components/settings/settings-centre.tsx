@@ -2,12 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { StaffAccounts, type RoleOption, type StaffRow } from "@/components/settings/staff-accounts";
 
 type Props = {
   actorName: string;
+  actorId: string;
   canManage: boolean;
+  canManageStaff: boolean;
   permissions: Array<{ key: string; group: string; label: string }>;
   data: Record<string, unknown>;
+  notice?: string;
+  error?: string;
 };
 
 const SECTIONS = [
@@ -24,7 +29,7 @@ const SECTIONS = [
   "Incidents",
 ];
 
-export function SettingsCentre({ data, permissions }: Props) {
+export function SettingsCentre({ data, permissions, actorId, canManageStaff, notice, error }: Props) {
   const [q, setQ] = useState("");
   const shown = useMemo(
     () => SECTIONS.filter((s) => s.toLowerCase().includes(q.toLowerCase()) || q.length === 0),
@@ -36,8 +41,8 @@ export function SettingsCentre({ data, permissions }: Props) {
     statuses: Array<{ name: string; colour: string }>;
     types: Array<{ name: string; prefix: string }>;
     priorities: Array<{ name: string }>;
-    staff: Array<{ name: string; email: string; role: { name: string } }>;
-    roles: Array<{ name: string; permissions: Array<{ permission: string }> }>;
+    staff: StaffRow[];
+    roles: Array<{ id: string; name: string; key: string; description: string | null; permissions: Array<{ permission: string }> }>;
     labour: Array<{ name: string; hourlyRate: unknown }>;
     groups: Array<{ name: string }>;
     methods: Array<{ name: string; isActive: boolean }>;
@@ -73,15 +78,19 @@ export function SettingsCentre({ data, permissions }: Props) {
         </Panel>
       ) : null}
       {shown.includes("Users") ? (
-        <Panel title="Users">
-          <ul className="text-sm">
-            {typed.staff.map((s) => (
-              <li key={s.email}>
-                {s.name} · {s.email} · {s.role.name}
-              </li>
-            ))}
-          </ul>
-        </Panel>
+        <StaffAccounts
+          staff={typed.staff}
+          roles={typed.roles.map((role): RoleOption => ({
+            id: role.id,
+            name: role.name,
+            key: role.key,
+            description: role.description,
+          }))}
+          canManage={canManageStaff}
+          actorId={actorId}
+          notice={notice}
+          error={error}
+        />
       ) : null}
       {shown.includes("Roles") ? (
         <Panel title="Roles & permissions">
