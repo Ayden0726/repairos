@@ -77,7 +77,7 @@ export async function setupAction(formData: FormData) {
     });
     const jar = await cookies();
     jar.set(SETUP_COOKIE, "1", { path: "/", httpOnly: true, sameSite: "lax" });
-    redirect("/login");
+    redirect("/login?from=setup");
   } catch (error) {
     if ((error as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw error;
     redirect(`/setup?error=${encodeURIComponent(toPublicError(error).error)}`);

@@ -31,6 +31,32 @@ npm run dev
 
 The app listens on **http://127.0.0.1:47821**.
 
+### Functional preview from the setup wizard
+
+The seeded demo skips setup and signs you in as Riverside Tech. To walk the real first-run path, start from an **empty** database and **do not** run the seed.
+
+```bash
+cp .env.example .env
+# set DATABASE_URL, REDIS_URL, SESSION_SECRET and ENCRYPTION_KEY
+# leave SEED_DEMO=false
+npm install
+npx prisma migrate reset --force --skip-seed
+npm run dev
+```
+
+Open **http://127.0.0.1:47821**. You should land on `/setup`, not login.
+
+1. Business name (required). Phone, email, ABN and address are optional.
+2. Keep GST ticked if you are registered. Labour defaults to `$110/hr` and diagnostic fee to `$89`.
+3. Owner name, email and password. Password must be **at least 10 characters** with upper, lower and a number (for example `Workshop!2026`).
+4. **Complete setup**. You are sent to login.
+5. Sign in with **that** owner email and password (not the Maya demo user).
+6. The shop is empty. Add a customer, click **New Job**, assign it to yourself, then run the job as the technician.
+
+If you already seeded the demo, `/setup` redirects to login. Reset with `npx prisma migrate reset --force --skip-seed` (or `npm run db:fresh`) and start `npm run dev` again.
+
+Docker is the same idea: keep `SEED_DEMO=false` in `.env`, run `docker compose up -d --build`, then `docker compose exec app npx prisma migrate deploy`. Do not run `prisma/seed.ts`. Open the site and complete `/setup`.
+
 Demo staff (password `Riverside!2026`):
 
 | Role | Email |

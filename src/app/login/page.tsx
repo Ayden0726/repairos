@@ -7,9 +7,14 @@ import { Label } from "@/components/ui/label";
 import { isSetupComplete } from "@/server/config/settings";
 import { redirect } from "next/navigation";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; next?: string; from?: string }>;
+}) {
   if (!(await isSetupComplete())) redirect("/setup");
   const params = await searchParams;
+  const fromSetup = params.from === "setup";
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted/40 px-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 shadow-sm">
@@ -19,7 +24,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </span>
           <div>
             <h1 className="text-lg font-semibold">WorkshopOS</h1>
-            <p className="text-sm text-muted-foreground">Sign in to the workshop</p>
+            <p className="text-sm text-muted-foreground">
+              {fromSetup ? "Shop is ready. Sign in with the owner account you just created." : "Sign in to the workshop"}
+            </p>
           </div>
         </div>
         {params.error ? (
@@ -30,7 +37,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <form action={loginAction} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" autoComplete="username" required defaultValue="maya@riversidetech.com.au" />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              required
+              defaultValue={fromSetup ? "" : "maya@riversidetech.com.au"}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
@@ -40,12 +54,20 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             Sign in
           </Button>
         </form>
-        <p className="mt-6 text-xs text-muted-foreground">
-          Demo owner: maya@riversidetech.com.au · Riverside!2026
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          First install? <Link className="underline" href="/setup">Run the setup wizard</Link>
-        </p>
+        {fromSetup ? (
+          <p className="mt-6 text-xs text-muted-foreground">
+            The shop starts empty. Add a customer, then New Job, and assign the ticket to yourself.
+          </p>
+        ) : (
+          <>
+            <p className="mt-6 text-xs text-muted-foreground">
+              Demo owner: maya@riversidetech.com.au · Riverside!2026
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              First install? <Link className="underline" href="/setup">Run the setup wizard</Link>
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { ALL_PERMISSION_KEYS, ROLE_PERMISSIONS } from "../permissions";
 import { prisma } from "../db";
 import { hashPassword, validatePasswordStrength } from "../auth/password";
-import { setSetting } from "../config/settings";
+import { setSetting, isSetupComplete } from "../config/settings";
 import { ValidationError } from "../errors";
 
 export const DEFAULT_STATUSES = [
@@ -211,6 +211,7 @@ export async function completeSetup(input: {
 }) {
   const problem = validatePasswordStrength(input.owner.password);
   if (problem) throw new ValidationError(problem);
+  if (await isSetupComplete()) throw new ValidationError("Setup is already complete.");
   await ensureFoundation();
 
   const ownerRole = await prisma.role.findUniqueOrThrow({ where: { key: "owner" } });
@@ -231,10 +232,10 @@ export async function completeSetup(input: {
   await setSetting("finance.defaultLabourRate", input.labourDefault, owner.id);
   await setSetting("warranty.defaultDays", 90, owner.id);
   await setSetting("security.twoFactor", {
-    requireOwners: true,
-    requireAdmins: true,
+    requireOwners: false,
+    requireAdmins: false,
     requireManagers: false,
-    requireRemote: true,
+    requireRemote: false,
     requireAll: false,
   }, owner.id);
   await setSetting("backup", { directory: process.env.BACKUP_DIR ?? "./data/backups", schedule: "0 2 * * *", retainDays: 30 }, owner.id);

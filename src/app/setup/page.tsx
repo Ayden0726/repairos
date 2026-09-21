@@ -51,7 +51,8 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
             <Field name="ownerPassword" label="Password" type="password" required className="md:col-span-2" />
           </div>
           <p className="text-xs text-muted-foreground">
-            2FA can be required for owners, managers or remote access from Settings → Security after you sign in.
+            Password must be at least 10 characters with upper, lower and a number. After this you sign in as owner — you
+            do not need a second technician account. Turn on 2FA later from Settings → Security.
           </p>
         </section>
         <Button type="submit" size="lg">
