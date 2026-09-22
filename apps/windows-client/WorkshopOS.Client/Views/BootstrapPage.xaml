@@ -1,0 +1,12 @@
+<Page
+    x:Class="WorkshopOS.Client.Views.BootstrapPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+      <TextBlock Text="WorkshopOS" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
+      <TextBlock Text="Connecting to server…" Opacity="0.7" HorizontalAlignment="Center" />
+      <ProgressRing IsActive="True" Width="36" Height="36" />
+    </StackPanel>
+  </Grid>
+</Page>

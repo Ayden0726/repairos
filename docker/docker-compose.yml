@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workshopos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workshopos_dev}
+      POSTGRES_DB: workshopos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workshopos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=workshopos;Username=workshopos;Password=${POSTGRES_PASSWORD:-workshopos_dev}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-change-me-to-a-long-random-secret-key-32+}
+      Jwt__Issuer: WorkshopOS
+      Jwt__Audience: WorkshopOS.Client
+      Seed__Demo: ${SEED_DEMO:-false}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+    ports:
+      - "${API_PORT:-5088}:8080"
+    volumes:
+      - files_data:/data/files
+      - backup_data:/data/backups
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=workshopos;Username=workshopos;Password=${POSTGRES_PASSWORD:-workshopos_dev}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-change-me-to-a-long-random-secret-key-32+}
+
+volumes:
+  postgres_data:
+  redis_data:
+  files_data:
+  backup_data:

@@ -1,0 +1,15 @@
+<Page
+    x:Class="WorkshopOS.Client.Views.ServerConnectPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="32">
+    <StackPanel MaxWidth="420" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+      <TextBlock Text="WorkshopOS" FontSize="28" FontWeight="SemiBold" />
+      <TextBlock Text="Connect to your WorkshopOS server" Opacity="0.75" TextWrapping="Wrap" />
+      <TextBox Header="Server URL" Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay}" PlaceholderText="http://127.0.0.1:5088" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+      <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Opacity="0.7" />
+      <Button Content="Connect" Command="{x:Bind ViewModel.ConnectCommand}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+    </StackPanel>
+  </Grid>
+</Page>
