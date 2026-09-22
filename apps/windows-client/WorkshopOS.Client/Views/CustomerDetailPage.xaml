@@ -1,0 +1,30 @@
+<Page
+    x:Class="WorkshopOS.Client.Views.CustomerDetailPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer Padding="24">
+    <StackPanel Spacing="12" MaxWidth="720">
+      <TextBlock Text="{x:Bind ViewModel.Customer.DisplayName, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="{x:Bind ViewModel.Customer.Phone, Mode=OneWay}" Opacity="0.75" />
+      <TextBlock Text="{x:Bind ViewModel.Customer.Email, Mode=OneWay}" Opacity="0.75" />
+      <Button Content="New repair for this customer" Click="NewRepair_Click" Style="{StaticResource AccentButtonStyle}" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
+      <TextBlock Text="Devices" FontWeight="SemiBold" Margin="0,12,0,0" />
+      <ItemsControl ItemsSource="{x:Bind ViewModel.Customer.Devices, Mode=OneWay}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Margin="0,4" Text="{Binding Label}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Text="Recent repairs" FontWeight="SemiBold" Margin="0,12,0,0" />
+      <ItemsControl ItemsSource="{x:Bind ViewModel.Customer.RecentRepairs, Mode=OneWay}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Margin="0,4" Text="{Binding TicketNumber}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </ScrollViewer>
+</Page>

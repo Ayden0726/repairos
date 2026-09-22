@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0-phase2 — 2026-09-22
+
+### Added
+
+- Customers API (list/search, create/update, detail with devices and recent repairs)
+- Devices API (per-customer list, create/update)
+- Repair tickets with numbering (`REP-YYYY-#####`), statuses, types, priorities
+- Intake fields (condition, accessories, encrypted passcode)
+- Immutable repair timeline events and customer/internal notes
+- Assign technician, change status, update diagnosis
+- Global search returns repairs, customers, and devices
+- WinUI pages: Customers, Customer detail, Repairs, New repair intake, Repair detail
+- Integration test covering customer → device → repair → status → timeline → search
+
 ## 1.0.0-phase1 — 2026-09-22
 
 ### Added

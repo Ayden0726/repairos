@@ -22,17 +22,28 @@ Design docs: [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) 
 
 ## Phase 1 status
 
-Working now:
+Working:
 
 - First-run setup (business + owner)
 - Login / refresh / logout (JWT)
 - Roles & permissions catalogue
 - Health endpoint
 - Settings business profile read
-- Windows shell: connect → setup/login → sidebar → search shell → Settings / Users
-- Later modules open a clear **Not yet implemented (Phase N)** page — no fake data
+- Windows shell: connect → setup/login → sidebar → search → Settings / Users
 
-Not in Phase 1: repairs, inventory, quotes, invoices, live dashboard metrics, SMS, AI, installer.
+## Phase 2 status
+
+Working:
+
+- Customers (list, create, detail)
+- Devices on customers
+- Repair intake and ticket list/detail
+- Status changes, notes, diagnosis, timeline
+- Search across repairs/customers/devices
+
+Later modules still show **Not yet implemented (Phase N)**.
+
+Not yet: live dashboard metrics, quotes, inventory, invoices, SMS, AI, installer.
 
 ## Run the API (Linux / macOS / Windows)
 

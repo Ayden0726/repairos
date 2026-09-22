@@ -3,7 +3,7 @@
 | Phase | Focus | Exit criteria |
 | --- | --- | --- |
 | **1** | Solution, API, auth, permissions, WinUI shell, Docker, health, setup | Build + tests green; login works; shell navigates |
-| **2** | Customers, devices, repairs, intake, timeline | Create/open repair end-to-end |
+| **2** | Customers, devices, repairs, intake, timeline | **Done** — create/open repair end-to-end |
 | **3** | Full operational dashboard | Cards/pipeline/workload use live queries + tests |
 | **4** | Quotes + pricing engine | Quote → approve |
 | **5** | Inventory, barcodes, POs, reservations | Reserve/consume stock on repair |

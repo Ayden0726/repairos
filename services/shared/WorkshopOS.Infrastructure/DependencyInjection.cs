@@ -20,6 +20,7 @@ public static class DependencyInjection
             opt.UseNpgsql(config.GetConnectionString("Default")));
 
         services.AddScoped<TokenService>();
+        services.AddScoped<SecretProtector>();
         services.AddScoped<IClock, SystemClock>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<ISetupService, SetupService>();
@@ -27,6 +28,9 @@ public static class DependencyInjection
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IDeviceService, DeviceService>();
+        services.AddScoped<IRepairService, RepairService>();
 
         var jwt = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)

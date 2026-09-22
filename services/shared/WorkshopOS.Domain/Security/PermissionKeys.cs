@@ -9,6 +9,9 @@ public static class PermissionKeys
         ("tickets.edit", "Tickets", "Edit tickets"),
         ("tickets.delete", "Tickets", "Delete or archive tickets"),
         ("tickets.assign", "Tickets", "Assign technicians"),
+        ("tickets.status", "Tickets", "Change ticket status"),
+        ("tickets.internal_notes", "Tickets", "View and write internal notes"),
+        ("tickets.credentials.view", "Tickets", "Reveal device passwords"),
         ("customers.view", "Customers", "View customers"),
         ("customers.manage", "Customers", "Manage customers"),
         ("devices.view", "Devices", "View devices"),
@@ -57,15 +60,16 @@ public static class PermissionKeys
         ["manager"] = AllKeys.Where(k => k is not ("roles.manage" or "incidents.manage" or "privacy.manage")).ToArray(),
         ["technician"] =
         [
-            "tickets.view", "tickets.create", "tickets.edit", "tickets.assign",
+            "tickets.view", "tickets.create", "tickets.edit", "tickets.assign", "tickets.status",
+            "tickets.internal_notes", "tickets.credentials.view",
             "customers.view", "devices.view", "inventory.view", "quotes.view",
             "builds.view", "builds.manage", "used.view", "bookings.view",
             "knowledge.view", "knowledge.manage", "ai.use"
         ],
         ["front_desk"] =
         [
-            "tickets.view", "tickets.create", "tickets.edit", "tickets.assign",
-            "customers.view", "customers.manage", "devices.view", "inventory.view",
+            "tickets.view", "tickets.create", "tickets.edit", "tickets.assign", "tickets.status",
+            "customers.view", "customers.manage", "devices.view", "devices.manage", "inventory.view",
             "quotes.view", "quotes.manage", "invoices.view", "invoices.manage",
             "payments.view", "payments.record", "builds.view", "used.view",
             "bookings.view", "bookings.manage", "knowledge.view", "ai.use"

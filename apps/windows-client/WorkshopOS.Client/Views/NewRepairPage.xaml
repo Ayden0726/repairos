@@ -1,0 +1,19 @@
+<Page
+    x:Class="WorkshopOS.Client.Views.NewRepairPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:w="using:WorkshopOS.Contracts.Workshop">
+  <ScrollViewer Padding="24">
+    <StackPanel MaxWidth="560" Spacing="12">
+      <TextBlock Text="New repair / intake" FontSize="22" FontWeight="SemiBold" />
+      <ComboBox Header="Customer" ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
+                SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
+                DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" />
+      <TextBox Header="Device brand" Text="{x:Bind ViewModel.Brand, Mode=TwoWay}" PlaceholderText="Apple" />
+      <TextBox Header="Device model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" PlaceholderText="iPhone 13" />
+      <TextBox Header="Reported fault" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}" AcceptsReturn="True" Height="100" TextWrapping="Wrap" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+      <Button Content="Create repair" Command="{x:Bind ViewModel.CreateCommand}" Style="{StaticResource AccentButtonStyle}" />
+    </StackPanel>
+  </ScrollViewer>
+</Page>

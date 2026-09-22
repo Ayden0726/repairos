@@ -265,8 +265,8 @@ public sealed class SettingsService : ISettingsService
         WorkshopOS.Contracts.Common.ModuleDto[] modules =
         [
             new("dashboard", "Workshop", "Dashboard", 3, IsVisible(hidden, "dashboard"), false),
-            new("repairs", "Workshop", "Repairs", 2, IsVisible(hidden, "repairs"), false),
-            new("customers", "Workshop", "Customers", 2, IsVisible(hidden, "customers"), false),
+            new("repairs", "Workshop", "Repairs", 2, IsVisible(hidden, "repairs"), true),
+            new("customers", "Workshop", "Customers", 2, IsVisible(hidden, "customers"), true),
             new("calendar", "Workshop", "Calendar", 9, IsVisible(hidden, "calendar"), false),
             new("quotes", "Sales", "Quotes", 4, IsVisible(hidden, "quotes"), false),
             new("invoices", "Sales", "Invoices", 6, IsVisible(hidden, "invoices"), false),
@@ -309,18 +309,56 @@ public sealed class RoleService : IRoleService
 
 public sealed class SearchService : ISearchService
 {
-    public Task<WorkshopOS.Contracts.Common.SearchResponse> SearchAsync(string query, CancellationToken ct = default)
+    private readonly WorkshopDbContext _db;
+    public SearchService(WorkshopDbContext db) => _db = db;
+
+    public async Task<WorkshopOS.Contracts.Common.SearchResponse> SearchAsync(string query, CancellationToken ct = default)
     {
-        // Phase 2+ populates groups. Phase 1 returns empty typed groups so the client shell works.
         var q = query?.Trim() ?? string.Empty;
-        WorkshopOS.Contracts.Common.SearchGroupDto[] groups =
+        if (q.Length < 2)
+        {
+            return new WorkshopOS.Contracts.Common.SearchResponse(q,
+            [
+                new("Repairs", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>()),
+                new("Customers", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>()),
+                new("Devices", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>())
+            ]);
+        }
+
+        var term = q.ToLowerInvariant();
+        var repairs = await _db.RepairTickets.AsNoTracking()
+            .Where(r => r.ArchivedAt == null && (
+                r.TicketNumber.ToLower().Contains(term) ||
+                r.Customer.DisplayName.ToLower().Contains(term) ||
+                r.ReportedIssue.ToLower().Contains(term)))
+            .OrderByDescending(r => r.CreatedAt).Take(10)
+            .Select(r => new WorkshopOS.Contracts.Common.SearchHitDto(r.Id.ToString(), r.TicketNumber, r.Customer.DisplayName + " · " + r.Status.Name, $"/repairs/{r.Id}"))
+            .ToListAsync(ct);
+
+        var customers = await _db.Customers.AsNoTracking()
+            .Where(c => c.ArchivedAt == null && (
+                c.DisplayName.ToLower().Contains(term) ||
+                (c.Phone != null && c.Phone.ToLower().Contains(term)) ||
+                (c.Email != null && c.Email.ToLower().Contains(term))))
+            .OrderBy(c => c.DisplayName).Take(10)
+            .Select(c => new WorkshopOS.Contracts.Common.SearchHitDto(c.Id.ToString(), c.DisplayName, c.Phone ?? c.Email, $"/customers/{c.Id}"))
+            .ToListAsync(ct);
+
+        var devices = await _db.Devices.AsNoTracking()
+            .Where(d => d.ArchivedAt == null && (
+                d.Brand.ToLower().Contains(term) ||
+                d.Model.ToLower().Contains(term) ||
+                (d.Serial != null && d.Serial.ToLower().Contains(term)) ||
+                (d.Imei != null && d.Imei.ToLower().Contains(term))))
+            .OrderBy(d => d.Brand).Take(10)
+            .Select(d => new WorkshopOS.Contracts.Common.SearchHitDto(d.Id.ToString(), (d.Brand + " " + d.Model).Trim(), d.Customer.DisplayName, $"/customers/{d.CustomerId}"))
+            .ToListAsync(ct);
+
+        return new WorkshopOS.Contracts.Common.SearchResponse(q,
         [
-            new("Repairs", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>()),
-            new("Customers", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>()),
-            new("Inventory", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>()),
-            new("Invoices", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>()),
-            new("PC Builds", Array.Empty<WorkshopOS.Contracts.Common.SearchHitDto>())
-        ];
-        return Task.FromResult(new WorkshopOS.Contracts.Common.SearchResponse(q, groups));
+            new("Repairs", repairs),
+            new("Customers", customers),
+            new("Devices", devices)
+        ]);
     }
 }

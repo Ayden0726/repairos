@@ -1,0 +1,41 @@
+<Page
+    x:Class="WorkshopOS.Client.Views.RepairsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:w="using:WorkshopOS.Contracts.Workshop">
+  <Grid Padding="24" RowSpacing="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <Grid>
+      <TextBlock Text="Repairs" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="New repair" HorizontalAlignment="Right" Click="NewRepair_Click" Style="{StaticResource AccentButtonStyle}" />
+    </Grid>
+    <Grid Grid.Row="1" ColumnSpacing="8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBox PlaceholderText="Search ticket, customer, serial…" Text="{x:Bind ViewModel.Query, Mode=TwoWay}" />
+      <Button Grid.Column="1" Content="Search" Command="{x:Bind ViewModel.RefreshCommand}" />
+    </Grid>
+    <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Repair_ItemClick">
+      <ListView.ItemTemplate>
+        <DataTemplate x:DataType="w:RepairListItemDto">
+          <Grid Padding="4" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="140" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{x:Bind TicketNumber}" FontWeight="SemiBold" />
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="{x:Bind CustomerName}" />
+              <TextBlock FontSize="12" Opacity="0.7" Text="{x:Bind ReportedIssue}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{x:Bind StatusName}" HorizontalAlignment="Right" />
+          </Grid>
+        </DataTemplate>
+      </ListView.ItemTemplate>
+    </ListView>
+  </Grid>
+</Page>

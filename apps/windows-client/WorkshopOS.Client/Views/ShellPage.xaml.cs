@@ -15,15 +15,23 @@ public sealed partial class ShellPage : Page
         DataContext = ViewModel;
         ViewModel.OpenModule = (key, phase, implemented) =>
         {
-            if (implemented && key == "settings")
+            if (implemented)
             {
-                ContentFrame.Navigate(typeof(SettingsPage));
-                return;
-            }
-            if (implemented && key == "users")
-            {
-                ContentFrame.Navigate(typeof(UsersPage));
-                return;
+                switch (key)
+                {
+                    case "settings":
+                        ContentFrame.Navigate(typeof(SettingsPage));
+                        return;
+                    case "users":
+                        ContentFrame.Navigate(typeof(UsersPage));
+                        return;
+                    case "customers":
+                        ContentFrame.Navigate(typeof(CustomersPage));
+                        return;
+                    case "repairs":
+                        ContentFrame.Navigate(typeof(RepairsPage));
+                        return;
+                }
             }
             ContentFrame.Navigate(typeof(PlaceholderPage), new PlaceholderArgs(key, phase));
         };
@@ -31,7 +39,7 @@ public sealed partial class ShellPage : Page
         Loaded += async (_, _) =>
         {
             await ViewModel.LoadCommand.ExecuteAsync(null);
-            ContentFrame.Navigate(typeof(PlaceholderPage), new PlaceholderArgs("dashboard", 3));
+            ContentFrame.Navigate(typeof(RepairsPage));
         };
     }
 
