@@ -28,6 +28,26 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<RepairEvent> RepairEvents => Set<RepairEvent>();
     public DbSet<RepairNote> RepairNotes => Set<RepairNote>();
 
+    public DbSet<Quote> Quotes => Set<Quote>();
+    public DbSet<QuoteLine> QuoteLines => Set<QuoteLine>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
+    public DbSet<InventoryReservation> InventoryReservations => Set<InventoryReservation>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
+    public DbSet<AppNotification> Notifications => Set<AppNotification>();
+    public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
+    public DbSet<PcBuild> PcBuilds => Set<PcBuild>();
+    public DbSet<PcBuildPart> PcBuildParts => Set<PcBuildPart>();
+    public DbSet<UsedDevice> UsedDevices => Set<UsedDevice>();
+    public DbSet<QaChecklist> QaChecklists => Set<QaChecklist>();
+    public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AppUser>(e =>
@@ -191,6 +211,232 @@ public sealed class WorkshopDbContext : DbContext
             e.HasOne(x => x.Ticket).WithMany(t => t.Notes).HasForeignKey(x => x.TicketId);
             e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);
         });
+
+        modelBuilder.Entity<Quote>(e =>
+        {
+            e.ToTable("quotes");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Subtotal).HasPrecision(12, 2);
+            e.Property(x => x.GstAmount).HasPrecision(12, 2);
+            e.Property(x => x.Total).HasPrecision(12, 2);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.Status);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
+            e.HasOne(x => x.RepairTicket).WithMany().HasForeignKey(x => x.RepairTicketId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<QuoteLine>(e =>
+        {
+            e.ToTable("quote_lines");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Type).HasMaxLength(32);
+            e.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Quantity).HasPrecision(12, 2);
+            e.Property(x => x.UnitPrice).HasPrecision(12, 2);
+            e.HasOne(x => x.Quote).WithMany(q => q.Lines).HasForeignKey(x => x.QuoteId);
+        });
+
+        modelBuilder.Entity<Invoice>(e =>
+        {
+            e.ToTable("invoices");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Subtotal).HasPrecision(12, 2);
+            e.Property(x => x.GstAmount).HasPrecision(12, 2);
+            e.Property(x => x.Total).HasPrecision(12, 2);
+            e.Property(x => x.AmountPaid).HasPrecision(12, 2);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.Status);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
+            e.HasOne(x => x.RepairTicket).WithMany().HasForeignKey(x => x.RepairTicketId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<InvoiceLine>(e =>
+        {
+            e.ToTable("invoice_lines");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Type).HasMaxLength(32);
+            e.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Quantity).HasPrecision(12, 2);
+            e.Property(x => x.UnitPrice).HasPrecision(12, 2);
+            e.HasOne(x => x.Invoice).WithMany(i => i.Lines).HasForeignKey(x => x.InvoiceId);
+        });
+
+        modelBuilder.Entity<Payment>(e =>
+        {
+            e.ToTable("payments");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Method).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Amount).HasPrecision(12, 2);
+            e.Property(x => x.Reference).HasMaxLength(200);
+            e.HasIndex(x => x.PaidAt);
+            e.HasOne(x => x.Invoice).WithMany(i => i.Payments).HasForeignKey(x => x.InvoiceId);
+        });
+
+        modelBuilder.Entity<Supplier>(e =>
+        {
+            e.ToTable("suppliers");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(240).IsRequired();
+            e.HasIndex(x => x.Name);
+        });
+
+        modelBuilder.Entity<InventoryItem>(e =>
+        {
+            e.ToTable("inventory_items");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Sku).IsUnique();
+            e.Property(x => x.Sku).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Barcode).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(64);
+            e.Property(x => x.Manufacturer).HasMaxLength(120);
+            e.Property(x => x.LocationBin).HasMaxLength(64);
+            e.Property(x => x.Cost).HasPrecision(12, 2);
+            e.Property(x => x.SellPrice).HasPrecision(12, 2);
+            e.Ignore(x => x.Available);
+            e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<InventoryTransaction>(e =>
+        {
+            e.ToTable("inventory_transactions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Type).HasMaxLength(32);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.HasIndex(x => new { x.ItemId, x.CreatedAt });
+            e.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId);
+        });
+
+        modelBuilder.Entity<InventoryReservation>(e =>
+        {
+            e.ToTable("inventory_reservations");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.HasIndex(x => new { x.TicketId, x.Status });
+            e.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId);
+            e.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId);
+        });
+
+        modelBuilder.Entity<PurchaseOrder>(e =>
+        {
+            e.ToTable("purchase_orders");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.Property(x => x.Shipping).HasPrecision(12, 2);
+            e.Property(x => x.GstAmount).HasPrecision(12, 2);
+            e.Property(x => x.Total).HasPrecision(12, 2);
+            e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId);
+        });
+
+        modelBuilder.Entity<PurchaseOrderLine>(e =>
+        {
+            e.ToTable("purchase_order_lines");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            e.Property(x => x.UnitCost).HasPrecision(12, 2);
+            e.HasOne(x => x.PurchaseOrder).WithMany(p => p.Lines).HasForeignKey(x => x.PurchaseOrderId);
+            e.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<AppNotification>(e =>
+        {
+            e.ToTable("notifications");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Severity).HasMaxLength(32);
+            e.Property(x => x.Route).HasMaxLength(240);
+            e.HasIndex(x => new { x.UserId, x.IsRead, x.CreatedAt });
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId);
+        });
+
+        modelBuilder.Entity<Booking>(e =>
+        {
+            e.ToTable("bookings");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Type).HasMaxLength(32);
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.HasIndex(x => x.StartsAt);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
+            e.HasOne(x => x.Staff).WithMany().HasForeignKey(x => x.StaffId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<KnowledgeArticle>(e =>
+        {
+            e.ToTable("knowledge_articles");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(64);
+            e.Property(x => x.Tags).HasMaxLength(500);
+            e.HasIndex(x => x.Category);
+        });
+
+        modelBuilder.Entity<PcBuild>(e =>
+        {
+            e.ToTable("pc_builds");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.Property(x => x.Budget).HasPrecision(12, 2);
+            e.Property(x => x.CostTotal).HasPrecision(12, 2);
+            e.Property(x => x.SellTotal).HasPrecision(12, 2);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<PcBuildPart>(e =>
+        {
+            e.ToTable("pc_build_parts");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Category).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Cost).HasPrecision(12, 2);
+            e.Property(x => x.SellPrice).HasPrecision(12, 2);
+            e.HasOne(x => x.PcBuild).WithMany(b => b.Parts).HasForeignKey(x => x.PcBuildId);
+        });
+
+        modelBuilder.Entity<UsedDevice>(e =>
+        {
+            e.ToTable("used_devices");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Summary).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Serial).HasMaxLength(120);
+            e.Property(x => x.Imei).HasMaxLength(32);
+            e.Property(x => x.ConditionGrade).HasMaxLength(8);
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.Property(x => x.PurchasePrice).HasPrecision(12, 2);
+            e.Property(x => x.ExpectedResale).HasPrecision(12, 2);
+            e.Property(x => x.ExpectedRepairCost).HasPrecision(12, 2);
+            e.Property(x => x.ActualSalePrice).HasPrecision(12, 2);
+            e.HasIndex(x => x.Status);
+        });
+
+        modelBuilder.Entity<QaChecklist>(e =>
+        {
+            e.ToTable("qa_checklists");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Item).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Result).HasMaxLength(32);
+            e.HasIndex(x => new { x.TicketId, x.SortOrder });
+            e.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId);
+        });
+
+        modelBuilder.Entity<BackupRecord>(e =>
+        {
+            e.ToTable("backup_records");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Type).HasMaxLength(32);
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.Property(x => x.Path).HasMaxLength(500);
+            e.HasIndex(x => x.StartedAt);
+        });
     }
 }
 
@@ -240,9 +486,16 @@ public static class DbSeed
                 db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionKey = perm });
         }
 
-        await EnsureRepairCatalogueAsync(db, ct);
+        await EnsureOperationsDefaultsAsync(db, ct);
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Lightweight ops defaults — no heavy catalogue/demo seed. Repair catalogue remains the source of status/type/priority rows.
+    /// Document sequences (QTE-/INV-/PO-/PCB-) are created on first use.
+    /// </summary>
+    public static Task EnsureOperationsDefaultsAsync(WorkshopDbContext db, CancellationToken ct = default) =>
+        EnsureRepairCatalogueAsync(db, ct);
 
     public static async Task EnsureRepairCatalogueAsync(WorkshopDbContext db, CancellationToken ct = default)
     {

@@ -1,5 +1,6 @@
 using WorkshopOS.Contracts.Auth;
 using WorkshopOS.Contracts.Common;
+using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Workshop;
 
 namespace WorkshopOS.Application.Abstractions;
@@ -69,4 +70,99 @@ public interface IRepairService
     Task<RepairNoteDto> AddNoteAsync(Guid id, AddNoteRequest request, Guid actorId, bool canInternal, CancellationToken ct = default);
     Task<RepairDetailDto> UpdateDiagnosisAsync(Guid id, UpdateDiagnosisRequest request, Guid actorId, CancellationToken ct = default);
     Task<RepairLookupsDto> GetLookupsAsync(CancellationToken ct = default);
+}
+
+public interface IDashboardService
+{
+    Task<DashboardDto> GetAsync(CancellationToken ct = default);
+}
+
+public interface IQuoteService
+{
+    Task<IReadOnlyList<QuoteListItemDto>> ListAsync(CancellationToken ct = default);
+    Task<QuoteDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<QuoteDetailDto> CreateAsync(CreateQuoteRequest request, Guid actorId, CancellationToken ct = default);
+    Task<QuoteDetailDto> SetStatusAsync(Guid id, string status, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IInvoiceService
+{
+    Task<IReadOnlyList<InvoiceListItemDto>> ListAsync(CancellationToken ct = default);
+    Task<InvoiceDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<InvoiceDetailDto> CreateFromRepairAsync(Guid repairTicketId, Guid actorId, CancellationToken ct = default);
+    Task<InvoiceDetailDto> RecordPaymentAsync(Guid id, RecordPaymentRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IInventoryService
+{
+    Task<IReadOnlyList<InventoryListItemDto>> ListAsync(CancellationToken ct = default);
+    Task<InventoryListItemDto> UpsertAsync(UpsertInventoryRequest request, Guid actorId, CancellationToken ct = default);
+    Task<InventoryListItemDto> AdjustAsync(Guid id, AdjustStockRequest request, Guid actorId, CancellationToken ct = default);
+    Task ReserveAsync(ReserveStockRequest request, Guid actorId, CancellationToken ct = default);
+    Task ConsumeReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IPurchasingService
+{
+    Task<IReadOnlyList<SupplierDto>> ListSuppliersAsync(CancellationToken ct = default);
+    Task<SupplierDto> UpsertSupplierAsync(UpsertSupplierRequest request, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<PurchaseOrderListItemDto>> ListPurchaseOrdersAsync(CancellationToken ct = default);
+    Task<PurchaseOrderListItemDto> CreatePurchaseOrderAsync(CreatePurchaseOrderRequest request, Guid actorId, CancellationToken ct = default);
+    Task<PurchaseOrderListItemDto> ReceiveLineAsync(Guid poId, ReceivePoLineRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface INotificationService
+{
+    Task<IReadOnlyList<NotificationDto>> ListForUserAsync(Guid userId, CancellationToken ct = default);
+    Task MarkReadAsync(Guid id, Guid userId, CancellationToken ct = default);
+    Task NotifyAsync(Guid userId, string title, string body, string severity = "Info", string? route = null, CancellationToken ct = default);
+}
+
+public interface IBookingService
+{
+    Task<IReadOnlyList<BookingDto>> ListAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default);
+    Task<BookingDto> CreateAsync(CreateBookingRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IKnowledgeService
+{
+    Task<IReadOnlyList<KnowledgeDto>> ListAsync(string? q, CancellationToken ct = default);
+    Task<KnowledgeDto> UpsertAsync(UpsertKnowledgeRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IPcBuildService
+{
+    Task<IReadOnlyList<PcBuildListItemDto>> ListAsync(CancellationToken ct = default);
+    Task<PcBuildListItemDto> CreateAsync(CreatePcBuildRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IUsedTechService
+{
+    Task<IReadOnlyList<UsedDeviceDto>> ListAsync(CancellationToken ct = default);
+    Task<UsedDeviceDto> CreateAsync(CreateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default);
+    Task<UsedDeviceDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IQaService
+{
+    Task<IReadOnlyList<QaItemDto>> ListForTicketAsync(Guid ticketId, CancellationToken ct = default);
+    Task EnsureDefaultChecklistAsync(Guid ticketId, CancellationToken ct = default);
+    Task<QaItemDto> SetResultAsync(Guid ticketId, Guid itemId, string result, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IReportService
+{
+    Task<ReportSummaryDto> SummaryAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default);
+}
+
+public interface IAiService
+{
+    Task<AiAssistResponse> AssistAsync(AiAssistRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IBackupService
+{
+    Task<IReadOnlyList<BackupDto>> ListAsync(CancellationToken ct = default);
+    Task<BackupDto> CreateAsync(Guid actorId, CancellationToken ct = default);
+    Task<SystemHealthDetailDto> HealthDetailAsync(CancellationToken ct = default);
 }

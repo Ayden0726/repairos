@@ -13,12 +13,14 @@ public sealed class RepairService : IRepairService
     private readonly WorkshopDbContext _db;
     private readonly IAuditService _audit;
     private readonly SecretProtector _secrets;
+    private readonly IQaService _qa;
 
-    public RepairService(WorkshopDbContext db, IAuditService audit, SecretProtector secrets)
+    public RepairService(WorkshopDbContext db, IAuditService audit, SecretProtector secrets, IQaService qa)
     {
         _db = db;
         _audit = audit;
         _secrets = secrets;
+        _qa = qa;
     }
 
     public async Task<PagedResult<RepairListItemDto>> ListAsync(string? q, string? statusKey, Guid? assignedToId, bool? overdueOnly, int page, int pageSize, CancellationToken ct = default)
@@ -158,6 +160,8 @@ public sealed class RepairService : IRepairService
         if (status.IsCompleted) ticket.CompletedAt ??= DateTimeOffset.UtcNow;
         if (status.Key == "ready_pickup") ticket.CompletedAt ??= DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
+        if (status.Key is "testing" or "ready_pickup")
+            await _qa.EnsureDefaultChecklistAsync(ticket.Id, ct);
         await AddEventAsync(ticket.Id, actorId, "repair.status", $"Status changed to {status.Name}", old, status.Name, ct);
         await _audit.WriteAsync(actorId, "repair.status", "RepairTicket", ticket.Id.ToString(), oldValue: old, newValue: status.Name, ct: ct);
         return await GetAsync(id, true, ct);

@@ -31,6 +31,21 @@ public static class DependencyInjection
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddScoped<IRepairService, RepairService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IQuoteService, QuoteService>();
+        services.AddScoped<IInvoiceService, InvoiceService>();
+        services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<IPurchasingService, PurchasingService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IBookingService, BookingService>();
+        services.AddScoped<IKnowledgeService, KnowledgeService>();
+        services.AddScoped<IPcBuildService, PcBuildService>();
+        services.AddScoped<IUsedTechService, UsedTechService>();
+        services.AddScoped<IQaService, QaService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IAiService, AiService>();
+        services.AddScoped<IBackupService, BackupService>();
+        services.AddHttpClient("ollama");
 
         var jwt = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)

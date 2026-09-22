@@ -264,18 +264,18 @@ public sealed class SettingsService : ISettingsService
         var hidden = await DbSeed.GetSettingAsync(_db, SettingKeys.ModuleVisibility, new Dictionary<string, bool>(), ct);
         WorkshopOS.Contracts.Common.ModuleDto[] modules =
         [
-            new("dashboard", "Workshop", "Dashboard", 3, IsVisible(hidden, "dashboard"), false),
+            new("dashboard", "Workshop", "Dashboard", 3, IsVisible(hidden, "dashboard"), true),
             new("repairs", "Workshop", "Repairs", 2, IsVisible(hidden, "repairs"), true),
             new("customers", "Workshop", "Customers", 2, IsVisible(hidden, "customers"), true),
-            new("calendar", "Workshop", "Calendar", 9, IsVisible(hidden, "calendar"), false),
-            new("quotes", "Sales", "Quotes", 4, IsVisible(hidden, "quotes"), false),
-            new("invoices", "Sales", "Invoices", 6, IsVisible(hidden, "invoices"), false),
-            new("used", "Sales", "Used Tech", 8, IsVisible(hidden, "used"), false),
-            new("inventory", "Stock", "Inventory", 5, IsVisible(hidden, "inventory"), false),
-            new("purchasing", "Stock", "Purchasing", 5, IsVisible(hidden, "purchasing"), false),
-            new("builds", "Services", "PC Builds", 8, IsVisible(hidden, "builds"), false),
-            new("knowledge", "Services", "Knowledge", 9, IsVisible(hidden, "knowledge"), false),
-            new("reports", "Management", "Reports", 10, IsVisible(hidden, "reports"), false),
+            new("calendar", "Workshop", "Calendar", 9, IsVisible(hidden, "calendar"), true),
+            new("quotes", "Sales", "Quotes", 4, IsVisible(hidden, "quotes"), true),
+            new("invoices", "Sales", "Invoices", 6, IsVisible(hidden, "invoices"), true),
+            new("used", "Sales", "Used Tech", 8, IsVisible(hidden, "used"), true),
+            new("inventory", "Stock", "Inventory", 5, IsVisible(hidden, "inventory"), true),
+            new("purchasing", "Stock", "Purchasing", 5, IsVisible(hidden, "purchasing"), true),
+            new("builds", "Services", "PC Builds", 8, IsVisible(hidden, "builds"), true),
+            new("knowledge", "Services", "Knowledge", 9, IsVisible(hidden, "knowledge"), true),
+            new("reports", "Management", "Reports", 10, IsVisible(hidden, "reports"), true),
             new("users", "Management", "Users", 1, IsVisible(hidden, "users"), true),
             new("settings", "Management", "Settings", 1, IsVisible(hidden, "settings"), true)
         ];
