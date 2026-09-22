@@ -1,0 +1,209 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Operations;
+
+namespace WorkshopOS.Client.Views;
+
+public partial class DashboardViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<DashboardCardVm> Cards { get; } = new();
+    public ObservableCollection<PipelineStageDto> Pipeline { get; } = new();
+    public ObservableCollection<UrgentJobDto> Urgent { get; } = new();
+    public ObservableCollection<TechnicianWorkloadDto> Workload { get; } = new();
+    public ObservableCollection<LowStockDto> LowStock { get; } = new();
+    public ObservableCollection<ActivityDto> Activity { get; } = new();
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private int _unassigned;
+
+    public DashboardViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var d = await _api.GetAsync<DashboardDto>("api/dashboard");
+            Cards.Clear();
+            Cards.Add(new("Open Jobs", d.Cards.OpenJobs.ToString(), "open"));
+            Cards.Add(new("Due Today", d.Cards.DueToday.ToString(), "dueToday"));
+            Cards.Add(new("Awaiting Approval", d.Cards.AwaitingApproval.ToString(), "awaiting_approval"));
+            Cards.Add(new("Waiting for Parts", d.Cards.WaitingForParts.ToString(), "waiting_parts"));
+            Cards.Add(new("Ready for Pickup", d.Cards.ReadyForPickup.ToString(), "ready_pickup"));
+            Cards.Add(new("Overdue", d.Cards.Overdue.ToString(), "overdue"));
+            Cards.Add(new("Revenue 30d", d.Cards.Revenue30Days.ToString("C"), null));
+            Cards.Add(new("Gross Profit 30d", d.Cards.GrossProfit30Days.ToString("C"), null));
+            Pipeline.Clear(); foreach (var p in d.Pipeline) Pipeline.Add(p);
+            Urgent.Clear(); foreach (var u in d.UrgentJobs) Urgent.Add(u);
+            Workload.Clear(); foreach (var w in d.Workload) Workload.Add(w);
+            LowStock.Clear(); foreach (var l in d.LowStock) LowStock.Add(l);
+            Activity.Clear(); foreach (var a in d.RecentActivity) Activity.Add(a);
+            Unassigned = d.UnassignedJobs;
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public sealed record DashboardCardVm(string Title, string Value, string? Filter);
+
+public partial class GenericListViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    private string _path = "";
+    [ObservableProperty] private string _title = "";
+    public ObservableCollection<string> Lines { get; } = new();
+    [ObservableProperty] private string? _error;
+
+    public GenericListViewModel(ApiClient api) => _api = api;
+
+    public void Configure(string title, string path)
+    {
+        Title = title;
+        _path = path;
+    }
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(await _api.GetRawAsync(_path));
+            Lines.Clear();
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var number = el.TryGetProperty("number", out var n) ? n.GetString() :
+                    el.TryGetProperty("title", out var t) ? t.GetString() :
+                    el.TryGetProperty("summary", out var s) ? s.GetString() :
+                    el.TryGetProperty("customerName", out var c) ? c.GetString() :
+                    el.TryGetProperty("name", out var nm) ? nm.GetString() : "Item";
+                var status = el.TryGetProperty("status", out var st) ? st.GetString() : "";
+                var extra = el.TryGetProperty("total", out var tot) ? tot.GetRawText() :
+                    el.TryGetProperty("available", out var av) ? $"avail {av.GetInt32()}" : "";
+                Lines.Add($"{number}  {status}  {extra}".Trim());
+            }
+            if (Lines.Count == 0) Lines.Add("No records yet — create them from the API or upcoming detail forms.");
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class InventoryViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<InventoryListItemDto> Items { get; } = new();
+    [ObservableProperty] private string _sku = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string? _error;
+    public InventoryViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<InventoryListItemDto>>("api/inventory");
+            Items.Clear();
+            foreach (var i in list) Items.Add(i);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CreateAsync()
+    {
+        try
+        {
+            await _api.PostAsync("api/inventory", new UpsertInventoryRequest(null, Sku, null, Name, "Parts", 0, 0, 0, 1, 5, null, null));
+            Sku = Name = string.Empty;
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class ReportsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    [ObservableProperty] private string _summary = "Loading…";
+    [ObservableProperty] private string? _error;
+    public ReportsViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            var r = await _api.GetAsync<ReportSummaryDto>("api/reports/summary");
+            Summary = $"From {r.From:d} to {r.To:d}\nRevenue {r.Revenue:C}\nCOGS {r.CostOfGoods:C}\nGross profit {r.GrossProfit:C}\nOpened {r.RepairsOpened} · Completed {r.RepairsCompleted}";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class BackupsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<string> Lines { get; } = new();
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _status;
+    public BackupsViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<BackupDto>>("api/backups");
+            Lines.Clear();
+            foreach (var b in list)
+                Lines.Add($"{b.StartedAt:u}  {b.Type}  {b.Status}  {b.Path ?? "(in progress)"}");
+            if (Lines.Count == 0) Lines.Add("No backups yet. Click Create backup.");
+            try
+            {
+                var health = await _api.GetAsync<SystemHealthDetailDto>("api/health/detail");
+                Status = $"System {health.Status} · DB {(health.Database ? "ok" : "down")} · backups {health.BackupCount ?? 0} · last {health.LastBackupAt?.ToString("u") ?? "never"}";
+            }
+            catch { /* optional */ }
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CreateAsync()
+    {
+        Error = null;
+        try
+        {
+            await _api.PostAsync<BackupDto>("api/backups");
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class AiAssistViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    [ObservableProperty] private string _prompt = string.Empty;
+    [ObservableProperty] private string _result = "Enter a diagnosis or customer question. Output is advisory — confirm before applying.";
+    [ObservableProperty] private string? _error;
+    public AiAssistViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task AssistAsync()
+    {
+        Error = null;
+        try
+        {
+            var response = await _api.PostAsync<AiAssistRequest, AiAssistResponse>(
+                "api/ai/assist", new AiAssistRequest(Prompt, null));
+            Result = $"[{response.Provider}] {(response.Enabled ? "on" : "offline")}\n{response.Output}\n\n{response.Disclaimer}";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}

@@ -1,12 +1,34 @@
 # Windows client (WinUI 3)
 
-Requires Windows 10/11 x64, Visual Studio 2022 with **Windows App SDK / WinUI** workload, and .NET 8.
+Requires **Windows 10/11 x64**, [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), and Visual Studio 2022 with the **Windows App SDK / WinUI** workload.
+
+This project **cannot** be built on Linux CI — only the API and tests run there. Use a Windows PC or the `windows-latest` GitHub Actions job.
+
+## Run (dev)
 
 ```powershell
-dotnet restore
-dotnet run --project WorkshopOS.Client.csproj
+cd apps\windows-client
+dotnet restore WorkshopOS.Client\WorkshopOS.Client.csproj
+dotnet run --project WorkshopOS.Client\WorkshopOS.Client.csproj
 ```
 
-Point the connect screen at your API (default `http://127.0.0.1:5088`).
+Connect screen default: `http://127.0.0.1:5088`.
 
-This project is not built in Linux CI — the API and tests are.
+## Build installer / portable zip
+
+From repo root (optional: install [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
+
+```powershell
+.\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
+```
+
+- `packaging\dist\WorkshopOS-Client-win-x64-v1.2.0.zip` — portable  
+- `packaging\dist\WorkshopOS-Setup-1.2.0.exe` — if Inno is installed  
+
+Upload those files to a GitHub Release so shops can download them.
+
+## First-run flow
+
+1. Enter API URL  
+2. Setup wizard (if server not configured) or Login  
+3. Sidebar: Dashboard, Repairs, Customers, Quotes, Inventory, Invoices, etc.

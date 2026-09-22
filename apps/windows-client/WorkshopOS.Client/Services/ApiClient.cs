@@ -80,6 +80,14 @@ public sealed class ApiClient
         return (await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct))!;
     }
 
+    public async Task<string> GetRawAsync(string path, CancellationToken ct = default)
+    {
+        using var http = CreateClient();
+        using var response = await http.GetAsync(path, ct);
+        await EnsureSuccess(response);
+        return await response.Content.ReadAsStringAsync(ct);
+    }
+
     public async Task<TResponse> PostAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
         using var http = CreateClient();
@@ -93,6 +101,21 @@ public sealed class ApiClient
         using var http = CreateClient();
         using var response = await http.PostAsJsonAsync(path, body, JsonOptions, ct);
         await EnsureSuccess(response);
+    }
+
+    public async Task PostAsync(string path, CancellationToken ct = default)
+    {
+        using var http = CreateClient();
+        using var response = await http.PostAsync(path, content: null, ct);
+        await EnsureSuccess(response);
+    }
+
+    public async Task<TResponse> PostAsync<TResponse>(string path, CancellationToken ct = default)
+    {
+        using var http = CreateClient();
+        using var response = await http.PostAsync(path, content: null, ct);
+        await EnsureSuccess(response);
+        return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
     }
 
     public async Task<WorkshopOS.Contracts.Common.HealthDto> HealthAsync(CancellationToken ct = default) =>

@@ -176,7 +176,7 @@ public partial class ShellViewModel : ObservableObject
             var result = await _api.GetAsync<SearchResponse>($"api/search?q={Uri.EscapeDataString(SearchQuery)}");
             var total = result.Groups.Sum(g => g.Hits.Count);
             SearchStatus = total == 0
-                ? $"No results yet for “{result.Query}”. Full search lands with repairs/customers (Phase 2)."
+                ? $"No results for “{result.Query}”."
                 : $"{total} result(s)";
         }
         catch (Exception ex)

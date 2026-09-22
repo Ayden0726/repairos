@@ -268,6 +268,7 @@ public sealed class SettingsService : ISettingsService
             new("repairs", "Workshop", "Repairs", 2, IsVisible(hidden, "repairs"), true),
             new("customers", "Workshop", "Customers", 2, IsVisible(hidden, "customers"), true),
             new("calendar", "Workshop", "Calendar", 9, IsVisible(hidden, "calendar"), true),
+            new("notifications", "Workshop", "Notifications", 7, IsVisible(hidden, "notifications"), true),
             new("quotes", "Sales", "Quotes", 4, IsVisible(hidden, "quotes"), true),
             new("invoices", "Sales", "Invoices", 6, IsVisible(hidden, "invoices"), true),
             new("used", "Sales", "Used Tech", 8, IsVisible(hidden, "used"), true),
@@ -275,7 +276,9 @@ public sealed class SettingsService : ISettingsService
             new("purchasing", "Stock", "Purchasing", 5, IsVisible(hidden, "purchasing"), true),
             new("builds", "Services", "PC Builds", 8, IsVisible(hidden, "builds"), true),
             new("knowledge", "Services", "Knowledge", 9, IsVisible(hidden, "knowledge"), true),
+            new("ai", "Services", "AI Assist", 11, IsVisible(hidden, "ai"), true),
             new("reports", "Management", "Reports", 10, IsVisible(hidden, "reports"), true),
+            new("backups", "Management", "Backups", 12, IsVisible(hidden, "backups"), true),
             new("users", "Management", "Users", 1, IsVisible(hidden, "users"), true),
             new("settings", "Management", "Settings", 1, IsVisible(hidden, "settings"), true)
         ];

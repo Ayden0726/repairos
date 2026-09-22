@@ -2,54 +2,47 @@
 
 ## Shell chrome
 
-- Left sidebar (collapsible sections)
-- Top: global search (`Ctrl+K`), notification bell (Phase 7 — shows empty/not implemented), user menu, theme
+- Left sidebar modules from `/api/settings/modules`
+- Top: global search, Notifications shortcut, user menu
 - Header: **WorkshopOS** + configured business name
-- Offline indicator placeholder (Phase 12)
 
 ## Sections
 
 ### WORKSHOP
-| Item | Phase |
+| Item | Status |
 | --- | --- |
-| Dashboard | 3 (shell shows placeholder until then) |
-| Repairs | 2 |
-| Customers | 2 |
-| Calendar | 9 |
+| Dashboard | Live metrics |
+| Repairs | Full intake / list / detail |
+| Customers | List / create / detail + devices |
+| Calendar | Bookings list |
+| Notifications | Inbox list |
 
 ### SALES
-| Item | Phase |
+| Item | Status |
 | --- | --- |
-| Quotes | 4 |
-| Invoices | 6 |
-| Used Tech | 8 |
+| Quotes | List (+ API create/status) |
+| Invoices | List (+ API from-repair / payments) |
+| Used Tech | List (+ API create/status) |
 
 ### STOCK
-| Item | Phase |
+| Item | Status |
 | --- | --- |
-| Inventory | 5 |
-| Purchasing | 5 |
+| Inventory | List + create item |
+| Purchasing | Purchase order list |
 
 ### SERVICES
-| Item | Phase |
+| Item | Status |
 | --- | --- |
-| PC Builds | 8 |
-| Knowledge | 9 |
+| PC Builds | List |
+| Knowledge | List |
+| AI Assist | Prompt → advisory output |
 
 ### MANAGEMENT
-| Item | Phase |
+| Item | Status |
 | --- | --- |
-| Reports | 10 |
-| Users | 1 (list shell; create in settings later) |
-| Settings | 1 |
+| Reports | Period summary |
+| Backups | List + create |
+| Users | Staff list |
+| Settings | Business profile |
 
-Administrators can hide unused modules via settings (`ModuleVisibility`) once Phase 1 settings UI is live.
-
-## Placeholders
-
-Any route not yet implemented shows:
-
-> **Not yet implemented**  
-> This module arrives in Phase N. No data is written.
-
-No fake lists or pretend save buttons.
+Administrators can hide modules via settings (`ModuleVisibility`).

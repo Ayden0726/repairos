@@ -2,94 +2,97 @@
 
 Self-hosted repair-shop operations platform for Australian electronics / computer repair businesses.
 
-**Architecture (Phase 1 complete):** Windows WinUI 3 client → HTTPS REST + SignalR → ASP.NET Core API → PostgreSQL.
+**Architecture:** Windows WinUI 3 client → HTTPS REST + SignalR → ASP.NET Core API → PostgreSQL.
 
 The Windows client never talks to PostgreSQL directly.
+
+**Live API (this environment):** [WorkshopOS API health](http://127.0.0.1:5088/api/health)
+
+## Features
+
+Full catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**
+
+| Area | Includes |
+| --- | --- |
+| Auth & setup | First-run wizard, JWT, roles/permissions, users, business settings |
+| Workshop | Customers, devices, repair intake/tickets/timeline, dashboard, calendar, notifications |
+| Sales | Quotes (GST), invoices & payments, used tech |
+| Stock | Inventory, reservations, suppliers, purchase orders |
+| Services | PC builds, knowledge base, QA checklists, optional AI (Ollama) |
+| Management | Reports, backups, module visibility |
 
 ## Repository layout
 
 ```
-apps/windows-client/WorkshopOS.Client   WinUI 3 desktop app (Windows 10/11 x64)
-services/api/WorkshopOS.Api             ASP.NET Core API + Swagger + SignalR hub
-services/worker/WorkshopOS.Worker       Background worker
-services/shared/                        Domain, Application, Infrastructure, Contracts
-docker/                                 Compose + Dockerfiles
-docs/                                   Architecture and phase design
-tests/WorkshopOS.Api.Tests              Integration tests
+apps/windows-client/     WinUI 3 desktop app (Windows 10/11 x64)
+services/api/            ASP.NET Core API + Swagger + SignalR
+services/worker/         Background worker
+services/shared/         Domain, Application, Infrastructure, Contracts
+docker/                  Compose + Dockerfiles
+packaging/               Windows client build + Inno Setup script
+scripts/                 Server install & publish helpers
+docs/                    Architecture, features, install
+tests/                   Integration tests
+.github/workflows/       CI + GitHub Release artifacts
 ```
 
-Design docs: [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [API](docs/API.md) · [Auth](docs/AUTH.md)
-
-## Phase 1 status
-
-Working:
-
-- First-run setup (business + owner)
-- Login / refresh / logout (JWT)
-- Roles & permissions catalogue
-- Health endpoint
-- Settings business profile read
-- Windows shell: connect → setup/login → sidebar → search → Settings / Users
-
-## Phase 2 status
-
-Working:
-
-- Customers (list, create, detail)
-- Devices on customers
-- Repair intake and ticket list/detail
-- Status changes, notes, diagnosis, timeline
-- Search across repairs/customers/devices
-
-Later modules still show **Not yet implemented (Phase N)**.
-
-Not yet: live dashboard metrics, quotes, inventory, invoices, SMS, AI, installer.
-
-## Run the API (Linux / macOS / Windows)
-
-Needs .NET 8 SDK and PostgreSQL 16.
+## Install server (Docker)
 
 ```bash
-# create DB once
-createdb workshopos_net   # or use docker/compose postgres
+chmod +x scripts/install-server.sh
+./scripts/install-server.sh
+```
 
+Or:
+
+```bash
+cd docker
+cp .env.example .env   # set POSTGRES_PASSWORD + JWT_SIGNING_KEY
+docker compose --env-file .env up -d --build
+```
+
+API: [http://127.0.0.1:5088](http://127.0.0.1:5088) · Swagger `/swagger` · Health `/api/health`
+
+Step-by-step (tarball + GitHub Releases): **[docs/INSTALL.md](docs/INSTALL.md)**
+
+## Build the Windows client
+
+**Must be done on Windows 10/11 x64** with .NET 8 + Windows App SDK / WinUI.
+
+```powershell
+# Dev
+dotnet run --project apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csproj
+
+# Portable zip + optional Inno installer → packaging\dist\
+.\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
+```
+
+1. Install / unzip the client on shop PCs  
+2. Enter server URL (`http://<server>:5088`)  
+3. Complete setup (or sign in)  
+4. Use the sidebar — all Phase 1–12 modules are wired  
+
+Details: [apps/windows-client/README.md](apps/windows-client/README.md) · [docs/INSTALL.md](docs/INSTALL.md)
+
+## Put downloads on GitHub
+
+1. Create the public GitHub repo (Cursor **Create repo** if needed) and push `main`.
+2. Tag: `git tag v1.2.0 && git push origin v1.2.0`
+3. Actions publishes **server tarball** + **client zip** on the Release page.
+4. Shops download the installer/zip and the server bundle from **Releases**.
+
+Manual server pack (no tag): `./scripts/publish-server.sh 1.2.0`
+
+## Develop / test API
+
+Needs .NET 8 SDK and PostgreSQL 16 (or Docker postgres).
+
+```bash
 cd services/api/WorkshopOS.Api
-# edit appsettings.json ConnectionStrings + Jwt:SigningKey
 dotnet run
-```
-
-API: [http://127.0.0.1:5088](http://127.0.0.1:5088) · Swagger: `/swagger` · Health: `/api/health`
-
-```bash
 dotnet test WorkshopOS.sln
 ```
 
-## Run with Docker
-
-```bash
-cp docker/.env.example docker/.env
-# set POSTGRES_PASSWORD and JWT_SIGNING_KEY
-docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
-```
-
-## Windows client
-
-Build on a Windows 10/11 x64 machine with Visual Studio 2022 + Windows App SDK / WinUI workload:
-
-```powershell
-dotnet restore apps/windows-client/WorkshopOS.Client/WorkshopOS.Client.csproj
-dotnet build apps/windows-client/WorkshopOS.Client/WorkshopOS.Client.csproj -c Debug
-dotnet run --project apps/windows-client/WorkshopOS.Client/WorkshopOS.Client.csproj
-```
-
-1. Enter server URL (`http://127.0.0.1:5088` for local API)
-2. Complete setup (or sign in if already set up)
-3. Use the sidebar — Settings and Users work; other modules show Phase placeholders
-
 ## Branding
 
-Product name is always **WorkshopOS**. Business name (ABN, logo fields, accent) comes from setup — nothing is hardcoded for production tenants.
-
-## Next
-
-Phase 2: customers, devices, repair tickets, intake, timeline. See [docs/ROADMAP.md](docs/ROADMAP.md).
+Product name is always **WorkshopOS**. Business name, ABN, accent colour come from setup — nothing is hardcoded for production tenants.

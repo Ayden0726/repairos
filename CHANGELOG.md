@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 — 2026-09-22
+
+### Added
+
+- Phase 3–12 operations API: dashboard, quotes, inventory/POs, invoices/payments, notifications, bookings, knowledge, PC builds, used tech, QA, reports, AI assist, backups
+- EF migration `Phase3to12Operations`
+- WinUI pages: Dashboard, Inventory, Reports, Generic list modules, Backups, AI Assist; shell routes all modules
+- Packaging: `packaging/build-client.ps1`, Inno Setup script, `scripts/install-server.sh`, `scripts/publish-server.sh`
+- GitHub Actions CI + Release workflows (server tarball + Windows client zip)
+- Docs: FEATURES, INSTALL; README overhaul for distribution
+
 ## 1.1.0-phase2 — 2026-09-22
 
 ### Added

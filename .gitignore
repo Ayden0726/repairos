@@ -38,3 +38,8 @@ data/
 *.rdb
 node_modules/
 .next/
+
+# Packaging outputs
+packaging/dist/
+packaging/out/
+packaging/staging/

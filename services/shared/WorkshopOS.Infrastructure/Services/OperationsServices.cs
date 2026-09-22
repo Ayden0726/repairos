@@ -1057,7 +1057,9 @@ public sealed class BackupService : IBackupService
     {
         var dir = Environment.GetEnvironmentVariable("BACKUP_DIR");
         if (string.IsNullOrWhiteSpace(dir))
-            dir = _config["Backup:Directory"] ?? Path.Combine(Directory.GetCurrentDirectory(), "data", "backups");
+            dir = _config["Backup:Directory"];
+        if (string.IsNullOrWhiteSpace(dir))
+            dir = Path.Combine(Path.GetTempPath(), "workshopos-backups");
         Directory.CreateDirectory(dir);
 
         var started = DateTimeOffset.UtcNow;

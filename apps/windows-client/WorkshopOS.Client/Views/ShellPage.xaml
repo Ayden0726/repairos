@@ -54,7 +54,7 @@
                  Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay}"
                  KeyDown="OnSearchKeyDown" />
         <Button Grid.Column="1" Content="Search" Command="{x:Bind ViewModel.SearchCommand}" />
-        <FontIcon Grid.Column="2" Glyph="&#xEA8F;" FontSize="18" Margin="8,0,0,0" ToolTipService.ToolTip="Notifications — Phase 7" />
+        <Button Grid.Column="2" Content="Alerts" Click="Notifications_Click" ToolTipService.ToolTip="Notifications" />
       </Grid>
       <TextBlock Grid.Row="1" Margin="16,0,16,8" Text="{x:Bind ViewModel.SearchStatus, Mode=OneWay}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
       <Frame x:Name="ContentFrame" Grid.Row="2" />

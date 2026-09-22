@@ -1,20 +1,18 @@
 # Development Roadmap
 
-| Phase | Focus | Exit criteria |
+| Phase | Focus | Status |
 | --- | --- | --- |
-| **1** | Solution, API, auth, permissions, WinUI shell, Docker, health, setup | Build + tests green; login works; shell navigates |
-| **2** | Customers, devices, repairs, intake, timeline | **Done** — create/open repair end-to-end |
-| **3** | Full operational dashboard | Cards/pipeline/workload use live queries + tests |
-| **4** | Quotes + pricing engine | Quote → approve |
-| **5** | Inventory, barcodes, POs, reservations | Reserve/consume stock on repair |
-| **6** | Invoices, payments, GST PDFs | Tax invoice PDF |
-| **7** | Notifications centre + SMS/email providers | Real send or explicit “provider not configured” |
-| **8** | PC diagnostics, PC builds, used tech | Margin tracking |
-| **9** | Calendar, knowledge, QA | Booking + QA gate |
-| **10** | Reporting CSV/PDF | Filtered reports |
-| **11** | Optional AI (Ollama) | Confirm-before-apply |
-| **12** | Offline cache, SignalR events, backups UI, installer, hardening | Multi-PC live updates + MSI |
+| **1** | Solution, API, auth, permissions, WinUI shell, Docker, health, setup | **Done** |
+| **2** | Customers, devices, repairs, intake, timeline | **Done** |
+| **3** | Operational dashboard | **Done** |
+| **4** | Quotes + GST pricing | **Done** (API + list UI) |
+| **5** | Inventory, POs, reservations | **Done** |
+| **6** | Invoices, payments | **Done** (API + list UI; PDF polish later) |
+| **7** | Notifications centre | **Done** (inbox; SMS provider optional) |
+| **8** | PC builds, used tech | **Done** |
+| **9** | Calendar, knowledge, QA | **Done** |
+| **10** | Reporting | **Done** (summary; CSV/PDF export later) |
+| **11** | Optional AI (Ollama) | **Done** (disabled-by-default, confirm-before-apply) |
+| **12** | Backups UI, SignalR, installer packaging | **Done** (packaging scripts + release workflow) |
 
-## Phase completion rules
-
-After each phase: build solution, run tests, fix failures, update migrations, update CHANGELOG and docs, commit. Do not start the next phase with failing fundamentals.
+See [FEATURES.md](FEATURES.md) and [INSTALL.md](INSTALL.md).

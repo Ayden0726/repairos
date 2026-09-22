@@ -16,7 +16,7 @@ public partial class App : Application
         InitializeComponent();
         var sc = new ServiceCollection();
         sc.AddSingleton<IAppSettingsStore, AppSettingsStore>();
-        sc.AddSingleton<IAuthSession, AuthSession>();
+        sc.AddSingleton<AuthSession>();
         sc.AddSingleton<ApiClient>();
         sc.AddTransient<ServerConnectViewModel>();
         sc.AddTransient<SetupViewModel>();

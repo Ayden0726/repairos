@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label (e.g. 1.2.0)"
+        required: true
+        default: "1.2.0"
+
+permissions:
+  contents: write
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Test API
+        run: dotnet test WorkshopOS.sln -c Release
+      - name: Pack server bundle
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          bash scripts/publish-server.sh "$VERSION"
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workshopos-server
+          path: packaging/dist/WorkshopOS-Server-*.tar.gz
+
+  windows-client:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build portable client zip
+        shell: pwsh
+        run: |
+          $Version = "${{ github.event.inputs.version || github.ref_name }}"
+          if ($Version.StartsWith("v")) { $Version = $Version.Substring(1) }
+          ./packaging/build-client.ps1 -Configuration Release -SkipInstaller -Version $Version
+      - name: Upload client zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: workshopos-client-win-x64
+          path: packaging/dist/WorkshopOS-Client-*.zip
+
+  release:
+    needs: [server, windows-client]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            workshopos-server/*
+            workshopos-client-win-x64/*
+          generate_release_notes: true
+          body: |
+            ## WorkshopOS release
+
+            1. Download **WorkshopOS-Server-*.tar.gz**, extract, run `./install-server.sh` (Docker required).
+            2. Download **WorkshopOS-Client-win-x64-*.zip** (or `WorkshopOS-Setup-*.exe` if attached), install on Windows PCs.
+            3. Point the client at `http://<server>:5088` and complete first-run setup.
+
+            See [docs/INSTALL.md](docs/INSTALL.md) and [docs/FEATURES.md](docs/FEATURES.md).

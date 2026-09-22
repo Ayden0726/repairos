@@ -1,0 +1,12 @@
+<Page x:Class="WorkshopOS.Client.Views.AiAssistPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel Padding="24" Spacing="12" MaxWidth="720">
+    <TextBlock Text="AI Assist" FontSize="22" FontWeight="SemiBold" />
+    <TextBlock Text="Optional diagnostic suggestions. Configure Ollama or leave disabled — the API always returns an explicit status." TextWrapping="Wrap" Opacity="0.75" />
+    <TextBox Header="Prompt" Text="{x:Bind ViewModel.Prompt, Mode=TwoWay}" AcceptsReturn="True" Height="120" TextWrapping="Wrap" />
+    <Button Content="Ask" Command="{x:Bind ViewModel.AssistCommand}" Style="{StaticResource AccentButtonStyle}" />
+    <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
+    <TextBlock Text="{x:Bind ViewModel.Result, Mode=OneWay}" TextWrapping="Wrap" />
+  </StackPanel>
+</Page>
