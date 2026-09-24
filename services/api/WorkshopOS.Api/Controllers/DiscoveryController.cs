@@ -99,6 +99,7 @@ public sealed class DiscoveryController : ControllerBase
 
     private static IEnumerable<string> GetLanIPv4Addresses()
     {
+        var results = new List<string>();
         try
         {
             foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
@@ -110,14 +111,15 @@ public sealed class DiscoveryController : ControllerBase
                     if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
                     var ip = ua.Address;
                     if (IPAddress.IsLoopback(ip)) continue;
-                    yield return ip.ToString();
+                    results.Add(ip.ToString());
                 }
             }
         }
         catch
         {
-            yield break;
+            /* ignore NIC enumeration failures */
         }
+        return results;
     }
 
     private static string BuildHtml(DiscoveryDto d, string primaryUrl)
