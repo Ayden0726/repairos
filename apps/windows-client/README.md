@@ -63,24 +63,36 @@ On first launch:
 
 ## Build installer / portable zip
 
-From the **repo root** (Inno Setup optional):
+1. Sync latest packaging scripts (`git pull`, or overwrite `packaging\build-client.ps1` / `build-client.cmd` from the remote if GitHub looks stale).
+2. Open **Developer PowerShell for VS 2022** (Start menu) — preferred over a normal PowerShell window.
+3. From the **repo root**, confirm the banner prints **`WorkshopOS client build script v4`**:
 
 ```powershell
-.\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0 -SkipInstaller
 ```
 
-Zip only:
+Or double-click `packaging\build-client.cmd`.
+
+Optional Setup.exe (needs [Inno Setup 6](https://jrsoftware.org/isdl.php)):
 
 ```powershell
-.\packaging\build-client.ps1 -SkipInstaller -Version 1.2.0
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
 ```
 
-Outputs in `packaging\dist\`:
+Outputs in `packaging\dist\` (only after a successful publish — failed builds do **not** zip stale output):
 
 - `WorkshopOS-Client-win-x64-v1.2.0.zip` — portable  
-- `WorkshopOS-Setup-1.2.0.exe` — if [Inno Setup 6](https://jrsoftware.org/isdl.php) is installed  
+- `WorkshopOS-Setup-1.2.0.exe` — if Inno is installed  
 
-Upload those to a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) so shops can download them. CI also builds the zip on tag push (`.github/workflows/release.yml`).
+### ExpandPriContent / Pri.Tasks.dll
+
+The project sets `<EnableMsixTooling>true</EnableMsixTooling>` with `<WindowsPackageType>None</WindowsPackageType>` so PRI generation uses the Windows App SDK NuGet tasks instead of VS `Microsoft.Build.Packaging.Pri.Tasks.dll`. That alone usually avoids MSB4062 under `C:\Program Files\dotnet\sdk\...\AppxPackage\`.
+
+If the error persists:
+
+1. Confirm the script banner is **v4** and the csproj has `EnableMsixTooling` = `true`.
+2. Visual Studio Installer → **Modify** → enable workload **WinUI application development**, plus Individual components **Windows App Packaging** and a **Windows 10/11 SDK**.
+3. Rebuild from Developer PowerShell for VS.
 
 ## Related
 

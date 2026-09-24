@@ -53,5 +53,5 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch WorkshopOS"; Flags: nowa
 function InitializeSetup(): Boolean;
 begin
   Result := True;
-  MsgBox('After install, open WorkshopOS and enter your server URL (for example http://shop-pc:5088).', mbInformation, MB_OK);
+  MsgBox('After install, open WorkshopOS. Enter the pairing code from http://<server>:5088/connect, or tap Find on this network.', mbInformation, MB_OK);
 end;

@@ -46,7 +46,8 @@ In Visual Studio Installer, enable workload **WinUI application development**.
 ```powershell
 git clone https://github.com/Ayden0726/repairos.git
 cd repairos
-.\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
+# Developer PowerShell for VS; expect banner "WorkshopOS client build script v4"
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0 -SkipInstaller
 ```
 
 Step-by-step + workload checklist: **[apps/windows-client/README.md](apps/windows-client/README.md)**

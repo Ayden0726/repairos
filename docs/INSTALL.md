@@ -62,8 +62,12 @@ Short list:
 ```powershell
 git clone https://github.com/Ayden0726/repairos.git
 cd repairos
-.\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
+# Prefer Developer PowerShell for VS. Banner must say "WorkshopOS client build script v4".
+# If git pull is already up to date but scripts look old, overwrite packaging\build-client.* from the latest remote.
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0 -SkipInstaller
 ```
+
+If you hit `ExpandPriContent` / `Pri.Tasks.dll` errors: sync latest scripts + csproj (`EnableMsixTooling=true`), then in VS Installer enable **WinUI application development** + **Windows App Packaging**. Details: [apps/windows-client/README.md](../apps/windows-client/README.md).
 
 ## 4. Publish downloads on GitHub
 

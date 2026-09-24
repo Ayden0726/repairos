@@ -9,11 +9,27 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
-    <WindowsPackageType>None</WindowsPackageType>
-    <EnableMsixTooling>false</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <!-- Unpackaged portable desktop app (zip), not an MSIX package. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxPackage>false</AppxPackage>
+
+    <!--
+      CRITICAL: EnableMsixTooling must be true even for unpackaged apps.
+      When false, MrtCore.PriGen.targets loads ExpandPriContent from
+      Microsoft.Build.Packaging.Pri.Tasks.dll under the VS AppxPackage folder.
+      That DLL is missing from the .NET SDK path (MSB4062 under
+      C:\Program Files\dotnet\sdk\...\AppxPackage\).
+      When true, PRI work uses Microsoft.Build.Msix.dll from the Windows App
+      SDK NuGet package instead (works with VS MSBuild and dotnet publish).
+      See: https://github.com/microsoft/WindowsAppSDK/issues/3939
+    -->
+    <EnableMsixTooling>true</EnableMsixTooling>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,5 +46,10 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!-- Activate Single-project MSIX tooling (PRI via NuGet tasks) without producing an .msix. -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
   </ItemGroup>
 </Project>

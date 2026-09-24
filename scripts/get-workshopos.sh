@@ -9,6 +9,8 @@
 #
 set -euo pipefail
 
+trap 'echo "ERROR: WorkshopOS setup failed at line $LINENO (exit $?). See messages above." >&2' ERR
+
 REPO_URL="${WORKSHOPOS_REPO:-https://github.com/Ayden0726/repairos.git}"
 INSTALL_DIR="${WORKSHOPOS_HOME:-$HOME/workshopos}"
 API_PORT="${API_PORT:-5088}"
@@ -255,30 +257,71 @@ else
   git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" || true
 fi
 
-cd "$INSTALL_DIR/docker"
+# Rewrite KEY=VALUE lines without sed/awk delimiters (secrets/paths may contain / + & etc.).
+set_env_kv() {
+  local file="$1" key="$2" value="$3" tmp line found=0
+  tmp="$(mktemp)" || {
+    echo "ERROR: could not create temp file while writing ${key} into ${file}" >&2
+    exit 1
+  }
+  if [[ -f "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == "${key}="* ]]; then
+        printf '%s=%s\n' "$key" "$value"
+        found=1
+      else
+        printf '%s\n' "$line"
+      fi
+    done < "$file" > "$tmp" || {
+      echo "ERROR: failed rewriting ${file} (${key})" >&2
+      rm -f "$tmp"
+      exit 1
+    }
+  fi
+  if [[ "$found" -eq 0 ]]; then
+    printf '%s=%s\n' "$key" "$value" >> "$tmp" || {
+      echo "ERROR: failed appending ${key} to ${file}" >&2
+      rm -f "$tmp"
+      exit 1
+    }
+  fi
+  mv "$tmp" "$file" || {
+    echo "ERROR: failed to update ${file} with ${key}" >&2
+    rm -f "$tmp"
+    exit 1
+  }
+}
+
+cd "$INSTALL_DIR/docker" || {
+  echo "ERROR: missing docker/ under $INSTALL_DIR — clone may be incomplete."
+  exit 1
+}
 if [[ ! -f .env ]]; then
-  cp .env.example .env
+  cp .env.example .env || {
+    echo "ERROR: could not copy docker/.env.example → docker/.env"
+    exit 1
+  }
   if have openssl; then
-    PW="$(openssl rand -base64 24 | tr -d '\n=/+' | cut -c1-28)"
-    KEY="$(openssl rand -base64 48 | tr -d '\n')"
+    # Strip characters that break shell/.env tooling; keep length enough for JWT.
+    PW="$(openssl rand -base64 32 | tr -d '\n=/+' | cut -c1-28)"
+    KEY="$(openssl rand -base64 64 | tr -d '\n=/+' | cut -c1-48)"
   else
     PW="change-me-$(date +%s)"
     KEY="change-me-signing-key-$(date +%s)-must-be-long-enough"
   fi
-  tmp="$(mktemp)"
-  sed "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${PW}/" .env | sed "s/^JWT_SIGNING_KEY=.*/JWT_SIGNING_KEY=${KEY}/" > "$tmp"
-  mv "$tmp" .env
-  grep -q '^API_PORT=' .env || echo "API_PORT=${API_PORT}" >> .env
-  tmp="$(mktemp)"
-  sed "s/^API_PORT=.*/API_PORT=${API_PORT}/" .env > "$tmp"
-  mv "$tmp" .env
+  set_env_kv .env POSTGRES_PASSWORD "$PW"
+  set_env_kv .env JWT_SIGNING_KEY "$KEY"
+  set_env_kv .env API_PORT "$API_PORT"
   echo "==> Wrote docker/.env with random secrets"
 else
   echo "==> Using existing docker/.env"
 fi
 
 echo "==> Building & starting containers (first run can take a few minutes)"
-compose --env-file .env up -d --build
+if ! compose --env-file .env up -d --build; then
+  echo "ERROR: docker compose up failed. Try: cd $INSTALL_DIR/docker && docker compose --env-file .env logs"
+  exit 1
+fi
 
 echo "==> Waiting for API health…"
 ok=0
@@ -291,14 +334,16 @@ for i in $(seq 1 60); do
 done
 
 if [[ "$ok" != "1" ]]; then
-  echo "API did not become healthy in time. Check: docker compose -f $INSTALL_DIR/docker/docker-compose.yml --env-file $INSTALL_DIR/docker/.env logs api"
+  echo "ERROR: API did not become healthy in time."
+  echo "  Check: cd $INSTALL_DIR/docker && docker compose --env-file .env logs api"
   exit 1
 fi
 
 DISCOVERY="$(curl -fsS "http://127.0.0.1:${API_PORT}/api/discovery" || true)"
 CODE="$(python3 -c "import json,sys; print(json.load(sys.stdin).get('pairingCode',''))" <<<"$DISCOVERY" 2>/dev/null || true)"
 if [[ -z "$CODE" ]]; then
-  CODE="$(echo "$DISCOVERY" | sed -n 's/.*"pairingCode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  # Delimiter | avoids breakage if JSON ever contains '/'
+  CODE="$(echo "$DISCOVERY" | sed -n 's|.*"pairingCode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*|\1|p' | head -1)"
 fi
 
 LAN_IPS="$(hostname -I 2>/dev/null || true)"
