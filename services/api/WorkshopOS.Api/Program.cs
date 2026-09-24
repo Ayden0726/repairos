@@ -48,7 +48,7 @@ app.UseExceptionHandler(errorApp =>
     });
 });
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue("Swagger:Enabled", true))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -66,6 +66,14 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<WorkshopDbContext>();
     await db.Database.MigrateAsync();
     await DbSeed.EnsureFoundationAsync(db);
+
+    // Ensure a stable LAN pairing code exists for /connect and Windows auto-discover.
+    var pairing = await DbSeed.GetSettingAsync(db, SettingKeys.PairingCode, "", CancellationToken.None);
+    if (string.IsNullOrWhiteSpace(pairing))
+    {
+        await DbSeed.SetSettingAsync(db, SettingKeys.PairingCode, WorkshopOS.Api.Controllers.DiscoveryController.NewPairingCode(), null);
+        await db.SaveChangesAsync();
+    }
 
     var seedDemo = app.Configuration.GetValue("Seed:Demo", false);
     if (seedDemo && !await DbSeed.GetSettingAsync(db, SettingKeys.SetupCompleted, false))

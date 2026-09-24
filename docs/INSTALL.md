@@ -4,18 +4,39 @@ Two pieces: **server** (API + PostgreSQL, any Linux/Windows host with Docker) an
 
 ## 1. Install the server
 
-### Option A — from a git clone (recommended)
+### Option A — one-command install (recommended)
+
+On a host with **Docker** + **git** + **curl**:
 
 ```bash
-git clone <your-github-repo-url> WorkshopOS
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
+```
+
+Options:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash -s -- --dir /opt/workshopos --port 5088
+```
+
+The script clones the repo, writes `docker/.env` with random secrets, starts containers, waits for health, then prints:
+
+- Pairing code (e.g. `WOS-AB12`)
+- Connect portal: `http://127.0.0.1:5088/connect` (and the LAN IP URL)
+
+Open `/connect` on a phone or PC on the same Wi‑Fi to show the code to staff.
+
+### Option B — from a git clone
+
+```bash
+git clone https://github.com/Ayden0726/repairos.git WorkshopOS
 cd WorkshopOS
-chmod +x scripts/install-server.sh
+chmod +x scripts/install-server.sh scripts/get-workshopos.sh
 ./scripts/install-server.sh
 ```
 
-Defaults to `/opt/workshopos`. Override: `./scripts/install-server.sh ~/workshopos`.
+`install-server.sh` delegates to `get-workshopos.sh` (same pairing / `/connect` messaging).
 
-### Option B — from a release tarball
+### Option C — from a release tarball
 
 1. On [GitHub Releases](../../releases) download `WorkshopOS-Server-v*.tar.gz`
 2. Extract and run:
@@ -23,11 +44,11 @@ Defaults to `/opt/workshopos`. Override: `./scripts/install-server.sh ~/workshop
 ```bash
 tar -xzf WorkshopOS-Server-v*.tar.gz
 cd WorkshopOS-Server-v*
-chmod +x scripts/install-server.sh
+chmod +x scripts/install-server.sh scripts/get-workshopos.sh
 ./scripts/install-server.sh "$(pwd)"
 ```
 
-### Option C — manual Docker Compose
+### Option D — manual Docker Compose
 
 ```bash
 cd docker
@@ -36,7 +57,9 @@ cp .env.example .env
 docker compose --env-file .env up -d --build
 ```
 
-API: `http://<host>:5088` · Health: `/api/health` · Swagger: `/swagger`
+Then open `http://<host>:5088/connect` for the pairing code.
+
+API: `http://<host>:5088` · Health: `/api/health` · Discovery: `/api/discovery` · Connect: `/connect` · Swagger: `/swagger`
 
 Open firewall port **5088** (or set `API_PORT` in `.env`) to your LAN.
 
@@ -49,8 +72,11 @@ Build the installer on a Windows machine (or download the release zip/setup from
 1. Open the repo on GitHub → **Releases**
 2. Download `WorkshopOS-Setup-*.exe` **or** `WorkshopOS-Client-win-x64-*.zip`
 3. Run the setup (or unzip and run `WorkshopOS.Client.exe`)
-4. Enter server URL, e.g. `http://192.168.1.50:5088`
-5. Complete first-run business setup (owner account), then sign in
+4. On the connect screen:
+   - Enter the **pairing code** from `/connect` → **Connect with code**, **or**
+   - Tap **Find on this network** (same LAN), **or**
+   - Paste `http://<server-lan-ip>:5088` → **Connect with URL**
+5. Complete first-run business setup (owner account) on the first PC, then sign in
 
 ### Build the client yourself (Windows only)
 
@@ -87,14 +113,19 @@ git push origin v1.2.0
 4. GitHub Actions (`.github/workflows/release.yml`) builds the **server tarball** and **Windows client zip** and attaches them to the release.
 5. Optionally run `packaging\build-client.ps1` on a Windows PC with Inno Setup and upload `WorkshopOS-Setup-*.exe` to the same release.
 
-Shops then: download server tarball → install with Docker → download Windows installer → connect to the API URL.
+Shops then: one-command server install → open `/connect` → Windows app with pairing code or LAN find.
 
 ## 4. Verify
 
 ```bash
 curl http://127.0.0.1:5088/api/health
 # {"status":"Healthy","database":true,...}
+
+curl http://127.0.0.1:5088/api/discovery
+# {"product":"WorkshopOS","pairingCode":"WOS-....","setupComplete":false,...}
 ```
+
+Open `http://127.0.0.1:5088/connect` in a browser for the pairing portal.
 
 ```bash
 dotnet test WorkshopOS.sln

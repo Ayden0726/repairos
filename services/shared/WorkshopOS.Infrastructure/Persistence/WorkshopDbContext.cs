@@ -447,6 +447,7 @@ public static class SettingKeys
     public const string Gst = "gst";
     public const string FinanceDefaults = "finance.defaults";
     public const string ModuleVisibility = "modules.visibility";
+    public const string PairingCode = "setup.pairing_code";
 }
 
 public static class DbSeed

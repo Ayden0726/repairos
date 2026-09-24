@@ -1,74 +1,35 @@
 #!/usr/bin/env bash
-# Install WorkshopOS server (API + PostgreSQL + worker) with Docker Compose.
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/scripts/install-server.sh | bash
-#   or: ./scripts/install-server.sh [/opt/workshopos]
-
+# Install WorkshopOS server (API + PostgreSQL + worker).
+#
+# Preferred one-liner (SimplyPrint-style):
+#   curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
+#
+# This script wraps the same flow for local checkouts / release tarballs:
+#   ./scripts/install-server.sh [/opt/workshopos]
+#   WORKSHOPOS_REPO=https://github.com/Ayden0726/repairos.git ./scripts/install-server.sh
+#
 set -euo pipefail
 
-INSTALL_DIR="${1:-${WORKSHOPOS_HOME:-/opt/workshopos}}"
-REPO_URL="${WORKSHOPOS_REPO:-}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_DIR="${1:-${WORKSHOPOS_HOME:-$HOME/workshopos}}"
 API_PORT="${API_PORT:-5088}"
+REPO_URL="${WORKSHOPOS_REPO:-https://github.com/Ayden0726/repairos.git}"
+BRANCH="${WORKSHOPOS_BRANCH:-main}"
 
-need() {
-  command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1"; exit 1; }
-}
+export WORKSHOPOS_HOME="$INSTALL_DIR"
+export WORKSHOPOS_REPO="$REPO_URL"
+export WORKSHOPOS_BRANCH="$BRANCH"
+export API_PORT
 
-need docker
-docker compose version >/dev/null 2>&1 || { echo "Docker Compose v2 required (docker compose)."; exit 1; }
-
-echo "==> Installing WorkshopOS server into $INSTALL_DIR"
-sudo mkdir -p "$INSTALL_DIR"
-sudo chown "$(id -u):$(id -g)" "$INSTALL_DIR" 2>/dev/null || true
-
-if [[ -f "$INSTALL_DIR/docker/docker-compose.yml" ]]; then
-  echo "Found existing checkout at $INSTALL_DIR"
-  cd "$INSTALL_DIR"
-elif [[ -n "$REPO_URL" ]]; then
-  need git
-  git clone "$REPO_URL" "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
-elif [[ -f "$(dirname "$0")/../docker/docker-compose.yml" ]]; then
-  # Running from a local clone
-  ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-  rsync -a --exclude '.git' --exclude '**/bin' --exclude '**/obj' "$ROOT/" "$INSTALL_DIR/" 2>/dev/null \
-    || cp -a "$ROOT/." "$INSTALL_DIR/"
-  cd "$INSTALL_DIR"
-else
-  echo "Set WORKSHOPOS_REPO to your GitHub clone URL, or run this script from a WorkshopOS checkout."
-  exit 1
+# If we already have get-workshopos.sh next to us (git clone / tarball), use it.
+if [[ -x "$SCRIPT_DIR/get-workshopos.sh" ]] || [[ -f "$SCRIPT_DIR/get-workshopos.sh" ]]; then
+  echo "==> Delegating to get-workshopos.sh (one-command installer)"
+  exec bash "$SCRIPT_DIR/get-workshopos.sh" --dir "$INSTALL_DIR" --port "$API_PORT" --repo "$REPO_URL" --branch "$BRANCH"
 fi
 
-cd docker
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-  # Generate secrets
-  if command -v openssl >/dev/null 2>&1; then
-    PW="$(openssl rand -base64 24 | tr -d '\n=/+' | cut -c1-28)"
-    KEY="$(openssl rand -base64 48 | tr -d '\n')"
-  else
-    PW="change-me-$(date +%s)"
-    KEY="change-me-signing-key-$(date +%s)-must-be-long"
-  fi
-  sed -i.bak "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${PW}/" .env 2>/dev/null \
-    || sed -i '' "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${PW}/" .env
-  sed -i.bak "s/^JWT_SIGNING_KEY=.*/JWT_SIGNING_KEY=${KEY}/" .env 2>/dev/null \
-    || sed -i '' "s/^JWT_SIGNING_KEY=.*/JWT_SIGNING_KEY=${KEY}/" .env
-  grep -q '^API_PORT=' .env || echo "API_PORT=${API_PORT}" >> .env
-  echo "Wrote docker/.env with generated secrets — keep this file private."
-fi
-
-echo "==> Building and starting containers"
-docker compose --env-file .env up -d --build
-
-echo ""
-echo "WorkshopOS server is starting."
-echo "  API:     http://127.0.0.1:${API_PORT}"
-echo "  Health:  http://127.0.0.1:${API_PORT}/api/health"
-echo "  Swagger: http://127.0.0.1:${API_PORT}/swagger"
-echo ""
-echo "On first launch of the Windows client, enter that API URL, complete business setup,"
-echo "then create staff accounts under Users / Settings."
-echo ""
-echo "Manage:  cd $INSTALL_DIR/docker && docker compose --env-file .env logs -f api"
-echo "Stop:    cd $INSTALL_DIR/docker && docker compose --env-file .env down"
+# Fallback: fetch the installer from the repo (e.g. copied alone)
+echo "==> Fetching get-workshopos.sh"
+tmp="$(mktemp)"
+curl -fsSL "https://raw.githubusercontent.com/Ayden0726/repairos/${BRANCH}/scripts/get-workshopos.sh" -o "$tmp"
+chmod +x "$tmp"
+exec bash "$tmp" --dir "$INSTALL_DIR" --port "$API_PORT" --repo "$REPO_URL" --branch "$BRANCH"

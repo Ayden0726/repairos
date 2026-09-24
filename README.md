@@ -6,7 +6,7 @@ Self-hosted repair-shop operations platform for Australian electronics / compute
 
 The Windows client never talks to PostgreSQL directly.
 
-**Live API (this environment):** [WorkshopOS API health](http://127.0.0.1:5088/api/health)
+**Live API (this environment):** [WorkshopOS API health](http://127.0.0.1:5088/api/health) · [Connect portal](http://127.0.0.1:5088/connect)
 
 ## Features
 
@@ -30,30 +30,43 @@ services/worker/         Background worker
 services/shared/         Domain, Application, Infrastructure, Contracts
 docker/                  Compose + Dockerfiles
 packaging/               Windows client build + Inno Setup script
-scripts/                 Server install & publish helpers
+scripts/                 One-command server install & publish helpers
 docs/                    Architecture, features, install
 tests/                   Integration tests
 .github/workflows/       CI + GitHub Release artifacts
 ```
 
-## Install server (Docker)
+## Install server (one command)
+
+On a Linux host with Docker:
 
 ```bash
-chmod +x scripts/install-server.sh
-./scripts/install-server.sh
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
 ```
 
-Or:
+That clones the repo, starts API + PostgreSQL + worker, then prints a **pairing code** and the `/connect` URL.
 
-```bash
-cd docker
-cp .env.example .env   # set POSTGRES_PASSWORD + JWT_SIGNING_KEY
-docker compose --env-file .env up -d --build
-```
+When it finishes, open:
 
-API: [http://127.0.0.1:5088](http://127.0.0.1:5088) · Swagger `/swagger` · Health `/api/health`
+- Same machine: `http://127.0.0.1:5088/connect`
+- Phone / PC on the same Wi‑Fi: `http://<server-lan-ip>:5088/connect`
 
-Step-by-step (tarball + GitHub Releases): **[docs/INSTALL.md](docs/INSTALL.md)**
+Optional flags: `bash -s -- --dir ~/workshopos --port 5088`
+
+From a local clone you can also run `./scripts/install-server.sh` (wraps the same installer).
+
+Manual Compose: **[docs/INSTALL.md](docs/INSTALL.md)**
+
+## Connect the Windows client
+
+1. Install / unzip **WorkshopOS Client** on a shop PC (see below).
+2. Open the app and either:
+   - Enter the **pairing code** from `/connect` → **Connect with code**, or
+   - Tap **Find on this network** (same LAN as the server), or
+   - Paste the server URL manually (`http://<server>:5088`).
+3. First PC completes the setup wizard (business + owner). Later PCs sign in.
+
+Discovery API (no auth): `GET /api/discovery` · Connect portal: `GET /connect`
 
 ## Build the Windows client
 
@@ -66,11 +79,6 @@ dotnet run --project apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csp
 # Portable zip + optional Inno installer → packaging\dist\
 .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
 ```
-
-1. Install / unzip the client on shop PCs  
-2. Enter server URL (`http://<server>:5088`)  
-3. Complete setup (or sign in)  
-4. Use the sidebar — all Phase 1–12 modules are wired  
 
 Details: [apps/windows-client/README.md](apps/windows-client/README.md) · [docs/INSTALL.md](docs/INSTALL.md)
 
