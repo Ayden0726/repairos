@@ -229,7 +229,10 @@ else
   have git || { echo "Missing git"; exit 1; }
   have docker || { echo "Missing docker"; exit 1; }
   docker compose version >/dev/null 2>&1 || { echo "Missing docker compose"; exit 1; }
+  DOCKER=(docker)
 fi
+
+compose() { "${DOCKER[@]}" compose "$@"; }
 
 if [[ ! -d "$INSTALL_DIR/.git" ]]; then
   echo "==> Cloning $REPO_URL → $INSTALL_DIR"
@@ -275,7 +278,7 @@ else
 fi
 
 echo "==> Building & starting containers (first run can take a few minutes)"
-docker compose --env-file .env up -d --build
+compose --env-file .env up -d --build
 
 echo "==> Waiting for API health…"
 ok=0
