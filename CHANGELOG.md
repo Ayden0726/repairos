@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1 — 2026-09-24
+
+### Added
+
+- SimplyPrint-style one-command server install: `scripts/get-workshopos.sh`
+- Public `/api/discovery` + `/connect` pairing portal (LAN pairing code `WOS-XXXX`)
+- Windows connect screen: pairing code, Find on this network, manual URL
+- Windows client build docs with download links for every prerequisite
+
 ## 1.2.0 — 2026-09-22
 
 ### Added

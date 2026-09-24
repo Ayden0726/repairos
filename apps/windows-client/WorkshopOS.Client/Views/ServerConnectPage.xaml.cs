@@ -14,4 +14,13 @@ public sealed partial class ServerConnectPage : Page
         DataContext = ViewModel;
         ViewModel.Navigate = route => Frame.Navigate(route == "setup" ? typeof(SetupPage) : typeof(LoginPage));
     }
+
+    private void FoundServer_Click(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is string url)
+        {
+            ViewModel.ServerUrl = url;
+            ViewModel.ConnectCommand.Execute(null);
+        }
+    }
 }

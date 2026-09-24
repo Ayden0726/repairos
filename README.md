@@ -1,106 +1,70 @@
 # WorkshopOS
 
-Self-hosted repair-shop operations platform for Australian electronics / computer repair businesses.
+Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Architecture:** Windows WinUI 3 client → HTTPS REST + SignalR → ASP.NET Core API → PostgreSQL.
+**Architecture:** Windows WinUI 3 client → REST + SignalR → ASP.NET Core API → PostgreSQL.
 
-The Windows client never talks to PostgreSQL directly.
-
-**Live API (this environment):** [WorkshopOS API health](http://127.0.0.1:5088/api/health) · [Connect portal](http://127.0.0.1:5088/connect)
+**Live API (this environment):** [Health](http://127.0.0.1:5088/api/health) · [Connect / pairing](http://127.0.0.1:5088/connect) · [Swagger](http://127.0.0.1:5088/swagger)
 
 ## Features
 
-Full catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**
+See **[docs/FEATURES.md](docs/FEATURES.md)**.
 
-| Area | Includes |
-| --- | --- |
-| Auth & setup | First-run wizard, JWT, roles/permissions, users, business settings |
-| Workshop | Customers, devices, repair intake/tickets/timeline, dashboard, calendar, notifications |
-| Sales | Quotes (GST), invoices & payments, used tech |
-| Stock | Inventory, reservations, suppliers, purchase orders |
-| Services | PC builds, knowledge base, QA checklists, optional AI (Ollama) |
-| Management | Reports, backups, module visibility |
+## Install server — one command
 
-## Repository layout
-
-```
-apps/windows-client/     WinUI 3 desktop app (Windows 10/11 x64)
-services/api/            ASP.NET Core API + Swagger + SignalR
-services/worker/         Background worker
-services/shared/         Domain, Application, Infrastructure, Contracts
-docker/                  Compose + Dockerfiles
-packaging/               Windows client build + Inno Setup script
-scripts/                 One-command server install & publish helpers
-docs/                    Architecture, features, install
-tests/                   Integration tests
-.github/workflows/       CI + GitHub Release artifacts
-```
-
-## Install server (one command)
-
-On a Linux host with Docker:
+Needs [Docker](https://docs.docker.com/get-docker/) + [Git](https://git-scm.com/downloads):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
 ```
 
-That clones the repo, starts API + PostgreSQL + worker, then prints a **pairing code** and the `/connect` URL.
+Then open **`http://<server-ip>:5088/connect`** — you’ll get a pairing code (`WOS-XXXX`) for the Windows app.
 
-When it finishes, open:
+Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**
 
-- Same machine: `http://127.0.0.1:5088/connect`
-- Phone / PC on the same Wi‑Fi: `http://<server-lan-ip>:5088/connect`
+## Connect Windows PCs
 
-Optional flags: `bash -s -- --dir ~/workshopos --port 5088`
-
-From a local clone you can also run `./scripts/install-server.sh` (wraps the same installer).
-
-Manual Compose: **[docs/INSTALL.md](docs/INSTALL.md)**
-
-## Connect the Windows client
-
-1. Install / unzip **WorkshopOS Client** on a shop PC (see below).
-2. Open the app and either:
-   - Enter the **pairing code** from `/connect` → **Connect with code**, or
-   - Tap **Find on this network** (same LAN as the server), or
-   - Paste the server URL manually (`http://<server>:5088`).
-3. First PC completes the setup wizard (business + owner). Later PCs sign in.
-
-Discovery API (no auth): `GET /api/discovery` · Connect portal: `GET /connect`
+1. Install the WorkshopOS client (Release zip/setup, or build below).  
+2. Enter the **pairing code**, or tap **Find on this network**, or paste the server URL.  
+3. Complete setup on the first PC; other PCs sign in.
 
 ## Build the Windows client
 
-**Must be done on Windows 10/11 x64** with .NET 8 + Windows App SDK / WinUI.
+**Windows 10/11 x64 only.** Install these first (all linked):
+
+| Tool | Link |
+| --- | --- |
+| Git for Windows | https://git-scm.com/download/win |
+| Visual Studio 2022 Community | https://visualstudio.microsoft.com/downloads/ |
+| WinUI / Windows App SDK tools | https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/set-up-your-development-environment |
+| .NET 8 SDK (x64) | https://dotnet.microsoft.com/download/dotnet/8.0 |
+| Inno Setup 6 (optional `.exe` installer) | https://jrsoftware.org/isdl.php |
+| Windows SDK | https://developer.microsoft.com/windows/downloads/windows-sdk/ |
+
+In Visual Studio Installer, enable workload **WinUI application development**.
 
 ```powershell
-# Dev
-dotnet run --project apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csproj
-
-# Portable zip + optional Inno installer → packaging\dist\
+git clone https://github.com/Ayden0726/repairos.git
+cd repairos
 .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
 ```
 
-Details: [apps/windows-client/README.md](apps/windows-client/README.md) · [docs/INSTALL.md](docs/INSTALL.md)
+Step-by-step + workload checklist: **[apps/windows-client/README.md](apps/windows-client/README.md)**
 
-## Put downloads on GitHub
+## Repository layout
 
-1. Create the public GitHub repo (Cursor **Create repo** if needed) and push `main`.
-2. Tag: `git tag v1.2.0 && git push origin v1.2.0`
-3. Actions publishes **server tarball** + **client zip** on the Release page.
-4. Shops download the installer/zip and the server bundle from **Releases**.
-
-Manual server pack (no tag): `./scripts/publish-server.sh 1.2.0`
+```
+apps/windows-client/   WinUI 3 desktop app
+services/api/          ASP.NET Core API + /connect portal
+docker/                Compose + Dockerfiles
+packaging/             Windows client build + Inno Setup
+scripts/               get-workshopos.sh (one-liner), install, publish
+docs/                  Features, install, architecture
+```
 
 ## Develop / test API
 
-Needs .NET 8 SDK and PostgreSQL 16 (or Docker postgres).
-
 ```bash
-cd services/api/WorkshopOS.Api
-dotnet run
+cd services/api/WorkshopOS.Api && dotnet run
 dotnet test WorkshopOS.sln
 ```
-
-## Branding
-
-Product name is always **WorkshopOS**. Business name, ABN, accent colour come from setup — nothing is hardcoded for production tenants.

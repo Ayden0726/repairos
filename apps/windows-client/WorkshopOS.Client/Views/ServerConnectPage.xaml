@@ -5,30 +5,26 @@
   <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="32">
     <StackPanel MaxWidth="440" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
       <TextBlock Text="WorkshopOS" FontSize="28" FontWeight="SemiBold" />
-      <TextBlock Text="Connect to your WorkshopOS server on this network" Opacity="0.75" TextWrapping="Wrap" />
+      <TextBlock Text="Connect to your shop server on this Wi‑Fi / LAN." Opacity="0.75" TextWrapping="Wrap" />
 
-      <TextBox Header="Pairing code"
+      <TextBox Header="Pairing code (from http://server:5088/connect)"
                Text="{x:Bind ViewModel.PairingCode, Mode=TwoWay}"
-               PlaceholderText="WOS-XXXX"
-               MaxLength="12" />
-      <Button Content="Connect with code"
-              Command="{x:Bind ViewModel.ConnectWithCodeCommand}"
-              Style="{StaticResource AccentButtonStyle}"
-              HorizontalAlignment="Stretch" />
-      <Button Content="Find on this network"
-              Command="{x:Bind ViewModel.DiscoverCommand}"
+               PlaceholderText="WOS-XXXX" />
+      <Button Content="Connect with code" Command="{x:Bind ViewModel.ConnectWithCodeCommand}"
+              Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+
+      <Button Content="Find on this network" Command="{x:Bind ViewModel.FindOnNetworkCommand}"
               HorizontalAlignment="Stretch" />
 
-      <TextBlock Text="Or enter the server URL manually" Opacity="0.55" Margin="0,8,0,0" />
-      <TextBox Header="Server URL"
-               Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay}"
+      <TextBlock Text="— or enter URL manually —" Opacity="0.5" HorizontalAlignment="Center" FontSize="12" />
+      <TextBox Header="Server URL" Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay}"
                PlaceholderText="http://192.168.1.50:5088" />
-      <Button Content="Connect with URL"
-              Command="{x:Bind ViewModel.ConnectCommand}"
-              HorizontalAlignment="Stretch" />
+      <Button Content="Connect" Command="{x:Bind ViewModel.ConnectCommand}" HorizontalAlignment="Stretch" />
 
       <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
       <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />
+      <ListView ItemsSource="{x:Bind ViewModel.FoundServers, Mode=OneWay}" MaxHeight="120"
+                IsItemClickEnabled="True" ItemClick="FoundServer_Click" />
     </StackPanel>
   </Grid>
 </Page>

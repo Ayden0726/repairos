@@ -1,132 +1,87 @@
 # Install WorkshopOS
 
-Two pieces: **server** (API + PostgreSQL, any Linux/Windows host with Docker) and **Windows client** (WinUI 3 app on each shop PC).
+Two pieces: **server** (one command, Docker) and **Windows client** (shop PCs).
 
-## 1. Install the server
+## 1. Install the server (one command)
 
-### Option A — one-command install (recommended)
-
-On a host with **Docker** + **git** + **curl**:
+On a Linux PC / NAS / VM with [Docker](https://docs.docker.com/get-docker/) + [Git](https://git-scm.com/downloads):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
 ```
 
-Options:
+That script will:
+
+1. Clone [Ayden0726/repairos](https://github.com/Ayden0726/repairos)  
+2. Generate DB + JWT secrets into `docker/.env`  
+3. `docker compose up -d --build`  
+4. Print your **pairing code** and the **/connect** page URL  
+
+When it finishes, open (same machine or another device on the Wi‑Fi):
+
+- `http://127.0.0.1:5088/connect`  
+- or `http://<server-lan-ip>:5088/connect`  
+
+You’ll see a code like **`WOS-AB12`**.
+
+### Options
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash -s -- --dir /opt/workshopos --port 5088
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash -s -- --dir ~/workshopos --port 5088
 ```
 
-The script clones the repo, writes `docker/.env` with random secrets, starts containers, waits for health, then prints:
-
-- Pairing code (e.g. `WOS-AB12`)
-- Connect portal: `http://127.0.0.1:5088/connect` (and the LAN IP URL)
-
-Open `/connect` on a phone or PC on the same Wi‑Fi to show the code to staff.
-
-### Option B — from a git clone
+### Manual / local clone
 
 ```bash
-git clone https://github.com/Ayden0726/repairos.git WorkshopOS
-cd WorkshopOS
-chmod +x scripts/install-server.sh scripts/get-workshopos.sh
-./scripts/install-server.sh
+git clone https://github.com/Ayden0726/repairos.git
+cd repairos
+chmod +x scripts/get-workshopos.sh scripts/install-server.sh
+./scripts/get-workshopos.sh --dir "$(pwd)"
 ```
 
-`install-server.sh` delegates to `get-workshopos.sh` (same pairing / `/connect` messaging).
+## 2. Connect the Windows client
 
-### Option C — from a release tarball
-
-1. On [GitHub Releases](../../releases) download `WorkshopOS-Server-v*.tar.gz`
-2. Extract and run:
-
-```bash
-tar -xzf WorkshopOS-Server-v*.tar.gz
-cd WorkshopOS-Server-v*
-chmod +x scripts/install-server.sh scripts/get-workshopos.sh
-./scripts/install-server.sh "$(pwd)"
-```
-
-### Option D — manual Docker Compose
-
-```bash
-cd docker
-cp .env.example .env
-# set POSTGRES_PASSWORD and JWT_SIGNING_KEY (long random)
-docker compose --env-file .env up -d --build
-```
-
-Then open `http://<host>:5088/connect` for the pairing code.
-
-API: `http://<host>:5088` · Health: `/api/health` · Discovery: `/api/discovery` · Connect: `/connect` · Swagger: `/swagger`
-
-Open firewall port **5088** (or set `API_PORT` in `.env`) to your LAN.
-
-## 2. Install the Windows client
-
-Build the installer on a Windows machine (or download the release zip/setup from GitHub Releases).
-
-### Download (after you publish a release)
-
-1. Open the repo on GitHub → **Releases**
-2. Download `WorkshopOS-Setup-*.exe` **or** `WorkshopOS-Client-win-x64-*.zip`
-3. Run the setup (or unzip and run `WorkshopOS.Client.exe`)
-4. On the connect screen:
-   - Enter the **pairing code** from `/connect` → **Connect with code**, **or**
+1. Install the client (from a [GitHub Release](https://github.com/Ayden0726/repairos/releases) zip/setup, or build it — see below).  
+2. On the connect screen:
+   - Enter the **pairing code** from `/connect`, **or**
    - Tap **Find on this network** (same LAN), **or**
-   - Paste `http://<server-lan-ip>:5088` → **Connect with URL**
-5. Complete first-run business setup (owner account) on the first PC, then sign in
+   - Paste `http://<server-ip>:5088`  
+3. First PC completes the business + owner setup wizard.  
+4. Other PCs sign in with staff accounts.
 
-### Build the client yourself (Windows only)
+## 3. Build the Windows client yourself
 
-Requirements: Windows 10/11 **x64**, [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), Visual Studio 2022 with **Windows App SDK / WinUI** workload. Optional: [Inno Setup 6](https://jrsoftware.org/isinfo.php) for `WorkshopOS-Setup.exe`.
+Full prerequisite **download links**: **[apps/windows-client/README.md](../apps/windows-client/README.md)**
+
+Short list:
+
+| Tool | Link |
+| --- | --- |
+| Git for Windows | https://git-scm.com/download/win |
+| Visual Studio 2022 Community | https://visualstudio.microsoft.com/downloads/ |
+| WinUI / Windows App SDK setup | https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/set-up-your-development-environment |
+| .NET 8 SDK (Windows x64) | https://dotnet.microsoft.com/download/dotnet/8.0 |
+| Inno Setup 6 (optional installer) | https://jrsoftware.org/isdl.php |
+| Windows SDK | https://developer.microsoft.com/windows/downloads/windows-sdk/ |
 
 ```powershell
-cd WorkshopOS
-# portable zip (+ installer if Inno is installed)
+git clone https://github.com/Ayden0726/repairos.git
+cd repairos
 .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
-
-# zip only
-.\packaging\build-client.ps1 -SkipInstaller
 ```
 
-Outputs land in `packaging/dist/`.
-
-Dev run without packaging:
-
-```powershell
-dotnet run --project apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csproj
-```
-
-## 3. Publish downloads on GitHub
-
-1. Create the GitHub repository (use **Create repo** in Cursor if this project is still local-only).
-2. Push `main`.
-3. Tag a release:
+## 4. Publish downloads on GitHub
 
 ```bash
 git tag v1.2.0
 git push origin v1.2.0
 ```
 
-4. GitHub Actions (`.github/workflows/release.yml`) builds the **server tarball** and **Windows client zip** and attaches them to the release.
-5. Optionally run `packaging\build-client.ps1` on a Windows PC with Inno Setup and upload `WorkshopOS-Setup-*.exe` to the same release.
+Actions builds the **server tarball** + **Windows client zip** onto the Release.
 
-Shops then: one-command server install → open `/connect` → Windows app with pairing code or LAN find.
-
-## 4. Verify
+## Verify
 
 ```bash
 curl http://127.0.0.1:5088/api/health
-# {"status":"Healthy","database":true,...}
-
 curl http://127.0.0.1:5088/api/discovery
-# {"product":"WorkshopOS","pairingCode":"WOS-....","setupComplete":false,...}
-```
-
-Open `http://127.0.0.1:5088/connect` in a browser for the pairing portal.
-
-```bash
-dotnet test WorkshopOS.sln
 ```
