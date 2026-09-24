@@ -10,12 +10,7 @@ On a Linux PC / NAS / VM with [Docker](https://docs.docker.com/get-docker/) + [G
 curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
 ```
 
-That script will:
-
-1. Clone [Ayden0726/repairos](https://github.com/Ayden0726/repairos)  
-2. Generate DB + JWT secrets into `docker/.env`  
-3. `docker compose up -d --build`  
-4. Print your **pairing code** and the **/connect** page URL  
+Also installs **Git** and **Docker** (Compose v2) automatically on common Linux distros when missing (Ubuntu/Debian/Raspberry Pi OS, Fedora/RHEL, Arch). On macOS it can install via Homebrew if present.
 
 When it finishes, open (same machine or another device on the Wi‑Fi):
 
