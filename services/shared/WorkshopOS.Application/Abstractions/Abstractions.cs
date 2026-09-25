@@ -32,6 +32,13 @@ public interface IRoleService
     Task<IReadOnlyList<PermissionDto>> ListPermissionsAsync(CancellationToken ct = default);
 }
 
+public interface IStaffService
+{
+    Task<IReadOnlyList<StaffUserDto>> ListAsync(CancellationToken ct = default);
+    Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
+    Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
+}
+
 public interface ISearchService
 {
     Task<SearchResponse> SearchAsync(string query, CancellationToken ct = default);

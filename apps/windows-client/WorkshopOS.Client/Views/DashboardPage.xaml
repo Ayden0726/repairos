@@ -22,34 +22,73 @@
           </DataTemplate>
         </GridView.ItemTemplate>
       </GridView>
-      <TextBlock Text="Repair pipeline" FontWeight="SemiBold" />
-      <ItemsControl ItemsSource="{x:Bind ViewModel.Pipeline, Mode=OneWay}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="ops:PipelineStageDto">
-            <Border Padding="8,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6">
-              <TextBlock>
-                <Run Text="{x:Bind Name}" /><Run Text=" " /><Run Text="{x:Bind Count}" FontWeight="Bold" />
-              </TextBlock>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <TextBlock Text="Urgent / overdue" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.Urgent, Mode=OneWay}" MaxHeight="200">
-        <ListView.ItemTemplate>
-          <DataTemplate x:DataType="ops:UrgentJobDto">
-            <TextBlock Text="{x:Bind TicketNumber}" />
-          </DataTemplate>
-        </ListView.ItemTemplate>
-      </ListView>
-      <TextBlock>
-        <Run Text="Unassigned jobs: " /><Run Text="{x:Bind ViewModel.Unassigned, Mode=OneWay}" FontWeight="Bold" />
-      </TextBlock>
+
+      <Grid ColumnSpacing="24">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <StackPanel Spacing="8">
+          <TextBlock Text="Upcoming calendar" FontWeight="SemiBold" FontSize="16" />
+          <TextBlock Text="{x:Bind ViewModel.CalendarStatus, Mode=OneWay}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+          <ListView ItemsSource="{x:Bind ViewModel.UpcomingBookings, Mode=OneWay}" MaxHeight="280" SelectionMode="None">
+            <ListView.ItemTemplate>
+              <DataTemplate x:DataType="local:DashboardBookingVm">
+                <Border Padding="10,8" Margin="0,0,0,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6">
+                  <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="120" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                      <TextBlock FontWeight="SemiBold" Text="{x:Bind WhenLabel}" />
+                      <TextBlock FontSize="11" Opacity="0.65" Text="{x:Bind Status}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock FontWeight="SemiBold" Text="{x:Bind CustomerName}" TextWrapping="Wrap" />
+                      <TextBlock FontSize="12" Opacity="0.75" Text="{x:Bind TypeLine}" />
+                      <TextBlock FontSize="12" Opacity="0.6" Text="{x:Bind Notes}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListView.ItemTemplate>
+          </ListView>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="8">
+          <TextBlock Text="Repair pipeline" FontWeight="SemiBold" FontSize="16" />
+          <ItemsControl ItemsSource="{x:Bind ViewModel.Pipeline, Mode=OneWay}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="ops:PipelineStageDto">
+                <Border Padding="8,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6">
+                  <TextBlock>
+                    <Run Text="{x:Bind Name}" /><Run Text=" " /><Run Text="{x:Bind Count}" FontWeight="Bold" />
+                  </TextBlock>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Margin="0,8,0,0" FontWeight="SemiBold">Urgent / overdue</TextBlock>
+          <ListView ItemsSource="{x:Bind ViewModel.Urgent, Mode=OneWay}" MaxHeight="160" IsItemClickEnabled="True" ItemClick="Urgent_Click">
+            <ListView.ItemTemplate>
+              <DataTemplate x:DataType="ops:UrgentJobDto">
+                <TextBlock>
+                  <Run Text="{x:Bind TicketNumber}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{x:Bind Customer}" />
+                </TextBlock>
+              </DataTemplate>
+            </ListView.ItemTemplate>
+          </ListView>
+          <TextBlock>
+            <Run Text="Unassigned jobs: " /><Run Text="{x:Bind ViewModel.Unassigned, Mode=OneWay}" FontWeight="Bold" />
+          </TextBlock>
+        </StackPanel>
+      </Grid>
+
       <TextBlock Text="Technician workload" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.Workload, Mode=OneWay}" MaxHeight="160">
+      <ListView ItemsSource="{x:Bind ViewModel.Workload, Mode=OneWay}" MaxHeight="140">
         <ListView.ItemTemplate>
           <DataTemplate x:DataType="ops:TechnicianWorkloadDto">
             <TextBlock>
@@ -59,7 +98,7 @@
         </ListView.ItemTemplate>
       </ListView>
       <TextBlock Text="Low stock" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.LowStock, Mode=OneWay}" MaxHeight="120">
+      <ListView ItemsSource="{x:Bind ViewModel.LowStock, Mode=OneWay}" MaxHeight="100">
         <ListView.ItemTemplate>
           <DataTemplate x:DataType="ops:LowStockDto">
             <TextBlock Text="{x:Bind Name}" />
@@ -67,7 +106,7 @@
         </ListView.ItemTemplate>
       </ListView>
       <TextBlock Text="Recent activity" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.Activity, Mode=OneWay}" MaxHeight="160">
+      <ListView ItemsSource="{x:Bind ViewModel.Activity, Mode=OneWay}" MaxHeight="140">
         <ListView.ItemTemplate>
           <DataTemplate x:DataType="ops:ActivityDto">
             <TextBlock Text="{x:Bind Summary}" TextWrapping="Wrap" />

@@ -173,19 +173,26 @@ public partial class ServerConnectViewModel : ObservableObject
         var targets = BuildProbeUrls();
         var bag = new System.Collections.Concurrent.ConcurrentBag<string>();
 
-        await Parallel.ForEachAsync(targets, new ParallelOptions
+        try
         {
-            MaxDegreeOfParallelism = 48,
-            CancellationToken = cts.Token
-        }, async (url, token) =>
+            await Parallel.ForEachAsync(targets, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = 48,
+                CancellationToken = cts.Token
+            }, async (url, token) =>
+            {
+                var d = await TryDiscoveryAsync(url, token);
+                if (d is null) return;
+                if (requiredCode is not null &&
+                    !string.Equals(NormalizeCode(d.PairingCode), NormalizeCode(requiredCode), StringComparison.OrdinalIgnoreCase))
+                    return;
+                bag.Add(url);
+            });
+        }
+        catch (OperationCanceledException)
         {
-            var d = await TryDiscoveryAsync(url, token);
-            if (d is null) return;
-            if (requiredCode is not null &&
-                !string.Equals(NormalizeCode(d.PairingCode), NormalizeCode(requiredCode), StringComparison.OrdinalIgnoreCase))
-                return;
-            bag.Add(url);
-        });
+            /* budget elapsed — return whatever we found */
+        }
 
         return bag.OrderBy(u => u.Contains("127.0.0.1") ? 0 : 1).ThenBy(u => u).ToList();
     }
@@ -331,6 +338,16 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private IReadOnlyList<ModuleDto> _modules = Array.Empty<ModuleDto>();
     [ObservableProperty] private bool _isOffline;
 
+    /// <summary>Primary destinations. AI/Knowledge/Backups/Users stay out of the sidebar.</summary>
+    public static readonly (string Title, string[] Keys)[] NavGroups =
+    [
+        ("Dashboard", ["dashboard"]),
+        ("Work", ["repairs", "quotes", "invoices", "calendar", "builds"]),
+        ("Inventory", ["inventory", "purchasing", "used"]),
+        ("Customers", ["customers"]),
+        ("Reports", ["reports"])
+    ];
+
     public ShellViewModel(ApiClient api, AuthSession session, IAppSettingsStore settings)
     {
         _api = api;
@@ -380,6 +397,21 @@ public partial class ShellViewModel : ObservableObject
         {
             SearchStatus = ex.Message;
         }
+    }
+
+    public void NavigateByKey(string key)
+    {
+        var module = Modules.FirstOrDefault(m => m.Key == key);
+        if (module is not null)
+        {
+            CurrentPageTitle = module.Title;
+            OpenModule?.Invoke(module.Key, module.Phase, module.Implemented);
+            return;
+        }
+
+        // Offline / modules not loaded — still open known implemented destinations.
+        CurrentPageTitle = key;
+        OpenModule?.Invoke(key, 1, true);
     }
 
     [RelayCommand]

@@ -122,7 +122,7 @@ public sealed class MetaController : ControllerBase
     }
 
     [HttpGet("roles")]
-    [Authorize(Policy = "perm:roles.manage")]
+    [Authorize(Policy = "perm:staff.view")]
     public Task<IReadOnlyList<RoleDto>> Roles(CancellationToken ct) => _roles.ListRolesAsync(ct);
 
     [HttpGet("permissions")]
@@ -133,4 +133,28 @@ public sealed class MetaController : ControllerBase
     [Authorize]
     public Task<SearchResponse> Search([FromQuery] string q, CancellationToken ct) =>
         _search.SearchAsync(q ?? string.Empty, ct);
+}
+
+[ApiController]
+[Route("api/users")]
+public sealed class UsersController : ControllerBase
+{
+    private readonly IStaffService _staff;
+    public UsersController(IStaffService staff) => _staff = staff;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:staff.view")]
+    public Task<IReadOnlyList<StaffUserDto>> List(CancellationToken ct) => _staff.ListAsync(ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:staff.manage")]
+    public Task<StaffUserDto> Create([FromBody] CreateStaffUserRequest request, CancellationToken ct) =>
+        _staff.CreateAsync(request, UserId(), ct);
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "perm:staff.manage")]
+    public Task<StaffUserDto> Update(Guid id, [FromBody] UpdateStaffUserRequest request, CancellationToken ct) =>
+        _staff.UpdateAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

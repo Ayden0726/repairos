@@ -1,6 +1,22 @@
 # Changelog
 
+## 1.2.2 — 2026-09-24
+
+### Fixed
+
+- Windows client **always** opens **ServerConnect** (pairing / URL) on launch — Bootstrap is never the initial page, so a stale saved URL cannot hang on **Connecting to server…**
+- **Change server** / **Clear saved server** wipe JSON, WinRT `LocalSettings`, and PasswordVault credentials
+- Connect screen shows a clear **Client 1.2.2** banner; packaging default version / build script **v5**
+
 ## 1.2.1 — 2026-09-24
+
+### Fixed
+
+- Windows client no longer hangs forever on **Connecting to server…**; bootstrap probes the saved URL for ~4s then always opens pairing/connect (manual button available immediately)
+- No settings / cleared `%LOCALAPPDATA%\WorkshopOS` → skip Bootstrap splash and open **ServerConnect** immediately (server does not need to be running yet)
+- Deleting the settings folder no longer resurrects a dead URL from WinRT `LocalSettings` (that was re-triggering the connecting splash after a “clear”)
+- Client settings moved to `%LOCALAPPDATA%\WorkshopOS\client-settings.json` (easy reset); Change server from Login/Settings
+- Splash and connect screens show **Client 1.2.1** so you can confirm you launched the new build
 
 ### Added
 

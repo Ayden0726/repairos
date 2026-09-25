@@ -24,9 +24,11 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**
 
 ## Connect Windows PCs
 
-1. Install the WorkshopOS client (Release zip/setup, or build below).  
-2. Enter the **pairing code**, or tap **Find on this network**, or paste the server URL.  
-3. Complete setup on the first PC; other PCs sign in.
+1. Start the **server** first; open `http://<server-ip>:5088/connect` for the pairing code.  
+2. Install the WorkshopOS client (Release zip/setup, or build below).  
+3. On the connect screen (appears within a few seconds — tap **Enter server / pairing code** if needed): enter the **pairing code**, or **Find on this network**, or paste the server URL.  
+4. **First PC** runs the shop **setup wizard** (business + owner). Other PCs sign in; add staff under **Users**.  
+5. Stuck on an old URL? Delete `%LOCALAPPDATA%\WorkshopOS\client-settings.json` and relaunch.
 
 ## Build the Windows client
 
@@ -47,7 +49,7 @@ In Visual Studio Installer, enable workload **WinUI application development**.
 git clone https://github.com/Ayden0726/repairos.git
 cd repairos
 # Developer PowerShell for VS; expect banner "WorkshopOS client build script v4"
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.2 -SkipInstaller
 ```
 
 Step-by-step + workload checklist: **[apps/windows-client/README.md](apps/windows-client/README.md)**

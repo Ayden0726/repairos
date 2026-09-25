@@ -1,0 +1,26 @@
+WorkshopOS Windows client 1.2.4 - rebuild on Windows
+====================================================
+
+Banner must show: Client 1.2.4
+
+Nav: Dashboard (with calendar) / Work / Inventory / Customers / Reports + Settings
+Settings hub: App | Users & Roles | Backups | Connection
+No AI Assist or Knowledge Base in the sidebar.
+
+From repo root (Developer PowerShell for VS 2022):
+
+  git pull origin main
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.4 -SkipInstaller
+
+Or wipe + verify + build + launch:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\rebuild-client.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.4.zip
+  packaging\dist\WorkshopOS-Setup-1.2.4.exe  (if Inno Setup 6 installed)
+
+Optional agent overlay if GitHub looks stale:
+  http://127.0.0.1:28765/repairos-github-sync.zip
+  Set $UseAgentOverlay = $true in packaging\rebuild-client.ps1

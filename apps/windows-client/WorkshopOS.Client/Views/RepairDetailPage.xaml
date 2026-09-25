@@ -4,26 +4,84 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:w="using:WorkshopOS.Contracts.Workshop">
   <ScrollViewer Padding="24">
-    <StackPanel MaxWidth="720" Spacing="10">
-      <TextBlock Text="{x:Bind ViewModel.Repair.TicketNumber, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
-      <TextBlock Text="{x:Bind ViewModel.Repair.CustomerName, Mode=OneWay}" />
-      <TextBlock Text="{x:Bind ViewModel.Repair.DeviceLabel, Mode=OneWay}" Opacity="0.75" />
-      <TextBlock Text="{x:Bind ViewModel.Repair.ReportedIssue, Mode=OneWay}" TextWrapping="Wrap" />
-      <ComboBox Header="Status" ItemsSource="{x:Bind ViewModel.Statuses, Mode=OneWay}"
-                SelectedItem="{x:Bind ViewModel.SelectedStatus, Mode=TwoWay}"
-                DisplayMemberPath="Name" HorizontalAlignment="Left" Width="280" />
-      <Button Content="Update status" Command="{x:Bind ViewModel.SaveStatusCommand}" />
-      <TextBox Header="Add note" Text="{x:Bind ViewModel.NoteBody, Mode=TwoWay}" />
-      <Button Content="Save note" Command="{x:Bind ViewModel.AddNoteCommand}" />
-      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
-      <TextBlock Text="Timeline" FontWeight="SemiBold" Margin="0,12,0,0" />
-      <ItemsControl ItemsSource="{x:Bind ViewModel.Repair.Timeline, Mode=OneWay}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="w:RepairEventDto">
-            <TextBlock Margin="0,4" Text="{x:Bind Summary}" TextWrapping="Wrap" />
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </StackPanel>
+    <Grid ColumnSpacing="24" MaxWidth="960">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <StackPanel Spacing="10">
+        <TextBlock Text="{x:Bind ViewModel.Repair.TicketNumber, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
+        <TextBlock FontSize="16" Text="{x:Bind ViewModel.Repair.CustomerName, Mode=OneWay}" />
+        <TextBlock Opacity="0.75" Text="{x:Bind ViewModel.Repair.DeviceLabel, Mode=OneWay}" />
+        <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+          <StackPanel Spacing="4">
+            <TextBlock FontWeight="SemiBold" Text="Reported fault" />
+            <TextBlock Text="{x:Bind ViewModel.Repair.ReportedIssue, Mode=OneWay}" TextWrapping="Wrap" />
+            <TextBlock FontSize="12" Opacity="0.7" Margin="0,6,0,0">
+              <Run Text="Priority: " /><Run Text="{x:Bind ViewModel.Repair.PriorityName, Mode=OneWay}" />
+              <Run Text=" · Type: " /><Run Text="{x:Bind ViewModel.Repair.TypeName, Mode=OneWay}" />
+            </TextBlock>
+          </StackPanel>
+        </Border>
+
+        <TextBlock FontWeight="SemiBold" Margin="0,8,0,0" Text="Diagnosis" />
+        <TextBox Header="Diagnosis" Text="{x:Bind ViewModel.Diagnosis, Mode=TwoWay}"
+                 AcceptsReturn="True" Height="80" TextWrapping="Wrap" />
+        <TextBox Header="Recommended repair" Text="{x:Bind ViewModel.Recommended, Mode=TwoWay}"
+                 AcceptsReturn="True" Height="60" TextWrapping="Wrap" />
+        <Button Content="Save diagnosis" Command="{x:Bind ViewModel.SaveDiagnosisCommand}" />
+
+        <TextBlock FontWeight="SemiBold" Margin="0,12,0,0" Text="Notes" />
+        <TextBox Header="Add note" Text="{x:Bind ViewModel.NoteBody, Mode=TwoWay}"
+                 AcceptsReturn="True" Height="70" TextWrapping="Wrap" />
+        <Button Content="Add note" Command="{x:Bind ViewModel.AddNoteCommand}" Style="{StaticResource AccentButtonStyle}" />
+        <ItemsControl ItemsSource="{x:Bind ViewModel.Repair.Notes, Mode=OneWay}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="w:RepairNoteDto">
+              <Border Padding="10,8" Margin="0,0,0,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6">
+                <StackPanel Spacing="2">
+                  <TextBlock FontSize="12" Opacity="0.7">
+                    <Run Text="{x:Bind AuthorName}" /><Run Text=" · " /><Run Text="{x:Bind CreatedAt}" />
+                  </TextBlock>
+                  <TextBlock Text="{x:Bind Body}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock FontWeight="SemiBold" Margin="0,12,0,0" Text="Timeline" />
+        <ItemsControl ItemsSource="{x:Bind ViewModel.Repair.Timeline, Mode=OneWay}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="w:RepairEventDto">
+              <TextBlock Margin="0,4" Opacity="0.85" TextWrapping="Wrap">
+                <Run Text="{x:Bind CreatedAt}" FontSize="11" /><Run Text=" — " /><Run Text="{x:Bind Summary}" />
+              </TextBlock>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <StackPanel Grid.Column="1" Spacing="12">
+        <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+          <StackPanel Spacing="10">
+            <TextBlock FontWeight="SemiBold" Text="Status &amp; assignment" />
+            <TextBlock>
+              <Run Text="Current: " /><Run Text="{x:Bind ViewModel.Repair.StatusName, Mode=OneWay}" FontWeight="SemiBold" />
+            </TextBlock>
+            <ComboBox Header="Change status" ItemsSource="{x:Bind ViewModel.Statuses, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedStatus, Mode=TwoWay}"
+                      DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+            <Button Content="Update status" Command="{x:Bind ViewModel.SaveStatusCommand}" HorizontalAlignment="Stretch" />
+            <ComboBox Header="Technician" ItemsSource="{x:Bind ViewModel.Technicians, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedTechnician, Mode=TwoWay}"
+                      DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+            <Button Content="Save assignment" Command="{x:Bind ViewModel.SaveAssignCommand}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Opacity="0.75" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Grid>
   </ScrollViewer>
 </Page>

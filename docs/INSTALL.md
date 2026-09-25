@@ -37,12 +37,21 @@ chmod +x scripts/get-workshopos.sh scripts/install-server.sh
 ## 2. Connect the Windows client
 
 1. Install the client (from a [GitHub Release](https://github.com/Ayden0726/repairos/releases) zip/setup, or build it — see below).  
-2. On the connect screen:
-   - Enter the **pairing code** from `/connect`, **or**
+2. Start the **server first** (step 1). Open `http://<server-ip>:5088/connect` and copy the pairing code (`WOS-XXXX`).  
+3. On the client connect screen (pairing / LAN / URL — appears within a few seconds; never stuck forever on “Connecting…”):
+   - Enter the **pairing code**, **or**
    - Tap **Find on this network** (same LAN), **or**
    - Paste `http://<server-ip>:5088`  
-3. First PC completes the business + owner setup wizard.  
-4. Other PCs sign in with staff accounts.
+4. **First PC** completes the **setup wizard** (business + owner account). That wizard **does** exist in the product.  
+5. Other PCs sign in with staff accounts (create staff under **Users** after login — there is no separate multi-account install wizard).
+
+If the client hangs or keeps retrying a dead URL, reset local config and relaunch:
+
+```powershell
+Remove-Item -Force -ErrorAction SilentlyContinue "$env:LOCALAPPDATA\WorkshopOS\client-settings.json"
+```
+
+Details: [apps/windows-client/README.md](../apps/windows-client/README.md).
 
 ## 3. Build the Windows client yourself
 
@@ -64,16 +73,24 @@ git clone https://github.com/Ayden0726/repairos.git
 cd repairos
 # Prefer Developer PowerShell for VS. Banner must say "WorkshopOS client build script v4".
 # If git pull is already up to date but scripts look old, overwrite packaging\build-client.* from the latest remote.
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0 -SkipInstaller
+
+# Portable zip only:
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.2 -SkipInstaller
+
+# Zip + Setup.exe (needs Inno Setup 6: https://jrsoftware.org/isdl.php
+#   ISCC.exe under "C:\Program Files (x86)\Inno Setup 6\" or "C:\Program Files\Inno Setup 6\"):
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.2
 ```
+
+Outputs in `packaging\dist\`: `WorkshopOS-Client-win-x64-v1.2.2.zip` and (with Inno) `WorkshopOS-Setup-1.2.2.exe`. The script always rebuilds from source; you cannot wrap an existing client zip into the installer without republishing. Installer format is **Inno `.exe` only** (not MSIX). Expect banner **`WorkshopOS client build script v5`**.
 
 If you hit `ExpandPriContent` / `Pri.Tasks.dll` errors: sync latest scripts + csproj (`EnableMsixTooling=true`), then in VS Installer enable **WinUI application development** + **Windows App Packaging**. Details: [apps/windows-client/README.md](../apps/windows-client/README.md).
 
 ## 4. Publish downloads on GitHub
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.2.2
+git push origin v1.2.2
 ```
 
 Actions builds the **server tarball** + **Windows client zip** onto the Release.

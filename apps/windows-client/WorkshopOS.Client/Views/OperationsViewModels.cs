@@ -15,7 +15,9 @@ public partial class DashboardViewModel : ObservableObject
     public ObservableCollection<TechnicianWorkloadDto> Workload { get; } = new();
     public ObservableCollection<LowStockDto> LowStock { get; } = new();
     public ObservableCollection<ActivityDto> Activity { get; } = new();
+    public ObservableCollection<DashboardBookingVm> UpcomingBookings { get; } = new();
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _calendarStatus;
     [ObservableProperty] private int _unassigned;
 
     public DashboardViewModel(ApiClient api) => _api = api;
@@ -24,6 +26,7 @@ public partial class DashboardViewModel : ObservableObject
     private async Task RefreshAsync()
     {
         Error = null;
+        CalendarStatus = null;
         try
         {
             var d = await _api.GetAsync<DashboardDto>("api/dashboard");
@@ -44,10 +47,39 @@ public partial class DashboardViewModel : ObservableObject
             Unassigned = d.UnassignedJobs;
         }
         catch (Exception ex) { Error = ex.Message; }
+
+        try
+        {
+            var from = DateTimeOffset.Now.Date;
+            var to = from.AddDays(7);
+            var bookings = await _api.GetAsync<IReadOnlyList<BookingDto>>(
+                $"api/bookings?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}");
+            UpcomingBookings.Clear();
+            foreach (var b in bookings.OrderBy(x => x.StartsAt).Take(12))
+            {
+                var when = b.StartsAt.ToLocalTime();
+                var label = when.Date == DateTime.Today
+                    ? $"Today {when:HH:mm}"
+                    : when.Date == DateTime.Today.AddDays(1)
+                        ? $"Tomorrow {when:HH:mm}"
+                        : when.ToString("ddd d MMM HH:mm");
+                UpcomingBookings.Add(new DashboardBookingVm(b.Id, label, b.Status, b.CustomerName,
+                    string.IsNullOrWhiteSpace(b.StaffName) ? b.Type : $"{b.Type} · {b.StaffName}", b.Notes));
+            }
+            CalendarStatus = UpcomingBookings.Count == 0
+                ? "No bookings in the next 7 days."
+                : $"{UpcomingBookings.Count} upcoming (next 7 days)";
+        }
+        catch (Exception ex)
+        {
+            UpcomingBookings.Clear();
+            CalendarStatus = $"Calendar unavailable: {ex.Message}";
+        }
     }
 }
 
 public sealed record DashboardCardVm(string Title, string Value, string? Filter);
+public sealed record DashboardBookingVm(Guid Id, string WhenLabel, string Status, string CustomerName, string TypeLine, string? Notes);
 
 public partial class GenericListViewModel : ObservableObject
 {

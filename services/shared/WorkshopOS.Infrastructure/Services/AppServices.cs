@@ -279,6 +279,7 @@ public sealed class SettingsService : ISettingsService
             new("ai", "Services", "AI Assist", 11, IsVisible(hidden, "ai"), true),
             new("reports", "Management", "Reports", 10, IsVisible(hidden, "reports"), true),
             new("backups", "Management", "Backups", 12, IsVisible(hidden, "backups"), true),
+            // Users & Settings live under the client Settings hub (not top-level sidebar).
             new("users", "Management", "Users", 1, IsVisible(hidden, "users"), true),
             new("settings", "Management", "Settings", 1, IsVisible(hidden, "settings"), true)
         ];
@@ -308,6 +309,119 @@ public sealed class RoleService : IRoleService
             .ToList();
         return Task.FromResult<IReadOnlyList<WorkshopOS.Contracts.Common.PermissionDto>>(list);
     }
+}
+
+public sealed class StaffService : IStaffService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly TokenService _tokens;
+    private readonly IAuditService _audit;
+
+    public StaffService(WorkshopDbContext db, TokenService tokens, IAuditService audit)
+    {
+        _db = db;
+        _tokens = tokens;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<StaffUserDto>> ListAsync(CancellationToken ct = default)
+    {
+        var users = await _db.Users.AsNoTracking()
+            .Include(u => u.Role)
+            .Where(u => u.ArchivedAt == null)
+            .OrderBy(u => u.DisplayName)
+            .ToListAsync(ct);
+        return users.Select(ToDto).ToList();
+    }
+
+    public async Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var email = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var display = (request.DisplayName ?? string.Empty).Trim();
+        var roleKey = (request.RoleKey ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(display))
+            throw new ValidationAppException("Email and display name are required.");
+        if (string.IsNullOrWhiteSpace(roleKey) || roleKey == "owner")
+            throw new ValidationAppException("Choose a role other than Owner. The shop owner is created during setup.");
+
+        var problem = PasswordRules.Validate(request.Password);
+        if (problem is not null) throw new ValidationAppException(problem);
+
+        if (await _db.Users.AnyAsync(u => u.NormalizedEmail == email.ToUpperInvariant() && u.ArchivedAt == null, ct))
+            throw new ConflictAppException("A user with that email already exists.");
+
+        var role = await _db.Roles.FirstOrDefaultAsync(r => r.Key == roleKey, ct)
+            ?? throw new ValidationAppException("Unknown role.");
+
+        var locationId = await _db.Locations.AsNoTracking()
+            .Where(l => l.IsDefault)
+            .Select(l => (Guid?)l.Id)
+            .FirstOrDefaultAsync(ct)
+            ?? await _db.Locations.AsNoTracking().Select(l => (Guid?)l.Id).FirstOrDefaultAsync(ct);
+
+        var user = new AppUser
+        {
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            UserName = email,
+            NormalizedUserName = email.ToUpperInvariant(),
+            DisplayName = display,
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            RoleId = role.Id,
+            Role = role,
+            LocationId = locationId,
+            IsOwner = false,
+            Status = UserStatus.Active
+        };
+        user.PasswordHash = _tokens.HashPassword(user, request.Password);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "staff.create", "User", user.Id.ToString(), newValue: new { user.Email, role.Key }, ct: ct);
+        return ToDto(user);
+    }
+
+    public async Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var user = await _db.Users.Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == id && u.ArchivedAt == null, ct)
+            ?? throw new ValidationAppException("User was not found.");
+
+        if (!string.IsNullOrWhiteSpace(request.DisplayName))
+            user.DisplayName = request.DisplayName.Trim();
+
+        if (request.Phone is not null)
+            user.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+
+        if (!string.IsNullOrWhiteSpace(request.RoleKey))
+        {
+            var roleKey = request.RoleKey.Trim().ToLowerInvariant();
+            if (roleKey == "owner" || user.IsOwner)
+                throw new ValidationAppException("Owner role cannot be reassigned through staff settings.");
+            var role = await _db.Roles.FirstOrDefaultAsync(r => r.Key == roleKey, ct)
+                ?? throw new ValidationAppException("Unknown role.");
+            user.RoleId = role.Id;
+            user.Role = role;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            if (!Enum.TryParse<UserStatus>(request.Status, ignoreCase: true, out var status))
+                throw new ValidationAppException("Status must be Active or Suspended.");
+            if (user.IsOwner && status != UserStatus.Active)
+                throw new ValidationAppException("The owner account cannot be suspended.");
+            user.Status = status;
+        }
+
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "staff.update", "User", user.Id.ToString(), newValue: request, ct: ct);
+        return ToDto(user);
+    }
+
+    private static StaffUserDto ToDto(AppUser user) =>
+        new(user.Id, user.Email, user.DisplayName, user.Phone, user.Role.Key, user.Role.Name,
+            user.Status.ToString(), user.IsOwner, user.LastLoginAt, user.CreatedAt);
 }
 
 public sealed class SearchService : ISearchService

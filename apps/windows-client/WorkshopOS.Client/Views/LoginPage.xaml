@@ -10,6 +10,7 @@
       <PasswordBox Header="Password" PasswordChanged="Password_PasswordChanged" />
       <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
       <Button Content="Sign in" Command="{x:Bind ViewModel.LoginCommand}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+      <HyperlinkButton Content="Change server / pairing code" Click="ChangeServer_Click" HorizontalAlignment="Center" />
     </StackPanel>
   </Grid>
 </Page>

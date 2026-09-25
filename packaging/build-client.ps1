@@ -11,11 +11,11 @@ param(
     [string]$Configuration = "Release",
     [switch]$SkipInstaller,
     [string]$ApiDefaultUrl = "http://127.0.0.1:5088",
-    [string]$Version = "1.2.0"
+    [string]$Version = "1.2.4"
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptVersion = "v4"
+$ScriptVersion = "v5"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Proj = Join-Path $Root "apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csproj"
 $PublishDir = Join-Path $Root "packaging\out\client"
@@ -91,6 +91,8 @@ $PublishProps = @(
     "/p:PublishReadyToRun=false"
     "/p:PublishProtocol=FileSystem"
     "/p:DeployOnBuild=false"
+    "/p:Version=$Version"
+    "/p:InformationalVersion=$Version"
 )
 
 Write-Host "==> Restoring WorkshopOS.Client"

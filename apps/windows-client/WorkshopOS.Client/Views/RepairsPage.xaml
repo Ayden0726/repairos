@@ -7,33 +7,77 @@
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
     <Grid>
-      <TextBlock Text="Repairs" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
-      <Button Content="New repair" HorizontalAlignment="Right" Click="NewRepair_Click" Style="{StaticResource AccentButtonStyle}" />
+      <StackPanel>
+        <TextBlock Text="Repairs" FontSize="22" FontWeight="SemiBold" />
+        <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" FontSize="12" Opacity="0.7" />
+      </StackPanel>
+      <Button Content="New ticket" HorizontalAlignment="Right" Click="NewRepair_Click" Style="{StaticResource AccentButtonStyle}" />
     </Grid>
     <Grid Grid.Row="1" ColumnSpacing="8">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="200" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <TextBox PlaceholderText="Search ticket, customer, serial…" Text="{x:Bind ViewModel.Query, Mode=TwoWay}" />
-      <Button Grid.Column="1" Content="Search" Command="{x:Bind ViewModel.RefreshCommand}" />
+      <TextBox PlaceholderText="Search ticket, customer, serial…"
+               Text="{x:Bind ViewModel.Query, Mode=TwoWay}"
+               KeyDown="Query_KeyDown" />
+      <ComboBox Grid.Column="1" Header="Status"
+                ItemsSource="{x:Bind ViewModel.StatusFilterLabels, Mode=OneWay}"
+                SelectedItem="{x:Bind ViewModel.SelectedStatusLabel, Mode=TwoWay}"
+                SelectionChanged="StatusFilter_Changed" />
+      <CheckBox Grid.Column="2" Content="Overdue only" VerticalAlignment="Bottom"
+                IsChecked="{x:Bind ViewModel.OverdueOnly, Mode=TwoWay}"
+                Checked="Overdue_Changed" Unchecked="Overdue_Changed" />
+      <Button Grid.Column="3" Content="Search" VerticalAlignment="Bottom"
+              Command="{x:Bind ViewModel.RefreshCommand}" />
     </Grid>
-    <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Repair_ItemClick">
+    <StackPanel Grid.Row="2" Spacing="4">
+      <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="28" Height="28" HorizontalAlignment="Left" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+    </StackPanel>
+    <ListView Grid.Row="3" ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+              IsItemClickEnabled="True" ItemClick="Repair_ItemClick"
+              SelectionMode="None">
       <ListView.ItemTemplate>
         <DataTemplate x:DataType="w:RepairListItemDto">
-          <Grid Padding="4" ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="140" /><ColumnDefinition Width="*" /><ColumnDefinition Width="120" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{x:Bind TicketNumber}" FontWeight="SemiBold" />
-            <StackPanel Grid.Column="1">
-              <TextBlock Text="{x:Bind CustomerName}" />
-              <TextBlock FontSize="12" Opacity="0.7" Text="{x:Bind ReportedIssue}" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-            <TextBlock Grid.Column="2" Text="{x:Bind StatusName}" HorizontalAlignment="Right" />
-          </Grid>
+          <Border Padding="10,8" Margin="0,0,0,6"
+                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  CornerRadius="6">
+            <Grid ColumnSpacing="12">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="120" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Text="{x:Bind TicketNumber}" FontWeight="SemiBold" />
+                <TextBlock FontSize="11" Opacity="0.65" Text="{x:Bind PriorityName}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="2">
+                <TextBlock Text="{x:Bind CustomerName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock FontSize="12" Opacity="0.75" Text="{x:Bind DeviceLabel}" TextTrimming="CharacterEllipsis" />
+                <TextBlock FontSize="12" Opacity="0.65" Text="{x:Bind ReportedIssue}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Spacing="2">
+                <Border Padding="6,2" HorizontalAlignment="Left" CornerRadius="4"
+                        Background="{ThemeResource AccentFillColorDefaultBrush}">
+                  <TextBlock Text="{x:Bind StatusName}" FontSize="12" Foreground="White" />
+                </Border>
+                <TextBlock FontSize="11" Opacity="0.7" Text="{x:Bind AssignedToName}" />
+              </StackPanel>
+              <StackPanel Grid.Column="3" Spacing="2" HorizontalAlignment="Right">
+                <TextBlock FontSize="11" Opacity="0.7" Text="{x:Bind CreatedAt}" />
+                <TextBlock FontSize="11" Opacity="0.7" Text="{x:Bind DueAt}" />
+              </StackPanel>
+            </Grid>
+          </Border>
         </DataTemplate>
       </ListView.ItemTemplate>
     </ListView>

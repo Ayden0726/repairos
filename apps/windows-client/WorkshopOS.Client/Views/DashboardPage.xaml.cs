@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Operations;
 
 namespace WorkshopOS.Client.Views;
 
@@ -19,5 +20,11 @@ public sealed partial class DashboardPage : Page
     {
         if (e.ClickedItem is DashboardCardVm card && !string.IsNullOrEmpty(card.Filter))
             Frame.Navigate(typeof(RepairsPage), card.Filter);
+    }
+
+    private void Urgent_Click(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is UrgentJobDto job)
+            Frame.Navigate(typeof(RepairDetailPage), job.Id);
     }
 }

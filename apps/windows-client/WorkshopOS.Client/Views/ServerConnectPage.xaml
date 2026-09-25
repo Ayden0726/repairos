@@ -5,6 +5,9 @@
   <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="32">
     <StackPanel MaxWidth="440" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
       <TextBlock Text="WorkshopOS" FontSize="28" FontWeight="SemiBold" />
+      <Border Background="#1A0B6E4F" Padding="10,6" CornerRadius="4" HorizontalAlignment="Left">
+        <TextBlock Text="Client 1.2.4" FontSize="14" FontWeight="SemiBold" Foreground="#0B6E4F" />
+      </Border>
       <TextBlock Text="Connect to your shop server on this Wi‑Fi / LAN." Opacity="0.75" TextWrapping="Wrap" />
 
       <TextBox Header="Pairing code (from http://server:5088/connect)"
@@ -20,6 +23,8 @@
       <TextBox Header="Server URL" Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay}"
                PlaceholderText="http://192.168.1.50:5088" />
       <Button Content="Connect" Command="{x:Bind ViewModel.ConnectCommand}" HorizontalAlignment="Stretch" />
+
+      <HyperlinkButton Content="Clear saved server" Click="ClearSaved_Click" HorizontalAlignment="Center" />
 
       <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
       <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />

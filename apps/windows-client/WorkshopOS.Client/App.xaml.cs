@@ -22,6 +22,7 @@ public partial class App : Application
         sc.AddTransient<SetupViewModel>();
         sc.AddTransient<LoginViewModel>();
         sc.AddTransient<ShellViewModel>();
+        sc.AddTransient<UsersViewModel>();
         sc.AddTransient<ServerConnectPage>();
         sc.AddTransient<SetupPage>();
         sc.AddTransient<LoginPage>();
@@ -35,6 +36,7 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         _window = new MainWindow();
+        ThemeService.Apply(_window, Services.GetRequiredService<IAppSettingsStore>().Theme);
         _window.Activate();
     }
 

@@ -55,20 +55,79 @@ dotnet restore WorkshopOS.Client\WorkshopOS.Client.csproj
 dotnet run --project WorkshopOS.Client\WorkshopOS.Client.csproj
 ```
 
-On first launch:
+### Startup / connect screen
+
+On launch (**Client 1.2.4+**):
+
+1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.4**. No “Connecting to server…” splash — Bootstrap is never the initial page.
+2. After you connect successfully → **Setup** (first-run shop + owner) or **Login**.
+
+Connect options on ServerConnect:
 
 1. Enter a **pairing code** from `http://<server>:5088/connect`, **or**
 2. Tap **Find on this network**, **or**
 3. Paste the server URL (`http://127.0.0.1:5088` for local API)
 
+**Change server** (Login / Settings → Connection) and **Clear saved server** wipe URL + tokens (JSON + WinRT LocalSettings + PasswordVault). Theme preference is kept.
+
+### Shell navigation (1.2.4)
+
+Slim left nav — AI Assist and Knowledge Base are **not** in the sidebar:
+
+| Primary | Nested / notes |
+| --- | --- |
+| Dashboard | Includes **Upcoming calendar** (next 7 days) |
+| Work | Repairs (tickets), Quotes, Invoices, Calendar (full list), PC Builds |
+| Inventory | Inventory, Purchasing, Used Tech |
+| Customers | — |
+| Reports | Top-level |
+| **Settings** (gear) | App (theme) · Users & Roles · Backups · Connection |
+
+Notifications stay on the **Alerts** button in the shell header (not a sidebar item).
+
+### App settings & theme
+
+**Settings → App**: Light / Dark / System. Persisted as `Theme` in:
+
+```text
+%LOCALAPPDATA%\WorkshopOS\client-settings.json
+```
+
+Applied via `RequestedTheme` on the main window root.
+
+### Users & Roles
+
+**Settings → Users & Roles**: list staff, create accounts, assign roles / suspend. Uses `GET/POST /api/users` and `PUT /api/users/{id}` (permissions `staff.view` / `staff.manage`). Role catalogue from `GET /api/roles`.
+
+**Settings → Backups**: create/list backups (moved out of primary nav).
+
+### Reset local client config (Windows)
+
+```powershell
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:LOCALAPPDATA\WorkshopOS"
+Get-ChildItem "$env:LOCALAPPDATA\Packages" -Directory -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match 'WorkshopOS' } |
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+```
+
+Then relaunch a **1.2.4+** build — you always land on Connect / pairing UI.
+
+### Account / shop setup wizard?
+
+**Yes for first-run shop setup** (not a separate multi-step “accounts wizard”):
+
+- After a successful server connect, if `GET /api/setup/status` says incomplete, the client shows **SetupPage** (business profile + owner account).
+- That is the only first-run wizard. Completing it creates the owner; later staff accounts are managed in **Settings → Users & Roles**.
+- There is **no** guided wizard for adding every staff account at install time.
+
 ## Build installer / portable zip
 
 1. Sync latest packaging scripts (`git pull`, or overwrite `packaging\build-client.ps1` / `build-client.cmd` from the remote if GitHub looks stale).
 2. Open **Developer PowerShell for VS 2022** (Start menu) — preferred over a normal PowerShell window.
-3. From the **repo root**, confirm the banner prints **`WorkshopOS client build script v4`**:
+3. From the **repo root**, confirm the banner prints **`WorkshopOS client build script v5`**:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.4 -SkipInstaller
 ```
 
 Or double-click `packaging\build-client.cmd`.
@@ -76,13 +135,13 @@ Or double-click `packaging\build-client.cmd`.
 Optional Setup.exe (needs [Inno Setup 6](https://jrsoftware.org/isdl.php)):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.0
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.4
 ```
 
 Outputs in `packaging\dist\` (only after a successful publish — failed builds do **not** zip stale output):
 
-- `WorkshopOS-Client-win-x64-v1.2.0.zip` — portable  
-- `WorkshopOS-Setup-1.2.0.exe` — if Inno is installed  
+- `WorkshopOS-Client-win-x64-v1.2.4.zip` — portable  
+- `WorkshopOS-Setup-1.2.4.exe` — if Inno is installed  
 
 ### ExpandPriContent / Pri.Tasks.dll
 
@@ -90,7 +149,7 @@ The project sets `<EnableMsixTooling>true</EnableMsixTooling>` with `<WindowsPac
 
 If the error persists:
 
-1. Confirm the script banner is **v4** and the csproj has `EnableMsixTooling` = `true`.
+1. Confirm the script banner is **v5** and the csproj has `EnableMsixTooling` = `true`.
 2. Visual Studio Installer → **Modify** → enable workload **WinUI application development**, plus Individual components **Windows App Packaging** and a **Windows 10/11 SDK**.
 3. Rebuild from Developer PowerShell for VS.
 

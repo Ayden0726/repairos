@@ -11,20 +11,26 @@ ASP.NET Core Identity stores users and password hashes. WorkshopOS adds:
 
 ## First-run
 
-1. Client calls `GET /api/setup/status`
-2. If incomplete, shows setup wizard (business + owner)
-3. `POST /api/setup` creates Location, BusinessSetting, Owner user with all permissions, marks `setup.completed`
-4. Client proceeds to login
+1. Client always opens **ServerConnect** on launch (pairing code, LAN discovery, or URL). No auto-bootstrap splash.
+2. After connect, client calls `GET /api/setup/status`
+3. If incomplete, shows **SetupPage** — the shop first-run wizard (business profile + owner account)
+4. `POST /api/setup` creates Location, BusinessSetting, Owner user with all permissions, marks `setup.completed`
+5. Client proceeds to login
 
-Setup cannot run twice.
+Setup cannot run twice. Staff users are created later in the app (**Settings → Users & Roles**), not by a second install wizard.
+
+Client connection settings path (Windows): `%LOCALAPPDATA%\WorkshopOS\client-settings.json`  
+Theme preference (`System` / `Light` / `Dark`) is stored in the same file and survives **Change server**.
+
+**Client 1.2.4+** always shows the connect UI on launch. **Change server** / **Clear saved server** wipe connection tokens/URL (JSON, WinRT `LocalSettings`, PasswordVault) but keep the theme.
 
 ## Login flow
 
 1. Client POSTs email + password
 2. Failed attempts audited + rate limited
 3. Success returns `{ accessToken, refreshToken, expiresAt, user }`
-4. Client stores tokens in Windows Credential Manager / protected local storage (DPAPI)
-5. Server URL stored separately in local app settings
+4. Client stores tokens in `%LOCALAPPDATA%\WorkshopOS\client-settings.json` (with the server URL)
+5. Server URL is cleared via **Clear saved server** / deleting that file
 
 ## Authorization
 

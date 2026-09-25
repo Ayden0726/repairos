@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using WorkshopOS.Client.Services;
 using WorkshopOS.Client.ViewModels;
 
 namespace WorkshopOS.Client.Views;
@@ -20,5 +21,17 @@ public sealed partial class LoginPage : Page
     {
         if (sender is PasswordBox box)
             ViewModel.Password = box.Password;
+    }
+
+    private void ChangeServer_Click(object sender, RoutedEventArgs e)
+    {
+        App.Services.GetRequiredService<IAppSettingsStore>().ClearConnection();
+        if (App.MainWindowInstance is MainWindow window)
+        {
+            window.AppRootFrame.Navigate(typeof(ServerConnectPage), "Choose a different WorkshopOS server.");
+            return;
+        }
+
+        Frame.Navigate(typeof(ServerConnectPage), "Choose a different WorkshopOS server.");
     }
 }
