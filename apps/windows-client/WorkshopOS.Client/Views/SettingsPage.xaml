@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:auth="using:WorkshopOS.Contracts.Auth">
-  <Grid Padding="24" RowSpacing="12">
+  <Grid Padding="24" RowSpacing="12" Background="{ThemeResource WorkshopPageBackgroundBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -24,7 +24,7 @@
               <ComboBoxItem Content="Dark" Tag="Dark" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.4" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.5" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
@@ -60,7 +60,7 @@
             </ListView>
             <StackPanel x:Name="EditUserPanel" Spacing="8" Visibility="Collapsed">
               <TextBlock Text="Edit selected" FontWeight="SemiBold" />
-              <ComboBox x:Name="EditRoleCombo" Header="Role" DisplayMemberPath="Name" Width="240" />
+              <ComboBox x:Name="EditRoleCombo" Header="Role" DisplayMemberPath="DisplayLabel" Width="240" />
               <ComboBox x:Name="EditStatusCombo" Header="Status" Width="240">
                 <x:String>Active</x:String>
                 <x:String>Suspended</x:String>
@@ -69,14 +69,17 @@
             </StackPanel>
           </StackPanel>
           <Border Grid.Column="1" Padding="16" CornerRadius="8"
-                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                  Background="{ThemeResource WorkshopSurfaceBrush}"
+                  BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
             <StackPanel Spacing="8">
               <TextBlock Text="New account" FontWeight="SemiBold" FontSize="16" />
               <TextBox x:Name="NewDisplayNameBox" Header="Display name" />
               <TextBox x:Name="NewEmailBox" Header="Email" />
               <PasswordBox x:Name="NewPasswordBox" Header="Password (min 10, upper/lower/digit)" />
               <TextBox x:Name="NewPhoneBox" Header="Phone (optional)" />
-              <ComboBox x:Name="NewRoleCombo" Header="Role" DisplayMemberPath="Name" />
+              <ComboBox x:Name="NewRoleCombo" Header="Role" DisplayMemberPath="DisplayLabel"
+                        HorizontalAlignment="Stretch" PlaceholderText="Select a role" />
+              <TextBlock x:Name="RolesHintText" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
               <Button x:Name="CreateUserButton" Content="Create account" Click="CreateUser_Click"
                       Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
             </StackPanel>
@@ -109,7 +112,8 @@
           <StackPanel Spacing="12" MaxWidth="560">
             <TextBlock Text="Server &amp; business" FontWeight="SemiBold" FontSize="16" />
             <TextBlock Text="Business profile from the WorkshopOS server." Opacity="0.7" />
-            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+                    BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
               <TextBlock x:Name="SummaryText" TextWrapping="Wrap" />
             </Border>
             <TextBlock x:Name="ServerUrlText" Opacity="0.75" TextWrapping="Wrap" />

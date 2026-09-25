@@ -69,14 +69,16 @@ public interface IDeviceService
 
 public interface IRepairService
 {
-    Task<PagedResult<RepairListItemDto>> ListAsync(string? q, string? statusKey, Guid? assignedToId, bool? overdueOnly, int page, int pageSize, CancellationToken ct = default);
+    Task<PagedResult<RepairListItemDto>> ListAsync(string? q, string? statusKey, string? priorityKey, Guid? assignedToId, bool? overdueOnly, int page, int pageSize, CancellationToken ct = default);
     Task<RepairDetailDto> GetAsync(Guid id, bool canViewCredentials, CancellationToken ct = default);
     Task<RepairDetailDto> CreateAsync(CreateRepairRequest request, Guid actorId, CancellationToken ct = default);
     Task<RepairDetailDto> ChangeStatusAsync(Guid id, Guid statusId, Guid actorId, CancellationToken ct = default);
+    Task<RepairDetailDto> ChangePriorityAsync(Guid id, Guid priorityId, Guid actorId, CancellationToken ct = default);
     Task<RepairDetailDto> AssignAsync(Guid id, Guid? assignedToId, Guid actorId, CancellationToken ct = default);
     Task<RepairNoteDto> AddNoteAsync(Guid id, AddNoteRequest request, Guid actorId, bool canInternal, CancellationToken ct = default);
     Task<RepairDetailDto> UpdateDiagnosisAsync(Guid id, UpdateDiagnosisRequest request, Guid actorId, CancellationToken ct = default);
     Task<RepairLookupsDto> GetLookupsAsync(CancellationToken ct = default);
+    Task<string> BuildPrintHtmlAsync(Guid id, CancellationToken ct = default);
 }
 
 public interface IDashboardService

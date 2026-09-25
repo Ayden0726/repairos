@@ -76,17 +76,26 @@ public sealed class RepairsController : ControllerBase
     public Task<PagedResult<RepairListItemDto>> List(
         [FromQuery] string? q,
         [FromQuery] string? status,
+        [FromQuery] string? priority,
         [FromQuery] Guid? assignedToId,
         [FromQuery] bool? overdue,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default) =>
-        _repairs.ListAsync(q, status, assignedToId, overdue, page, pageSize, ct);
+        _repairs.ListAsync(q, status, priority, assignedToId, overdue, page, pageSize, ct);
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "perm:tickets.view")]
     public Task<RepairDetailDto> Get(Guid id, CancellationToken ct) =>
         _repairs.GetAsync(id, User.HasClaim("is_owner", "true") || User.HasClaim("permission", "tickets.credentials.view"), ct);
+
+    [HttpGet("{id:guid}/print")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public async Task<IActionResult> Print(Guid id, CancellationToken ct)
+    {
+        var html = await _repairs.BuildPrintHtmlAsync(id, ct);
+        return Content(html, "text/html; charset=utf-8");
+    }
 
     [HttpPost]
     [Authorize(Policy = "perm:tickets.create")]
@@ -97,6 +106,11 @@ public sealed class RepairsController : ControllerBase
     [Authorize(Policy = "perm:tickets.status")]
     public Task<RepairDetailDto> Status(Guid id, [FromBody] ChangeStatusRequest request, CancellationToken ct) =>
         _repairs.ChangeStatusAsync(id, request.StatusId, UserId(), ct);
+
+    [HttpPost("{id:guid}/priority")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<RepairDetailDto> Priority(Guid id, [FromBody] ChangePriorityRequest request, CancellationToken ct) =>
+        _repairs.ChangePriorityAsync(id, request.PriorityId, UserId(), ct);
 
     [HttpPost("{id:guid}/assign")]
     [Authorize(Policy = "perm:tickets.assign")]

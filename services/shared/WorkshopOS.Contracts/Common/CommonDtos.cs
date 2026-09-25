@@ -12,7 +12,8 @@ public sealed record SearchGroupDto(string Type, IReadOnlyList<SearchHitDto> Hit
 
 public sealed record SearchHitDto(string Id, string Title, string? Subtitle, string Route);
 
-public sealed record RoleDto(Guid Id, string Key, string Name, string? Description, IReadOnlyList<string> Permissions);
+/// <summary>Role catalogue row. Permissions is string[] so WinUI/JSON deserialize reliably.</summary>
+public sealed record RoleDto(Guid Id, string Key, string Name, string? Description, string[] Permissions);
 
 public sealed record PermissionDto(string Key, string Group, string Label);
 

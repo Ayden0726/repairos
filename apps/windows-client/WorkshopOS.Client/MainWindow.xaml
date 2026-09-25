@@ -2,14 +2,15 @@
     x:Class="WorkshopOS.Client.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Grid>
+  <Grid x:Name="RootGrid" Background="{ThemeResource WorkshopPageBackgroundBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="32" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
-    <Border x:Name="AppTitleBar" Grid.Row="0" Background="Transparent">
-      <TextBlock Margin="16,8,0,0" Text="WorkshopOS" FontWeight="SemiBold" FontSize="12" />
+    <Border x:Name="AppTitleBar" Grid.Row="0" Background="{ThemeResource WorkshopChromeBrush}">
+      <TextBlock Margin="16,8,0,0" Text="WorkshopOS" FontWeight="SemiBold" FontSize="12"
+                 Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
     </Border>
-    <Frame x:Name="RootFrame" Grid.Row="1" />
+    <Frame x:Name="RootFrame" Grid.Row="1" Background="{ThemeResource WorkshopPageBackgroundBrush}" />
   </Grid>
 </Window>

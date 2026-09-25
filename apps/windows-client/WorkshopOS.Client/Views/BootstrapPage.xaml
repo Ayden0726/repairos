@@ -2,12 +2,12 @@
     x:Class="WorkshopOS.Client.Views.BootstrapPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- Kept for compatibility only. MainWindow never navigates here (1.2.4+). -->
-  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+  <!-- Kept for compatibility only. MainWindow never navigates here (1.2.5+). -->
+  <Grid Background="{ThemeResource WorkshopPageBackgroundBrush}">
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" MaxWidth="420" Padding="24">
       <TextBlock Text="WorkshopOS" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
       <Border Background="#1A0B6E4F" Padding="10,6" CornerRadius="4" HorizontalAlignment="Center">
-        <TextBlock x:Name="BuildBanner" Text="Client 1.2.4" FontSize="14" FontWeight="SemiBold" Foreground="#0B6E4F" />
+        <TextBlock x:Name="BuildBanner" Text="Client 1.2.5" FontSize="14" FontWeight="SemiBold" Foreground="#0B6E4F" />
       </Border>
       <TextBlock x:Name="StatusText" Text="Opening connect screen…" Opacity="0.7" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
       <ProgressRing IsActive="True" Width="36" Height="36" HorizontalAlignment="Center" />

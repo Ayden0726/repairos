@@ -159,6 +159,7 @@ public sealed record CreateRepairRequest(
     string? NewDeviceImei);
 
 public sealed record ChangeStatusRequest(Guid StatusId);
+public sealed record ChangePriorityRequest(Guid PriorityId);
 public sealed record AssignRepairRequest(Guid? AssignedToId);
 public sealed record AddNoteRequest(string Body, bool IsInternal);
 public sealed record UpdateDiagnosisRequest(string? Diagnosis, string? RecommendedRepair);

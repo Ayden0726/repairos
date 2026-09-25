@@ -103,14 +103,22 @@ public sealed partial class SettingsPage : Page
     {
         UsersLoadingRing.IsActive = true;
         UsersErrorText.Text = string.Empty;
+        RolesHintText.Text = string.Empty;
         try
         {
             await Users.LoadCommand.ExecuteAsync(null);
             UsersList.ItemsSource = Users.Users;
             NewRoleCombo.ItemsSource = Users.Roles;
             EditRoleCombo.ItemsSource = Users.Roles;
-            if (NewRoleCombo.SelectedItem is null && Users.Roles.Count > 0)
+            if (Users.NewRole is not null)
+                NewRoleCombo.SelectedItem = Users.Roles.FirstOrDefault(r => r.Key == Users.NewRole.Key);
+            else if (NewRoleCombo.SelectedItem is null && Users.Roles.Count > 0)
                 NewRoleCombo.SelectedItem = Users.Roles[0];
+
+            RolesHintText.Text = Users.Roles.Count == 0
+                ? "Role list empty — check GET /api/roles and staff.view permission."
+                : string.Join(" · ", Users.Roles.Select(r => r.DisplayLabel));
+
             UsersStatusText.Text = Users.Status ?? (Users.Users.Count == 0 ? "No staff yet." : $"{Users.Users.Count} account(s)");
             if (!string.IsNullOrWhiteSpace(Users.Error))
                 UsersErrorText.Text = Users.Error;
@@ -141,7 +149,7 @@ public sealed partial class SettingsPage : Page
         Users.NewEmail = NewEmailBox.Text ?? string.Empty;
         Users.NewPassword = NewPasswordBox.Password ?? string.Empty;
         Users.NewPhone = NewPhoneBox.Text ?? string.Empty;
-        Users.NewRole = NewRoleCombo.SelectedItem as RoleDto;
+        Users.NewRole = NewRoleCombo.SelectedItem as RoleOption;
         CreateUserButton.IsEnabled = false;
         try
         {
@@ -167,7 +175,7 @@ public sealed partial class SettingsPage : Page
     private async void SaveUser_Click(object sender, RoutedEventArgs e)
     {
         if (Users.SelectedUser is null) return;
-        Users.EditRole = EditRoleCombo.SelectedItem as RoleDto;
+        Users.EditRole = EditRoleCombo.SelectedItem as RoleOption;
         Users.EditStatus = EditStatusCombo.SelectedItem as string ?? "Active";
         await Users.SaveSelectedCommand.ExecuteAsync(null);
         await RefreshUsersUiAsync();

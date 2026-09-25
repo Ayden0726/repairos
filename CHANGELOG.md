@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.5 — 2026-09-25
+
+### Added
+
+- WinUI **Tickets** helpdesk UI: Work → Tickets, shell **New ticket** CTA, list filters (status / priority / tech / overdue), ticket detail with status workflow chips, notes timeline (internal flag), priority change, customer link, printable job sheet (`GET /api/repairs/{id}/print`)
+- Repair list API priority filter (`?priority=`) and `POST /api/repairs/{id}/priority`
+
+### Fixed
+
+- Dark mode uses solid Workshop theme brushes (page / surface / border / text) instead of blurry translucent grey cards
+- Settings → Users & Roles role dropdown: WinUI `DisplayMemberPath=Name` conflict fixed via `DisplayLabel`; roles load from `GET /api/roles` with clearer errors
+
+
 ## 1.2.2 — 2026-09-24
 
 ### Fixed

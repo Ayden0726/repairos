@@ -7,6 +7,53 @@
       <ResourceDictionary.MergedDictionaries>
         <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
       </ResourceDictionary.MergedDictionaries>
+
+      <!-- Crisp light/dark surfaces (not translucent grey overlays). -->
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="WorkshopPageBackgroundBrush" Color="#F3F5F7" />
+          <SolidColorBrush x:Key="WorkshopSurfaceBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="WorkshopSurfaceAltBrush" Color="#EEF2F4" />
+          <SolidColorBrush x:Key="WorkshopBorderBrush" Color="#D5DCE2" />
+          <SolidColorBrush x:Key="WorkshopTextPrimaryBrush" Color="#14212B" />
+          <SolidColorBrush x:Key="WorkshopTextSecondaryBrush" Color="#5B6B78" />
+          <SolidColorBrush x:Key="WorkshopAccentBrush" Color="#0F766E" />
+          <SolidColorBrush x:Key="WorkshopAccentSoftBrush" Color="#D8F3EF" />
+          <SolidColorBrush x:Key="WorkshopDangerBrush" Color="#B42318" />
+          <SolidColorBrush x:Key="WorkshopOverdueBrush" Color="#B42318" />
+          <SolidColorBrush x:Key="WorkshopNavPaneBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="WorkshopChromeBrush" Color="#E8EEF1" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="WorkshopPageBackgroundBrush" Color="#0F1419" />
+          <SolidColorBrush x:Key="WorkshopSurfaceBrush" Color="#1A222C" />
+          <SolidColorBrush x:Key="WorkshopSurfaceAltBrush" Color="#232D38" />
+          <SolidColorBrush x:Key="WorkshopBorderBrush" Color="#334155" />
+          <SolidColorBrush x:Key="WorkshopTextPrimaryBrush" Color="#E8EEF4" />
+          <SolidColorBrush x:Key="WorkshopTextSecondaryBrush" Color="#9AA8B6" />
+          <SolidColorBrush x:Key="WorkshopAccentBrush" Color="#2DD4BF" />
+          <SolidColorBrush x:Key="WorkshopAccentSoftBrush" Color="#134E4A" />
+          <SolidColorBrush x:Key="WorkshopDangerBrush" Color="#F97066" />
+          <SolidColorBrush x:Key="WorkshopOverdueBrush" Color="#F97066" />
+          <SolidColorBrush x:Key="WorkshopNavPaneBrush" Color="#121820" />
+          <SolidColorBrush x:Key="WorkshopChromeBrush" Color="#0B1015" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+          <SolidColorBrush x:Key="WorkshopPageBackgroundBrush" Color="#F3F5F7" />
+          <SolidColorBrush x:Key="WorkshopSurfaceBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="WorkshopSurfaceAltBrush" Color="#EEF2F4" />
+          <SolidColorBrush x:Key="WorkshopBorderBrush" Color="#D5DCE2" />
+          <SolidColorBrush x:Key="WorkshopTextPrimaryBrush" Color="#14212B" />
+          <SolidColorBrush x:Key="WorkshopTextSecondaryBrush" Color="#5B6B78" />
+          <SolidColorBrush x:Key="WorkshopAccentBrush" Color="#0F766E" />
+          <SolidColorBrush x:Key="WorkshopAccentSoftBrush" Color="#D8F3EF" />
+          <SolidColorBrush x:Key="WorkshopDangerBrush" Color="#B42318" />
+          <SolidColorBrush x:Key="WorkshopOverdueBrush" Color="#B42318" />
+          <SolidColorBrush x:Key="WorkshopNavPaneBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="WorkshopChromeBrush" Color="#E8EEF1" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
       <SolidColorBrush x:Key="WorkshopAccentBrush" Color="#0F766E" />
     </ResourceDictionary>
   </Application.Resources>

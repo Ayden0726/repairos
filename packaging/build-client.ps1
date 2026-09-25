@@ -11,7 +11,7 @@ param(
     [string]$Configuration = "Release",
     [switch]$SkipInstaller,
     [string]$ApiDefaultUrl = "http://127.0.0.1:5088",
-    [string]$Version = "1.2.4"
+    [string]$Version = "1.2.5"
 )
 
 $ErrorActionPreference = "Stop"

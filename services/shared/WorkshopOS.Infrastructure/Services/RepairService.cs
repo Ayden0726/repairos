@@ -23,7 +23,7 @@ public sealed class RepairService : IRepairService
         _qa = qa;
     }
 
-    public async Task<PagedResult<RepairListItemDto>> ListAsync(string? q, string? statusKey, Guid? assignedToId, bool? overdueOnly, int page, int pageSize, CancellationToken ct = default)
+    public async Task<PagedResult<RepairListItemDto>> ListAsync(string? q, string? statusKey, string? priorityKey, Guid? assignedToId, bool? overdueOnly, int page, int pageSize, CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -39,6 +39,8 @@ public sealed class RepairService : IRepairService
 
         if (!string.IsNullOrWhiteSpace(statusKey))
             query = query.Where(r => r.Status.Key == statusKey);
+        if (!string.IsNullOrWhiteSpace(priorityKey))
+            query = query.Where(r => r.Priority.Key == priorityKey);
         if (assignedToId is Guid tech)
             query = query.Where(r => r.AssignedToId == tech);
         if (overdueOnly == true)
@@ -165,6 +167,73 @@ public sealed class RepairService : IRepairService
         await AddEventAsync(ticket.Id, actorId, "repair.status", $"Status changed to {status.Name}", old, status.Name, ct);
         await _audit.WriteAsync(actorId, "repair.status", "RepairTicket", ticket.Id.ToString(), oldValue: old, newValue: status.Name, ct: ct);
         return await GetAsync(id, true, ct);
+    }
+
+    public async Task<RepairDetailDto> ChangePriorityAsync(Guid id, Guid priorityId, Guid actorId, CancellationToken ct = default)
+    {
+        var ticket = await _db.RepairTickets.Include(t => t.Priority).FirstOrDefaultAsync(t => t.Id == id && t.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Repair was not found.", 404);
+        var priority = await _db.RepairPriorities.FirstOrDefaultAsync(p => p.Id == priorityId, ct)
+            ?? throw new ValidationAppException("Invalid priority.");
+        var old = ticket.Priority.Name;
+        ticket.PriorityId = priority.Id;
+        ticket.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await AddEventAsync(ticket.Id, actorId, "repair.priority", $"Priority changed to {priority.Name}", old, priority.Name, ct);
+        await _audit.WriteAsync(actorId, "repair.priority", "RepairTicket", ticket.Id.ToString(), oldValue: old, newValue: priority.Name, ct: ct);
+        return await GetAsync(id, true, ct);
+    }
+
+    public async Task<string> BuildPrintHtmlAsync(Guid id, CancellationToken ct = default)
+    {
+        var r = await LoadTicketAsync(id, ct);
+        static string Esc(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
+        var accessories = string.Join(", ", new[]
+        {
+            r.ChargerIncluded ? "Charger" : null,
+            r.SimIncluded ? "SIM" : null,
+            r.CaseIncluded ? "Case" : null,
+            r.AccessoriesIncluded ? "Other accessories" : null
+        }.Where(x => x is not null));
+        var notesHtml = r.Notes.Count == 0
+            ? "<li>None</li>"
+            : string.Join("", r.Notes.Take(8).Select(n =>
+                "<li><strong>" + Esc(n.Author.DisplayName) + "</strong> (" + Esc(n.CreatedAt.ToLocalTime().ToString("g")) + ")" +
+                (n.IsInternal ? " · internal" : "") + ": " + Esc(n.Body) + "</li>"));
+
+        var deviceLabel = r.Device is null ? "—" : $"{r.Device.Brand} {r.Device.Model}".Trim();
+        var serialLine = r.Device?.Serial is null ? "" : "<div>Serial: " + Esc(r.Device.Serial) + "</div>";
+        var due = r.DueAt?.ToLocalTime().ToString("g") ?? "—";
+        var acc = string.IsNullOrWhiteSpace(accessories) ? "None noted" : accessories;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>")
+          .Append(Esc(r.TicketNumber)).Append("</title><style>")
+          .Append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#111}")
+          .Append("h1{margin:0 0 4px;font-size:22px}.meta{color:#444;margin-bottom:16px}")
+          .Append(".box{border:1px solid #ccc;border-radius:8px;padding:12px;margin:12px 0}")
+          .Append(".label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#666}")
+          .Append("@media print{button{display:none}}")
+          .Append("</style></head><body>")
+          .Append("<button onclick=\"window.print()\">Print</button>")
+          .Append("<h1>").Append(Esc(r.TicketNumber)).Append("</h1>")
+          .Append("<div class=\"meta\">").Append(Esc(r.Customer.DisplayName)).Append(" · ")
+          .Append(Esc(r.Type.Name)).Append(" · ").Append(Esc(r.Status.Name)).Append(" · ")
+          .Append(Esc(r.Priority.Name)).Append("</div>")
+          .Append("<div class=\"box\"><div class=\"label\">Device</div>").Append(Esc(deviceLabel))
+          .Append(serialLine).Append("</div>")
+          .Append("<div class=\"box\"><div class=\"label\">Reported fault</div><pre style=\"white-space:pre-wrap;font-family:inherit;margin:0\">")
+          .Append(Esc(r.ReportedIssue)).Append("</pre></div>")
+          .Append("<div class=\"box\"><div class=\"label\">Diagnosis / recommended</div><div>")
+          .Append(Esc(r.Diagnosis ?? "—")).Append("</div><div>")
+          .Append(Esc(r.RecommendedRepair ?? "")).Append("</div></div>")
+          .Append("<div class=\"box\"><div class=\"label\">Assigned / due</div>Tech: ")
+          .Append(Esc(r.AssignedTo?.DisplayName ?? "Unassigned")).Append("<br/>Due: ")
+          .Append(Esc(due)).Append("<br/>Accessories: ").Append(Esc(acc)).Append("</div>")
+          .Append("<div class=\"box\"><div class=\"label\">Notes</div><ul>").Append(notesHtml).Append("</ul></div>")
+          .Append("<script>window.onload=function(){setTimeout(function(){window.print()},300);}</script>")
+          .Append("</body></html>");
+        return sb.ToString();
     }
 
     public async Task<RepairDetailDto> AssignAsync(Guid id, Guid? assignedToId, Guid actorId, CancellationToken ct = default)

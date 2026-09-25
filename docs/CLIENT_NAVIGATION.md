@@ -12,7 +12,7 @@
 | Item | Status |
 | --- | --- |
 | Dashboard | Live metrics |
-| Repairs | Full intake / list / detail |
+| Tickets | Full intake / list / detail |
 | Customers | List / create / detail + devices |
 | Calendar | Bookings list |
 | Notifications | Inbox list |

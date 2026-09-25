@@ -80,7 +80,7 @@ public sealed partial class ShellPage : Page
     private static string TitleForKey(string key) => key switch
     {
         "dashboard" => "Dashboard",
-        "repairs" => "Repairs",
+        "repairs" => "Tickets",
         "quotes" => "Quotes",
         "invoices" => "Invoices",
         "calendar" => "Calendar",
@@ -222,5 +222,12 @@ public sealed partial class ShellPage : Page
     {
         ViewModel.CurrentPageTitle = "Notifications";
         ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Notifications", "api/notifications"));
+    }
+
+    private void NewTicket_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CurrentPageTitle = "New ticket";
+        ContentFrame.Navigate(typeof(NewRepairPage));
+        SelectNavKey("repairs");
     }
 }

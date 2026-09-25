@@ -38,7 +38,7 @@ public sealed partial class RepairsPage : Page
 
     private void NewRepair_Click(object sender, RoutedEventArgs e) => Frame.Navigate(typeof(NewRepairPage));
 
-    private async void StatusFilter_Changed(object sender, SelectionChangedEventArgs e)
+    private async void Filter_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (!_ready) return;
         await ViewModel.RefreshCommand.ExecuteAsync(null);

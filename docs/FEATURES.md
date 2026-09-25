@@ -42,7 +42,7 @@ Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup
 
 ## Windows client modules
 
-Sidebar: Dashboard, Repairs, Customers, Calendar, Notifications, Quotes, Invoices, Used Tech, Inventory, Purchasing, PC Builds, Knowledge, AI Assist, Reports, Backups, Users, Settings.
+Sidebar: Dashboard, Tickets, Customers, Calendar, Notifications, Quotes, Invoices, Used Tech, Inventory, Purchasing, PC Builds, Knowledge, AI Assist, Reports, Backups, Users, Settings.
 
 ## What is intentionally not fake
 

@@ -265,7 +265,7 @@ public sealed class SettingsService : ISettingsService
         WorkshopOS.Contracts.Common.ModuleDto[] modules =
         [
             new("dashboard", "Workshop", "Dashboard", 3, IsVisible(hidden, "dashboard"), true),
-            new("repairs", "Workshop", "Repairs", 2, IsVisible(hidden, "repairs"), true),
+            new("repairs", "Workshop", "Tickets", 2, IsVisible(hidden, "repairs"), true),
             new("customers", "Workshop", "Customers", 2, IsVisible(hidden, "customers"), true),
             new("calendar", "Workshop", "Calendar", 9, IsVisible(hidden, "calendar"), true),
             new("notifications", "Workshop", "Notifications", 7, IsVisible(hidden, "notifications"), true),
@@ -299,7 +299,8 @@ public sealed class RoleService : IRoleService
     {
         var roles = await _db.Roles.Include(r => r.Permissions).OrderBy(r => r.Name).ToListAsync(ct);
         return roles.Select(r => new WorkshopOS.Contracts.Common.RoleDto(
-            r.Id, r.Key, r.Name, r.Description, r.Permissions.Select(p => p.PermissionKey).OrderBy(x => x).ToArray())).ToList();
+            r.Id, r.Key, r.Name, r.Description,
+            r.Permissions.Select(p => p.PermissionKey).OrderBy(x => x).ToArray())).ToList();
     }
 
     public Task<IReadOnlyList<WorkshopOS.Contracts.Common.PermissionDto>> ListPermissionsAsync(CancellationToken ct = default)

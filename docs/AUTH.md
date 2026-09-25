@@ -22,7 +22,7 @@ Setup cannot run twice. Staff users are created later in the app (**Settings →
 Client connection settings path (Windows): `%LOCALAPPDATA%\WorkshopOS\client-settings.json`  
 Theme preference (`System` / `Light` / `Dark`) is stored in the same file and survives **Change server**.
 
-**Client 1.2.4+** always shows the connect UI on launch. **Change server** / **Clear saved server** wipe connection tokens/URL (JSON, WinRT `LocalSettings`, PasswordVault) but keep the theme.
+**Client 1.2.5+** always shows the connect UI on launch. **Change server** / **Clear saved server** wipe connection tokens/URL (JSON, WinRT `LocalSettings`, PasswordVault) but keep the theme.
 
 ## Login flow
 

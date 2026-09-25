@@ -67,7 +67,11 @@ public partial class RepairsViewModel : ObservableObject
     private readonly ApiClient _api;
     public ObservableCollection<RepairListItemDto> Items { get; } = new();
     public ObservableCollection<LookupDto> Statuses { get; } = new();
+    public ObservableCollection<LookupDto> Priorities { get; } = new();
+    public ObservableCollection<StaffLookupDto> Technicians { get; } = new();
     public ObservableCollection<string> StatusFilterLabels { get; } = new();
+    public ObservableCollection<string> PriorityFilterLabels { get; } = new();
+    public ObservableCollection<string> TechnicianFilterLabels { get; } = new();
 
     [ObservableProperty] private string _query = string.Empty;
     [ObservableProperty] private string? _error;
@@ -75,6 +79,8 @@ public partial class RepairsViewModel : ObservableObject
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _overdueOnly;
     [ObservableProperty] private string _selectedStatusLabel = "All statuses";
+    [ObservableProperty] private string _selectedPriorityLabel = "All priorities";
+    [ObservableProperty] private string _selectedTechnicianLabel = "All technicians";
     [ObservableProperty] private int _totalCount;
 
     private string? _pendingFilter;
@@ -92,7 +98,6 @@ public partial class RepairsViewModel : ObservableObject
             return;
         }
         OverdueOnly = false;
-        // Map dashboard card keys to status keys / labels after lookups load.
     }
 
     [RelayCommand]
@@ -106,20 +111,42 @@ public partial class RepairsViewModel : ObservableObject
             {
                 var lookups = await _api.GetAsync<RepairLookupsDto>("api/repairs/lookups");
                 Statuses.Clear();
+                Priorities.Clear();
+                Technicians.Clear();
                 StatusFilterLabels.Clear();
+                PriorityFilterLabels.Clear();
+                TechnicianFilterLabels.Clear();
                 StatusFilterLabels.Add("All statuses");
+                PriorityFilterLabels.Add("All priorities");
+                TechnicianFilterLabels.Add("All technicians");
                 foreach (var s in lookups.Statuses)
                 {
                     Statuses.Add(s);
                     StatusFilterLabels.Add(s.Name);
                 }
+                foreach (var p in lookups.Priorities)
+                {
+                    Priorities.Add(p);
+                    PriorityFilterLabels.Add(p.Name);
+                }
+                foreach (var t in lookups.Technicians)
+                {
+                    Technicians.Add(t);
+                    TechnicianFilterLabels.Add(t.Name);
+                }
                 ApplyPendingStatusLabel();
             }
 
             var statusKey = ResolveStatusKey();
+            var priorityKey = ResolvePriorityKey();
+            var techId = ResolveTechnicianId();
             var qs = $"api/repairs?q={Uri.EscapeDataString(Query)}&pageSize=100";
             if (!string.IsNullOrWhiteSpace(statusKey))
                 qs += $"&status={Uri.EscapeDataString(statusKey)}";
+            if (!string.IsNullOrWhiteSpace(priorityKey))
+                qs += $"&priority={Uri.EscapeDataString(priorityKey)}";
+            if (techId is Guid tid)
+                qs += $"&assignedToId={tid}";
             if (OverdueOnly)
                 qs += "&overdue=true";
 
@@ -164,6 +191,20 @@ public partial class RepairsViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(SelectedStatusLabel) || SelectedStatusLabel == "All statuses")
             return null;
         return Statuses.FirstOrDefault(s => s.Name == SelectedStatusLabel)?.Key;
+    }
+
+    private string? ResolvePriorityKey()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedPriorityLabel) || SelectedPriorityLabel == "All priorities")
+            return null;
+        return Priorities.FirstOrDefault(p => p.Name == SelectedPriorityLabel)?.Key;
+    }
+
+    private Guid? ResolveTechnicianId()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedTechnicianLabel) || SelectedTechnicianLabel == "All technicians")
+            return null;
+        return Technicians.FirstOrDefault(t => t.Name == SelectedTechnicianLabel)?.Id;
     }
 }
 
@@ -240,14 +281,18 @@ public partial class RepairDetailViewModel : ObservableObject
     private readonly ApiClient _api;
     [ObservableProperty] private RepairDetailDto? _repair;
     [ObservableProperty] private string _noteBody = string.Empty;
+    [ObservableProperty] private bool _noteIsInternal;
     [ObservableProperty] private string _diagnosis = string.Empty;
     [ObservableProperty] private string _recommended = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private string? _statusMessage;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _accessoriesSummary = string.Empty;
     public ObservableCollection<LookupDto> Statuses { get; } = new();
+    public ObservableCollection<LookupDto> Priorities { get; } = new();
     public ObservableCollection<StaffLookupDto> Technicians { get; } = new();
     [ObservableProperty] private LookupDto? _selectedStatus;
+    [ObservableProperty] private LookupDto? _selectedPriority;
     [ObservableProperty] private StaffLookupDto? _selectedTechnician;
 
     public RepairDetailViewModel(ApiClient api) => _api = api;
@@ -260,15 +305,30 @@ public partial class RepairDetailViewModel : ObservableObject
             var lookups = await _api.GetAsync<RepairLookupsDto>("api/repairs/lookups");
             Statuses.Clear();
             foreach (var s in lookups.Statuses) Statuses.Add(s);
+            Priorities.Clear();
+            foreach (var p in lookups.Priorities) Priorities.Add(p);
             Technicians.Clear();
             foreach (var t in lookups.Technicians) Technicians.Add(t);
             Repair = await _api.GetAsync<RepairDetailDto>($"api/repairs/{id}");
             SelectedStatus = Statuses.FirstOrDefault(s => s.Id == Repair.StatusId);
+            SelectedPriority = Priorities.FirstOrDefault(p => p.Id == Repair.PriorityId);
             SelectedTechnician = Technicians.FirstOrDefault(t => t.Id == Repair.AssignedToId);
             Diagnosis = Repair.Diagnosis ?? string.Empty;
             Recommended = Repair.RecommendedRepair ?? string.Empty;
+            AccessoriesSummary = BuildAccessories(Repair);
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+
+    private static string BuildAccessories(RepairDetailDto r)
+    {
+        var parts = new List<string>();
+        if (r.ChargerIncluded) parts.Add("Charger");
+        if (r.SimIncluded) parts.Add("SIM");
+        if (r.CaseIncluded) parts.Add("Case");
+        if (r.AccessoriesIncluded) parts.Add("Other accessories");
+        if (r.HasPasscode) parts.Add("Passcode on file");
+        return parts.Count == 0 ? "No accessories noted." : "Intake: " + string.Join(" · ", parts);
     }
 
     [RelayCommand]
@@ -281,6 +341,23 @@ public partial class RepairDetailViewModel : ObservableObject
         {
             Repair = await _api.PostAsync<ChangeStatusRequest, RepairDetailDto>($"api/repairs/{Repair.Id}/status", new ChangeStatusRequest(SelectedStatus.Id));
             StatusMessage = $"Status → {Repair.StatusName}";
+            AccessoriesSummary = BuildAccessories(Repair);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task SavePriorityAsync()
+    {
+        if (Repair is null || SelectedPriority is null) return;
+        IsBusy = true;
+        Error = null;
+        try
+        {
+            Repair = await _api.PostAsync<ChangePriorityRequest, RepairDetailDto>(
+                $"api/repairs/{Repair.Id}/priority", new ChangePriorityRequest(SelectedPriority.Id));
+            StatusMessage = $"Priority → {Repair.PriorityName}";
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { IsBusy = false; }
@@ -329,12 +406,36 @@ public partial class RepairDetailViewModel : ObservableObject
         Error = null;
         try
         {
-            await _api.PostAsync<AddNoteRequest, RepairNoteDto>($"api/repairs/{Repair.Id}/notes", new AddNoteRequest(NoteBody.Trim(), false));
+            await _api.PostAsync<AddNoteRequest, RepairNoteDto>(
+                $"api/repairs/{Repair.Id}/notes",
+                new AddNoteRequest(NoteBody.Trim(), NoteIsInternal));
             NoteBody = string.Empty;
+            NoteIsInternal = false;
             StatusMessage = "Note added.";
             await LoadAsync(Repair.Id);
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { IsBusy = false; }
+    }
+
+    public async Task PrintAsync()
+    {
+        if (Repair is null) return;
+        Error = null;
+        try
+        {
+            var html = await _api.GetRawAsync($"api/repairs/{Repair.Id}/print");
+            var dir = Path.Combine(Path.GetTempPath(), "WorkshopOS");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{Repair.TicketNumber.Replace('/', '-')}-jobsheet.html");
+            await File.WriteAllTextAsync(path, html);
+            var uri = new Uri(path);
+            var success = await Windows.System.Launcher.LaunchUriAsync(uri);
+            StatusMessage = success ? "Opened job sheet for printing." : "Saved job sheet but could not open browser.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
     }
 }

@@ -2,42 +2,52 @@
     x:Class="WorkshopOS.Client.Views.NewRepairPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:w="using:WorkshopOS.Contracts.Workshop">
+    xmlns:w="using:WorkshopOS.Contracts.Workshop"
+    Background="{ThemeResource WorkshopPageBackgroundBrush}">
   <ScrollViewer Padding="24">
     <StackPanel MaxWidth="560" Spacing="12">
-      <TextBlock Text="New repair ticket" FontSize="22" FontWeight="SemiBold" />
-      <TextBlock Text="Intake a device and open a ticket on the board." Opacity="0.7" TextWrapping="Wrap" />
-      <ComboBox Header="Customer" ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
-                SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
-                DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" />
-      <Grid ColumnSpacing="12">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <ComboBox Header="Job type" ItemsSource="{x:Bind ViewModel.Types, Mode=OneWay}"
-                  SelectedItem="{x:Bind ViewModel.SelectedType, Mode=TwoWay}"
-                  DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
-        <ComboBox Grid.Column="1" Header="Priority" ItemsSource="{x:Bind ViewModel.Priorities, Mode=OneWay}"
-                  SelectedItem="{x:Bind ViewModel.SelectedPriority, Mode=TwoWay}"
-                  DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
-      </Grid>
-      <ComboBox Header="Assign technician (optional)" ItemsSource="{x:Bind ViewModel.Technicians, Mode=OneWay}"
-                SelectedItem="{x:Bind ViewModel.SelectedTechnician, Mode=TwoWay}"
-                DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
-      <Grid ColumnSpacing="12">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <TextBox Header="Device brand" Text="{x:Bind ViewModel.Brand, Mode=TwoWay}" PlaceholderText="Apple" />
-        <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" PlaceholderText="iPhone 13" />
-      </Grid>
-      <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
-      <TextBox Header="Reported fault" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
-               AcceptsReturn="True" Height="110" TextWrapping="Wrap"
-               PlaceholderText="What is wrong? When did it start?" />
-      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
-      <Button Content="Create ticket" Command="{x:Bind ViewModel.CreateCommand}"
-              Style="{StaticResource AccentButtonStyle}" />
+      <TextBlock Text="New ticket" FontSize="24" FontWeight="SemiBold"
+                 Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+      <TextBlock Text="Quick intake — open a job on the board in under a minute. Device details can wait."
+                 Foreground="{ThemeResource WorkshopTextSecondaryBrush}" TextWrapping="Wrap" />
+      <Border Padding="16" CornerRadius="8"
+              Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="12">
+          <ComboBox Header="Customer" ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
+                    DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" />
+          <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ComboBox Header="Job type" ItemsSource="{x:Bind ViewModel.Types, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedType, Mode=TwoWay}"
+                      DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+            <ComboBox Grid.Column="1" Header="Priority" ItemsSource="{x:Bind ViewModel.Priorities, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedPriority, Mode=TwoWay}"
+                      DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+          </Grid>
+          <ComboBox Header="Assign technician (optional)" ItemsSource="{x:Bind ViewModel.Technicians, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedTechnician, Mode=TwoWay}"
+                    DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+          <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBox Header="Device brand" Text="{x:Bind ViewModel.Brand, Mode=TwoWay}" PlaceholderText="Apple" />
+            <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" PlaceholderText="iPhone 13" />
+          </Grid>
+          <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
+          <TextBox Header="Reported fault" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
+                   AcceptsReturn="True" Height="110" TextWrapping="Wrap"
+                   PlaceholderText="What is wrong? When did it start?" />
+          <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
+                     Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
+          <Button Content="Create ticket" Command="{x:Bind ViewModel.CreateCommand}"
+                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </Page>
