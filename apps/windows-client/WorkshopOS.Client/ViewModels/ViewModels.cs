@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using WorkshopOS.Client.Services;
 using WorkshopOS.Contracts.Common;
 
@@ -328,6 +329,10 @@ public partial class ShellViewModel : ObservableObject
     private readonly ApiClient _api;
     private readonly AuthSession _session;
     private readonly IAppSettingsStore _settings;
+    private readonly HashSet<Guid> _knownNotificationIds = new();
+    private bool _notificationBaselineSet;
+    private CancellationTokenSource? _pollCts;
+    private DispatcherQueueTimer? _bannerDismissTimer;
 
     [ObservableProperty] private string _productName = "WorkshopOS";
     [ObservableProperty] private string _businessName = string.Empty;
@@ -337,6 +342,15 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string? _searchStatus;
     [ObservableProperty] private IReadOnlyList<ModuleDto> _modules = Array.Empty<ModuleDto>();
     [ObservableProperty] private bool _isOffline;
+    [ObservableProperty] private bool _hasUnread;
+    [ObservableProperty] private int _unreadCount;
+    [ObservableProperty] private bool _isBannerOpen;
+    [ObservableProperty] private string _bannerTitle = string.Empty;
+    [ObservableProperty] private string _bannerMessage = string.Empty;
+    [ObservableProperty] private string _notificationsEmpty = "No notifications yet.";
+    [ObservableProperty] private bool _showNotificationsEmpty = true;
+
+    public ObservableCollection<WorkshopOS.Contracts.Operations.NotificationDto> Notifications { get; } = new();
 
     /// <summary>Primary destinations. AI/Knowledge/Backups/Users stay out of the sidebar.</summary>
     public static readonly (string Title, string[] Keys)[] NavGroups =
@@ -374,6 +388,142 @@ public partial class ShellViewModel : ObservableObject
         catch
         {
             IsOffline = true;
+        }
+
+        await RefreshNotificationsAsync(showBannerForNew: false);
+        StartNotificationPolling();
+    }
+
+    public void StopNotificationPolling()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        _pollCts = null;
+        _bannerDismissTimer?.Stop();
+        _bannerDismissTimer = null;
+    }
+
+    private void StartNotificationPolling()
+    {
+        StopNotificationPolling();
+        _pollCts = new CancellationTokenSource();
+        var token = _pollCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20), token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await RefreshNotificationsAsync(showBannerForNew: true);
+                }
+                catch
+                {
+                    /* keep polling */
+                }
+            }
+        }, token);
+    }
+
+    public async Task RefreshNotificationsAsync(bool showBannerForNew)
+    {
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<WorkshopOS.Contracts.Operations.NotificationDto>>("api/notifications");
+            var ordered = list.OrderByDescending(n => n.CreatedAt).ToList();
+
+            void ApplyUi()
+            {
+                Notifications.Clear();
+                foreach (var n in ordered.Take(25))
+                    Notifications.Add(n);
+
+                ShowNotificationsEmpty = Notifications.Count == 0;
+                NotificationsEmpty = "No notifications yet.";
+                UnreadCount = ordered.Count(n => !n.IsRead);
+                HasUnread = UnreadCount > 0;
+
+                if (!_notificationBaselineSet)
+                {
+                    foreach (var n in ordered)
+                        _knownNotificationIds.Add(n.Id);
+                    _notificationBaselineSet = true;
+                    return;
+                }
+
+                var newcomers = ordered.Where(n => _knownNotificationIds.Add(n.Id)).ToList();
+                if (showBannerForNew && newcomers.Count > 0)
+                {
+                    var latest = newcomers.OrderByDescending(n => n.CreatedAt).First();
+                    BannerTitle = newcomers.Count == 1 ? latest.Title : $"{newcomers.Count} new notifications";
+                    BannerMessage = newcomers.Count == 1
+                        ? (string.IsNullOrWhiteSpace(latest.Body) ? "Tap the bell for details." : latest.Body)
+                        : latest.Title;
+                    IsBannerOpen = true;
+                    ScheduleBannerAutoDismiss();
+                }
+            }
+
+            var dq = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            if (dq is null && WorkshopOS.Client.App.MainWindowInstance is not null)
+                dq = WorkshopOS.Client.App.MainWindowInstance.DispatcherQueue;
+
+            if (dq is not null && !dq.HasThreadAccess)
+            {
+                var tcs = new TaskCompletionSource();
+                dq.TryEnqueue(() =>
+                {
+                    try { ApplyUi(); tcs.SetResult(); }
+                    catch (Exception ex) { tcs.SetException(ex); }
+                });
+                await tcs.Task;
+            }
+            else
+            {
+                ApplyUi();
+            }
+        }
+        catch
+        {
+            /* offline / auth — leave existing list */
+        }
+    }
+
+    private void ScheduleBannerAutoDismiss()
+    {
+        var dq = WorkshopOS.Client.App.MainWindowInstance?.DispatcherQueue;
+        if (dq is null) return;
+
+        _bannerDismissTimer?.Stop();
+        _bannerDismissTimer = dq.CreateTimer();
+        _bannerDismissTimer.Interval = TimeSpan.FromSeconds(6);
+        _bannerDismissTimer.IsRepeating = false;
+        _bannerDismissTimer.Tick += (_, _) =>
+        {
+            IsBannerOpen = false;
+            _bannerDismissTimer?.Stop();
+        };
+        _bannerDismissTimer.Start();
+    }
+
+    public async Task MarkNotificationReadAsync(Guid id)
+    {
+        try
+        {
+            await _api.PostAsync($"api/notifications/{id}/read");
+            await RefreshNotificationsAsync(showBannerForNew: false);
+        }
+        catch
+        {
+            /* ignore */
         }
     }
 
@@ -425,6 +575,7 @@ public partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private async Task LogoutAsync()
     {
+        StopNotificationPolling();
         await _api.LogoutAsync();
         LoggedOut?.Invoke();
     }

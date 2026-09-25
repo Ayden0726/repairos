@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WorkshopOS.Client.ViewModels;
 using WorkshopOS.Contracts.Common;
+using WorkshopOS.Contracts.Operations;
 
 namespace WorkshopOS.Client.Views;
 
@@ -16,6 +17,7 @@ public sealed partial class ShellPage : Page
         DataContext = ViewModel;
         ViewModel.OpenModule = NavigateToModule;
         ViewModel.LoggedOut = () => Frame.Navigate(typeof(LoginPage));
+        Unloaded += (_, _) => ViewModel.StopNotificationPolling();
         Loaded += async (_, _) =>
         {
             await ViewModel.LoadCommand.ExecuteAsync(null);
@@ -218,8 +220,25 @@ public sealed partial class ShellPage : Page
             ViewModel.SearchCommand.Execute(null);
     }
 
-    private void Notifications_Click(object sender, RoutedEventArgs e)
+    private async void Notifications_Click(object sender, RoutedEventArgs e)
     {
+        // Button.Flyout opens automatically; refresh list contents for the flyout.
+        await ViewModel.RefreshNotificationsAsync(showBannerForNew: false);
+    }
+
+    private void OpenAllNotifications_Click(object sender, RoutedEventArgs e)
+    {
+        NotificationsFlyout.Hide();
+        ViewModel.CurrentPageTitle = "Notifications";
+        ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Notifications", "api/notifications"));
+    }
+
+    private async void NotificationItem_Click(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not NotificationDto note) return;
+        NotificationsFlyout.Hide();
+        if (!note.IsRead)
+            await ViewModel.MarkNotificationReadAsync(note.Id);
         ViewModel.CurrentPageTitle = "Notifications";
         ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Notifications", "api/notifications"));
     }

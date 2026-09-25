@@ -9,6 +9,7 @@ namespace WorkshopOS.Client.Views;
 public partial class DashboardViewModel : ObservableObject
 {
     private readonly ApiClient _api;
+    private readonly AuthSession _session;
     public ObservableCollection<DashboardCardVm> Cards { get; } = new();
     public ObservableCollection<PipelineStageDto> Pipeline { get; } = new();
     public ObservableCollection<UrgentJobDto> Urgent { get; } = new();
@@ -16,17 +17,41 @@ public partial class DashboardViewModel : ObservableObject
     public ObservableCollection<LowStockDto> LowStock { get; } = new();
     public ObservableCollection<ActivityDto> Activity { get; } = new();
     public ObservableCollection<DashboardBookingVm> UpcomingBookings { get; } = new();
+    public ObservableCollection<MyTicketVm> MyOpenTickets { get; } = new();
     [ObservableProperty] private string? _error;
     [ObservableProperty] private string? _calendarStatus;
     [ObservableProperty] private int _unassigned;
+    [ObservableProperty] private string _greeting = "Welcome";
+    [ObservableProperty] private string _myTicketsStatus = "Loading your open tickets…";
+    [ObservableProperty] private bool _hasMyTickets;
+    [ObservableProperty] private bool _showMyTicketsEmpty = true;
 
-    public DashboardViewModel(ApiClient api) => _api = api;
+    public DashboardViewModel(ApiClient api, AuthSession session)
+    {
+        _api = api;
+        _session = session;
+        Greeting = BuildGreeting(session.User?.DisplayName);
+    }
+
+    private static string BuildGreeting(string? displayName)
+    {
+        var hour = DateTime.Now.Hour;
+        var part = hour switch
+        {
+            >= 5 and < 12 => "Good morning",
+            >= 12 and < 17 => "Good afternoon",
+            _ => "Good evening"
+        };
+        var name = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
+        return name is null ? part : $"{part}, {name}";
+    }
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
         Error = null;
         CalendarStatus = null;
+        Greeting = BuildGreeting(_session.User?.DisplayName);
         try
         {
             var d = await _api.GetAsync<DashboardDto>("api/dashboard");
@@ -47,6 +72,8 @@ public partial class DashboardViewModel : ObservableObject
             Unassigned = d.UnassignedJobs;
         }
         catch (Exception ex) { Error = ex.Message; }
+
+        await LoadMyOpenTicketsAsync();
 
         try
         {
@@ -76,10 +103,60 @@ public partial class DashboardViewModel : ObservableObject
             CalendarStatus = $"Calendar unavailable: {ex.Message}";
         }
     }
+
+    private async Task LoadMyOpenTicketsAsync()
+    {
+        MyOpenTickets.Clear();
+        HasMyTickets = false;
+        ShowMyTicketsEmpty = true;
+
+        var userId = _session.User?.Id;
+        if (userId is null)
+        {
+            MyTicketsStatus = "Sign in to see tickets assigned to you.";
+            return;
+        }
+
+        try
+        {
+            var page = await _api.GetAsync<WorkshopOS.Contracts.Workshop.PagedResult<WorkshopOS.Contracts.Workshop.RepairListItemDto>>(
+                $"api/repairs?assignedToId={userId}&pageSize=100");
+            var open = page.Items
+                .Where(t => !string.Equals(t.StatusKey, "completed", StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(t.StatusKey, "cancelled", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => t.DueAt ?? DateTimeOffset.MaxValue)
+                .ThenByDescending(t => t.CreatedAt)
+                .Take(12)
+                .ToList();
+
+            foreach (var t in open)
+            {
+                var due = t.DueAt is DateTimeOffset d
+                    ? (d.ToLocalTime().Date == DateTime.Today
+                        ? $"Due today {d.ToLocalTime():HH:mm}"
+                        : $"Due {d.ToLocalTime():ddd d MMM}")
+                    : "No due date";
+                if (t.IsOverdue) due = "Overdue · " + due;
+                MyOpenTickets.Add(new MyTicketVm(t.Id, t.TicketNumber, t.CustomerName, t.StatusName, due, t.IsOverdue));
+            }
+
+            HasMyTickets = MyOpenTickets.Count > 0;
+            ShowMyTicketsEmpty = !HasMyTickets;
+            MyTicketsStatus = HasMyTickets
+                ? $"{MyOpenTickets.Count} open ticket(s) assigned to you"
+                : "No open tickets assigned to you.";
+        }
+        catch (Exception ex)
+        {
+            MyTicketsStatus = $"Could not load your tickets: {ex.Message}";
+            ShowMyTicketsEmpty = true;
+        }
+    }
 }
 
 public sealed record DashboardCardVm(string Title, string Value, string? Filter);
 public sealed record DashboardBookingVm(Guid Id, string WhenLabel, string Status, string CustomerName, string TypeLine, string? Notes);
+public sealed record MyTicketVm(Guid Id, string TicketNumber, string CustomerName, string Status, string DueLabel, bool IsOverdue);
 
 public partial class GenericListViewModel : ObservableObject
 {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.7 — 2026-09-25
+
+### Added
+
+- Shell header **bell** icon (replaces Alerts text) with notifications flyout + unread badge
+- Auto-dismissing **InfoBar** banner when new notifications arrive (poll every ~20s)
+- Dashboard time-of-day greeting with technician display name
+- Dashboard **My open tickets** quick view (assigned to current user) with empty state
+
 ## 1.2.6 — 2026-09-25
 
 ### Added

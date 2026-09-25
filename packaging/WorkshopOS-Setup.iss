@@ -2,7 +2,7 @@
 ; Build via packaging/build-client.ps1 on a Windows machine.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.6"
+  #define MyAppVersion "1.2.7"
 #endif
 #ifndef PublishDir
   #define PublishDir "out\client"

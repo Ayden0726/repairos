@@ -6,10 +6,49 @@
   <ScrollViewer Padding="20">
     <StackPanel Spacing="16">
       <Grid>
-        <TextBlock Text="Dashboard" FontSize="22" FontWeight="SemiBold" />
-        <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Right" />
+        <StackPanel Spacing="2">
+          <TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Text="Dashboard" FontSize="13" Opacity="0.65" />
+        </StackPanel>
+        <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Right" VerticalAlignment="Top" />
       </Grid>
       <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
+
+      <StackPanel Spacing="8">
+        <TextBlock Text="My open tickets" FontWeight="SemiBold" FontSize="16" />
+        <TextBlock Text="{x:Bind ViewModel.MyTicketsStatus, Mode=OneWay}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+        <TextBlock Text="Nothing assigned to you right now."
+                   FontSize="13" Opacity="0.6"
+                   Visibility="{x:Bind ViewModel.ShowMyTicketsEmpty, Mode=OneWay}" />
+        <ListView ItemsSource="{x:Bind ViewModel.MyOpenTickets, Mode=OneWay}"
+                  MaxHeight="220"
+                  IsItemClickEnabled="True"
+                  ItemClick="MyTicket_Click"
+                  SelectionMode="None"
+                  Visibility="{x:Bind ViewModel.HasMyTickets, Mode=OneWay}">
+          <ListView.ItemTemplate>
+            <DataTemplate x:DataType="local:MyTicketVm">
+              <Border Padding="10,8" Margin="0,0,0,6" Background="{ThemeResource WorkshopSurfaceBrush}" CornerRadius="6">
+                <Grid ColumnSpacing="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock FontWeight="SemiBold" VerticalAlignment="Center" Text="{x:Bind TicketNumber}" />
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{x:Bind CustomerName}" TextWrapping="Wrap" />
+                    <TextBlock FontSize="12" Opacity="0.7" Text="{x:Bind Status}" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" FontSize="12" Opacity="0.7" VerticalAlignment="Center"
+                             Text="{x:Bind DueLabel}" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+      </StackPanel>
+
       <GridView ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Card_Click">
         <GridView.ItemTemplate>
           <DataTemplate x:DataType="local:DashboardCardVm">

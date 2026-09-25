@@ -10,7 +10,9 @@ public sealed partial class DashboardPage : Page
 
     public DashboardPage()
     {
-        ViewModel = new DashboardViewModel(App.Services.GetRequiredService<ApiClient>());
+        ViewModel = new DashboardViewModel(
+            App.Services.GetRequiredService<ApiClient>(),
+            App.Services.GetRequiredService<AuthSession>());
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += async (_, _) => await ViewModel.RefreshCommand.ExecuteAsync(null);
@@ -26,5 +28,11 @@ public sealed partial class DashboardPage : Page
     {
         if (e.ClickedItem is UrgentJobDto job)
             Frame.Navigate(typeof(RepairDetailPage), job.Id);
+    }
+
+    private void MyTicket_Click(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is MyTicketVm ticket)
+            Frame.Navigate(typeof(RepairDetailPage), ticket.Id);
     }
 }
