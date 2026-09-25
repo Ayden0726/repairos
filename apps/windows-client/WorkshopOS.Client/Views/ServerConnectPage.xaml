@@ -6,7 +6,7 @@
     <StackPanel MaxWidth="440" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
       <TextBlock Text="WorkshopOS" FontSize="28" FontWeight="SemiBold" />
       <Border Background="#1A0B6E4F" Padding="10,6" CornerRadius="4" HorizontalAlignment="Left">
-        <TextBlock Text="Client 1.2.5" FontSize="14" FontWeight="SemiBold" Foreground="#0B6E4F" />
+        <TextBlock Text="Client 1.2.6" FontSize="14" FontWeight="SemiBold" Foreground="#0B6E4F" />
       </Border>
       <TextBlock Text="Connect to your shop server on this Wi‑Fi / LAN." Opacity="0.75" TextWrapping="Wrap" />
 

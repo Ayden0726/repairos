@@ -211,12 +211,21 @@ public partial class RepairsViewModel : ObservableObject
 public partial class NewRepairViewModel : ObservableObject
 {
     private readonly ApiClient _api;
+    private Guid? _preferCustomerId;
     public ObservableCollection<CustomerListItemDto> Customers { get; } = new();
     public ObservableCollection<LookupDto> Types { get; } = new();
     public ObservableCollection<LookupDto> Priorities { get; } = new();
     public ObservableCollection<StaffLookupDto> Technicians { get; } = new();
 
+    [ObservableProperty] private bool _useExistingCustomer = true;
+    [ObservableProperty] private string _customerQuery = string.Empty;
+    [ObservableProperty] private bool _isLoadingCustomers;
+    [ObservableProperty] private string? _customersStatus;
     [ObservableProperty] private CustomerListItemDto? _selectedCustomer;
+    [ObservableProperty] private string _newFirstName = string.Empty;
+    [ObservableProperty] private string _newLastName = string.Empty;
+    [ObservableProperty] private string _newPhone = string.Empty;
+    [ObservableProperty] private string _newEmail = string.Empty;
     [ObservableProperty] private LookupDto? _selectedType;
     [ObservableProperty] private LookupDto? _selectedPriority;
     [ObservableProperty] private StaffLookupDto? _selectedTechnician;
@@ -228,13 +237,42 @@ public partial class NewRepairViewModel : ObservableObject
     [ObservableProperty] private bool _isSaving;
     public Action<Guid>? Created { get; set; }
 
+    public bool ShowNewCustomerFields => !UseExistingCustomer;
+    public bool HasCustomers => Customers.Count > 0;
+    public bool HasCustomersStatus => !string.IsNullOrWhiteSpace(CustomersStatus);
+    public bool IsCustomersIdle => !IsLoadingCustomers;
+    public bool CanSubmit => !IsSaving;
+
     public NewRepairViewModel(ApiClient api) => _api = api;
+
+    partial void OnUseExistingCustomerChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowNewCustomerFields));
+        Error = null;
+    }
+
+    partial void OnIsLoadingCustomersChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsCustomersIdle));
+    }
+
+    partial void OnCustomersStatusChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasCustomersStatus));
+    }
+
+    partial void OnIsSavingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSubmit));
+    }
 
     public async Task InitAsync(Guid? customerId)
     {
+        _preferCustomerId = customerId;
+        Error = null;
+        CustomersStatus = null;
         try
         {
-            var pageTask = _api.GetAsync<PagedResult<CustomerListItemDto>>("api/customers?pageSize=200");
             var lookups = await _api.GetAsync<RepairLookupsDto>("api/repairs/lookups");
             Types.Clear(); foreach (var t in lookups.Types) Types.Add(t);
             Priorities.Clear(); foreach (var p in lookups.Priorities) Priorities.Add(p);
@@ -242,26 +280,121 @@ public partial class NewRepairViewModel : ObservableObject
             SelectedType ??= Types.FirstOrDefault();
             SelectedPriority ??= Priorities.FirstOrDefault(p => p.Key is "normal" or "medium") ?? Priorities.FirstOrDefault();
 
-            var page = await pageTask;
-            Customers.Clear();
-            foreach (var c in page.Items) Customers.Add(c);
-            if (customerId is Guid id)
-                SelectedCustomer = Customers.FirstOrDefault(c => c.Id == id);
+            if (customerId is Guid)
+                UseExistingCustomer = true;
+
+            await LoadCustomersAsync();
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task SearchCustomersAsync() => await LoadCustomersAsync();
+
+    private async Task LoadCustomersAsync()
+    {
+        IsLoadingCustomers = true;
+        CustomersStatus = null;
+        Error = null;
+        try
+        {
+            var q = Uri.EscapeDataString(CustomerQuery?.Trim() ?? string.Empty);
+            var url = string.IsNullOrEmpty(q)
+                ? "api/customers?pageSize=200"
+                : $"api/customers?q={q}&pageSize=100";
+            var page = await _api.GetAsync<PagedResult<CustomerListItemDto>>(url);
+            Customers.Clear();
+            foreach (var c in page.Items) Customers.Add(c);
+            OnPropertyChanged(nameof(HasCustomers));
+
+            if (_preferCustomerId is Guid prefer)
+            {
+                SelectedCustomer = Customers.FirstOrDefault(c => c.Id == prefer) ?? SelectedCustomer;
+                _preferCustomerId = null;
+            }
+            else if (SelectedCustomer is not null)
+            {
+                SelectedCustomer = Customers.FirstOrDefault(c => c.Id == SelectedCustomer.Id);
+            }
+
+            if (Customers.Count == 0)
+            {
+                CustomersStatus = string.IsNullOrWhiteSpace(CustomerQuery)
+                    ? "No customers yet. Uncheck Existing customer to create one here."
+                    : "No customers match that search.";
+                SelectedCustomer = null;
+            }
+            else
+            {
+                CustomersStatus = $"{Customers.Count} customer{(Customers.Count == 1 ? "" : "s")}";
+                SelectedCustomer ??= Customers[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            Customers.Clear();
+            OnPropertyChanged(nameof(HasCustomers));
+            SelectedCustomer = null;
+            CustomersStatus = null;
+            Error = $"Could not load customers: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingCustomers = false;
+        }
     }
 
     [RelayCommand]
     private async Task CreateAsync()
     {
         Error = null;
-        if (SelectedCustomer is null) { Error = "Select a customer."; return; }
         if (string.IsNullOrWhiteSpace(Issue)) { Error = "Describe the fault."; return; }
+
+        if (UseExistingCustomer)
+        {
+            if (SelectedCustomer is null)
+            {
+                Error = HasCustomers
+                    ? "Select a customer."
+                    : "No customer selected. Search again or create a new customer.";
+                return;
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(NewFirstName) && string.IsNullOrWhiteSpace(NewLastName)
+                 && string.IsNullOrWhiteSpace(NewPhone) && string.IsNullOrWhiteSpace(NewEmail))
+        {
+            Error = "Enter a name, phone, or email for the new customer.";
+            return;
+        }
+
         IsSaving = true;
         try
         {
+            Guid customerId;
+            if (UseExistingCustomer)
+            {
+                customerId = SelectedCustomer!.Id;
+            }
+            else
+            {
+                var created = await _api.PostAsync<UpsertCustomerRequest, CustomerDetailDto>(
+                    "api/customers",
+                    new UpsertCustomerRequest(
+                        null,
+                        CustomerType.Individual,
+                        string.IsNullOrWhiteSpace(NewFirstName) ? null : NewFirstName.Trim(),
+                        string.IsNullOrWhiteSpace(NewLastName) ? null : NewLastName.Trim(),
+                        null,
+                        string.IsNullOrWhiteSpace(NewPhone) ? null : NewPhone.Trim(),
+                        string.IsNullOrWhiteSpace(NewEmail) ? null : NewEmail.Trim(),
+                        null, null, null, null, null,
+                        PreferredContact.Sms,
+                        false));
+                customerId = created.Id;
+            }
+
             var repair = await _api.PostAsync<CreateRepairRequest, RepairDetailDto>("api/repairs", new CreateRepairRequest(
-                SelectedCustomer.Id, null, SelectedType?.Id, SelectedPriority?.Id, SelectedTechnician?.Id,
+                customerId, null, SelectedType?.Id, SelectedPriority?.Id, SelectedTechnician?.Id,
                 Issue.Trim(), null, null, null, null, true,
                 true, false, false, false, null, null, null, null,
                 DeviceCategory.Phone,

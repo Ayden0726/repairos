@@ -24,7 +24,7 @@
               <ComboBoxItem Content="Dark" Tag="Dark" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.5" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.6" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
           </StackPanel>
         </ScrollViewer>
       </PivotItem>

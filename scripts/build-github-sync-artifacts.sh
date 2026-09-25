@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.5)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.6)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -76,19 +76,19 @@ PowerShell (ASCII-safe):
   Set-Location \$repo
   git add -A
   git status
-  git commit -m "Client 1.2.5: Tickets UI, dark mode, roles dropdown"
+  git commit -m "Client 1.2.6: New ticket inline customer create"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
 
 Then rebuild Windows client:
 
-  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.5 -SkipInstaller
+  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.6 -SkipInstaller
 
 Or wipe + verify + build + launch:
 
   powershell -ExecutionPolicy Bypass -File .\\packaging\\rebuild-client.ps1
 
-Banner must show: Client 1.2.5
+Banner must show: Client 1.2.6
 
 WSL / bash:
 
@@ -97,7 +97,7 @@ WSL / bash:
   curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO"
-  git add -A && git commit -m "Client 1.2.5: Tickets UI, dark mode, roles dropdown"
+  git add -A && git commit -m "Client 1.2.6: New ticket inline customer create"
   git push -u origin main
 
 ────────────────────────────────────────────────────────────
@@ -111,13 +111,13 @@ OPTION B: git bundle
   git push origin main
 
 ────────────────────────────────────────────────────────────
-Key 1.2.5 changes in this sync
+Key 1.2.6 changes in this sync
 ────────────────────────────────────────────────────────────
   Tickets helpdesk UI (Work -> Tickets, New ticket CTA, filters, detail workflow, print)
   Crisp dark mode (Workshop* solid theme brushes)
   Settings Users & Roles dropdown fixed (DisplayLabel + GET /api/roles)
   GET /api/repairs/{id}/print, POST /api/repairs/{id}/priority, list ?priority=
-  Client Version 1.2.5 / packaging defaults / WINDOWS_CLIENT_1.2.5_REBUILD.txt
+  Client Version 1.2.6 / packaging defaults / WINDOWS_CLIENT_1.2.6_REBUILD.txt
 EOF
 cp -f "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" "$SERVE/"
 ls -lh "$OUT/repairos-github-sync.zip" "$OUT/repairos-main.bundle" "$SERVE/repairos-github-sync.zip"

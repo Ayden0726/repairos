@@ -14,9 +14,61 @@
               Background="{ThemeResource WorkshopSurfaceBrush}"
               BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
         <StackPanel Spacing="12">
-          <ComboBox Header="Customer" ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
-                    SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
-                    DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" />
+          <CheckBox Content="Existing customer"
+                    IsChecked="{x:Bind ViewModel.UseExistingCustomer, Mode=TwoWay}" />
+
+          <!-- Pick existing customer -->
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.UseExistingCustomer, Mode=OneWay}">
+            <Grid ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox Header="Search customers"
+                       PlaceholderText="Name, phone, or email"
+                       Text="{x:Bind ViewModel.CustomerQuery, Mode=TwoWay}"
+                       KeyDown="CustomerSearch_KeyDown" />
+              <Button Grid.Column="1" Content="Search" VerticalAlignment="Bottom"
+                      Command="{x:Bind ViewModel.SearchCustomersCommand}"
+                      IsEnabled="{x:Bind ViewModel.IsCustomersIdle, Mode=OneWay}" />
+            </Grid>
+            <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
+                          IsActive="{x:Bind ViewModel.IsLoadingCustomers, Mode=OneWay}" />
+            <TextBlock Text="{x:Bind ViewModel.CustomersStatus, Mode=OneWay}"
+                       Foreground="{ThemeResource WorkshopTextSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Visibility="{x:Bind ViewModel.HasCustomersStatus, Mode=OneWay}" />
+            <ComboBox Header="Customer"
+                      ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
+                      DisplayMemberPath="DisplayName"
+                      HorizontalAlignment="Stretch"
+                      IsEnabled="{x:Bind ViewModel.HasCustomers, Mode=OneWay}" />
+          </StackPanel>
+
+          <!-- Create new customer inline -->
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowNewCustomerFields, Mode=OneWay}">
+            <TextBlock Text="New customer" FontWeight="SemiBold"
+                       Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+            <Grid ColumnSpacing="12">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBox Header="First name" Text="{x:Bind ViewModel.NewFirstName, Mode=TwoWay}"
+                       PlaceholderText="Required" />
+              <TextBox Grid.Column="1" Header="Last name" Text="{x:Bind ViewModel.NewLastName, Mode=TwoWay}" />
+            </Grid>
+            <Grid ColumnSpacing="12">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBox Header="Phone" Text="{x:Bind ViewModel.NewPhone, Mode=TwoWay}"
+                       PlaceholderText="Optional" />
+              <TextBox Grid.Column="1" Header="Email" Text="{x:Bind ViewModel.NewEmail, Mode=TwoWay}"
+                       PlaceholderText="Optional" />
+            </Grid>
+          </StackPanel>
+
           <Grid ColumnSpacing="12">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
@@ -44,8 +96,11 @@
                    PlaceholderText="What is wrong? When did it start?" />
           <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
                      Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
+          <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
+                        IsActive="{x:Bind ViewModel.IsSaving, Mode=OneWay}" />
           <Button Content="Create ticket" Command="{x:Bind ViewModel.CreateCommand}"
-                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                  IsEnabled="{x:Bind ViewModel.CanSubmit, Mode=OneWay}" />
         </StackPanel>
       </Border>
     </StackPanel>

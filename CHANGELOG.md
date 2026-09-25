@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6 — 2026-09-25
+
+### Added
+
+- WinUI **New ticket**: **Existing customer** checkbox — checked picks/search customers; unchecked shows inline create (first/last name, phone, email)
+- New-customer path calls `POST /api/customers` then creates the repair with the new id
+- Customer search empty / loading / error status on the New ticket form
+
 ## 1.2.5 — 2026-09-25
 
 ### Added
