@@ -113,6 +113,7 @@
                           <ColumnDefinition Width="90" /><ColumnDefinition Width="90" />
                         </Grid.ColumnDefinitions>
                         <TextBox Header="SKU / part" Text="{x:Bind Sku, Mode=TwoWay}" LostFocus="LineField_LostFocus" />
+                        <!-- NumberBox.Value is double; QuoteLineDraft numerics must be double for x:Bind -->
                         <NumberBox Grid.Column="1" Header="Qty" Value="{x:Bind Quantity, Mode=TwoWay}"
                                    SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
                         <NumberBox Grid.Column="2" Header="Part cost" Value="{x:Bind PartCost, Mode=TwoWay}"
@@ -129,18 +130,20 @@
                           <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                           <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ComboBox x:Name="PartCombo" Header="Inventory part" DisplayMemberPath="Name"
+                        <!-- No x:Name inside DataTemplate (XamlCompiler field generation). -->
+                        <ComboBox Header="Inventory part" DisplayMemberPath="Name"
                                   HorizontalAlignment="Stretch" SelectionChanged="PartCombo_SelectionChanged"
-                                  Tag="{x:Bind}" />
+                                  GotFocus="PartCombo_GotFocus" Tag="{x:Bind}" />
                         <Button Grid.Column="1" Content="Load parts" VerticalAlignment="Bottom"
                                 Click="LoadParts_Click" Tag="{x:Bind}" />
-                        <ComboBox Grid.Column="2" x:Name="ServiceCombo" Header="Service"
+                        <ComboBox Grid.Column="2" Header="Service"
                                   DisplayMemberPath="Name" HorizontalAlignment="Stretch"
-                                  SelectionChanged="ServiceCombo_SelectionChanged" Tag="{x:Bind}" />
+                                  SelectionChanged="ServiceCombo_SelectionChanged"
+                                  GotFocus="ServiceCombo_GotFocus" Tag="{x:Bind}" />
                         <TextBlock Grid.Column="3" VerticalAlignment="Bottom" Margin="0,0,0,8"
                                    Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-                          <Run Text="Sell " /><Run Text="{x:Bind PartSell, Mode=OneWay}" />
-                          <Run Text=" · Line " /><Run Text="{x:Bind LineTotal, Mode=OneWay}" />
+                          <Run Text="Sell " /><Run Text="{x:Bind PartSellText, Mode=OneWay}" />
+                          <Run Text=" · Line " /><Run Text="{x:Bind LineTotalText, Mode=OneWay}" />
                         </TextBlock>
                       </Grid>
                     </StackPanel>
@@ -175,22 +178,22 @@
         <TextBlock Text="Quote summary" FontSize="18" FontWeight="SemiBold"
                    Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-          <Run Text="Parts " /><Run Text="{x:Bind ViewModel.PartsSubtotal, Mode=OneWay}" />
+          <Run Text="Parts " /><Run Text="{x:Bind ViewModel.PartsSubtotalText, Mode=OneWay}" />
         </TextBlock>
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-          <Run Text="Labour " /><Run Text="{x:Bind ViewModel.LabourSubtotal, Mode=OneWay}" />
+          <Run Text="Labour " /><Run Text="{x:Bind ViewModel.LabourSubtotalText, Mode=OneWay}" />
         </TextBlock>
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-          <Run Text="Discount " /><Run Text="{x:Bind ViewModel.DiscountTotal, Mode=OneWay}" />
+          <Run Text="Discount " /><Run Text="{x:Bind ViewModel.DiscountTotalText, Mode=OneWay}" />
         </TextBlock>
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-          <Run Text="Subtotal " /><Run Text="{x:Bind ViewModel.Subtotal, Mode=OneWay}" />
+          <Run Text="Subtotal " /><Run Text="{x:Bind ViewModel.SubtotalText, Mode=OneWay}" />
         </TextBlock>
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-          <Run Text="Tax " /><Run Text="{x:Bind ViewModel.GstAmount, Mode=OneWay}" />
+          <Run Text="Tax " /><Run Text="{x:Bind ViewModel.GstAmountText, Mode=OneWay}" />
         </TextBlock>
         <TextBlock FontSize="22" FontWeight="Bold" Foreground="{ThemeResource WorkshopTextPrimaryBrush}">
-          <Run Text="Total " /><Run Text="{x:Bind ViewModel.Total, Mode=OneWay}" />
+          <Run Text="Total " /><Run Text="{x:Bind ViewModel.TotalText, Mode=OneWay}" />
         </TextBlock>
 
         <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.CanViewProfit, Mode=OneWay}">
@@ -198,19 +201,19 @@
                      Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
           <TextBlock Visibility="{x:Bind ViewModel.CanViewCost, Mode=OneWay}"
                      Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-            <Run Text="Cost " /><Run Text="{x:Bind ViewModel.CostTotal, Mode=OneWay}" />
+            <Run Text="Cost " /><Run Text="{x:Bind ViewModel.CostTotalText, Mode=OneWay}" />
           </TextBlock>
           <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-            <Run Text="Profit " /><Run Text="{x:Bind ViewModel.ProfitTotal, Mode=OneWay}" />
+            <Run Text="Profit " /><Run Text="{x:Bind ViewModel.ProfitTotalText, Mode=OneWay}" />
           </TextBlock>
           <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-            <Run Text="Margin " /><Run Text="{x:Bind ViewModel.MarginPercent, Mode=OneWay}" /><Run Text="%" />
+            <Run Text="Margin " /><Run Text="{x:Bind ViewModel.MarginPercentText, Mode=OneWay}" /><Run Text="%" />
           </TextBlock>
         </StackPanel>
 
         <InfoBar IsOpen="{x:Bind ViewModel.RequiresApproval, Mode=OneWay}"
                  Severity="Warning" Title="Margin approval"
-                 Message="{x:Bind ViewModel.MarginWarning, Mode=OneWay}"
+                 Message="{x:Bind ViewModel.MarginWarningText, Mode=OneWay}"
                  IsClosable="False" />
 
         <Button Content="Save" Command="{x:Bind ViewModel.SaveCommand}"

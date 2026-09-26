@@ -67,7 +67,7 @@ $checks = [ordered]@{
   'ServerConnect banner Client 1.2.8' = ($xaml -match 'Client 1\.2\.8')
   'csproj Version 1.2.8' = ($proj -match '<Version>1\.2\.8</Version>')
   'build-client.ps1 default 1.2.8' = ($bld -match 'Version\s*=\s*"1\.2\.8"')
-  'build-client.ps1 script v5' = ($bld -match 'ScriptVersion\s*=\s*"v5"')
+  'build-client.ps1 script v6' = ($bld -match 'ScriptVersion\s*=\s*"v6"')
 }
 
 $allOk = $true
@@ -82,7 +82,7 @@ if (-not $allOk) {
 
 # 5) Build 1.2.8 (with or without installer - SkipInstaller by default; remove switch for Inno)
 Set-Location $Repo
-Write-Host 'Building client 1.2.8 (script v5)...' -ForegroundColor Cyan
+Write-Host 'Building client 1.2.8 (script v6)...' -ForegroundColor Cyan
 powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.8 -SkipInstaller
 # For installer instead: omit -SkipInstaller (needs Inno Setup 6)
 # powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.8

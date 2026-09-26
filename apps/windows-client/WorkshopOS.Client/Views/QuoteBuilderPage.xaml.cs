@@ -46,16 +46,32 @@ public sealed partial class QuoteBuilderPage : Page
     private void LoadParts_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: QuoteLineDraft line }) return;
-        // Find sibling ComboBox in the same row visually — bind items from VM inventory.
         if (sender is FrameworkElement fe)
         {
             var parent = fe.Parent as Panel;
-            var combo = parent?.Children.OfType<ComboBox>().FirstOrDefault(c => c.Header as string == "Inventory part");
+            var combo = parent?.Children.OfType<ComboBox>().FirstOrDefault(c =>
+                string.Equals(c.Header as string, "Inventory part", StringComparison.Ordinal));
             if (combo is not null)
             {
                 combo.ItemsSource = ViewModel.InventoryParts;
                 combo.Tag = line;
             }
+        }
+    }
+
+    private void PartCombo_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is ComboBox combo)
+        {
+            combo.ItemsSource ??= ViewModel.InventoryParts;
+        }
+    }
+
+    private void ServiceCombo_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is ComboBox combo)
+        {
+            combo.ItemsSource ??= ViewModel.Services;
         }
     }
 
@@ -69,8 +85,7 @@ public sealed partial class QuoteBuilderPage : Page
     {
         if (sender is ComboBox combo)
         {
-            if (combo.ItemsSource is null)
-                combo.ItemsSource = ViewModel.Services;
+            combo.ItemsSource ??= ViewModel.Services;
             if (combo is { SelectedItem: ServicePricingDto svc, Tag: QuoteLineDraft line })
                 ViewModel.ApplyService(line, svc);
         }

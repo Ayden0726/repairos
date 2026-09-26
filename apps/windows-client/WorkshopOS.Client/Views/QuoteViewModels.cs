@@ -52,21 +52,29 @@ public partial class QuoteLineDraft : ObservableObject
     [ObservableProperty] private string? _serviceName;
     [ObservableProperty] private string? _partName;
     [ObservableProperty] private string? _supplierName;
-    [ObservableProperty] private string? _sku;
+    // Non-null string: WinUI x:Bind TwoWay to TextBox.Text rejects string?.
+    [ObservableProperty] private string _sku = string.Empty;
     [ObservableProperty] private Guid? _inventoryItemId;
     [ObservableProperty] private Guid? _servicePricingId;
     [ObservableProperty] private string? _difficultyLevelKey;
-    [ObservableProperty] private decimal _quantity = 1m;
-    [ObservableProperty] private decimal _partCost;
-    [ObservableProperty] private decimal _shippingCost;
-    [ObservableProperty] private decimal _otherCost;
-    [ObservableProperty] private decimal _markupPercent;
-    [ObservableProperty] private decimal _labourAmount;
-    [ObservableProperty] private decimal _additionalAmount;
-    [ObservableProperty] private decimal _discountAmount;
-    [ObservableProperty] private decimal _partSell;
-    [ObservableProperty] private decimal _lineTotal;
-    [ObservableProperty] private decimal _lineProfit;
+    // NumberBox.Value is double — decimal TwoWay x:Bind fails XamlCompiler (MSB3073).
+    [ObservableProperty] private double _quantity = 1d;
+    [ObservableProperty] private double _partCost;
+    [ObservableProperty] private double _shippingCost;
+    [ObservableProperty] private double _otherCost;
+    [ObservableProperty] private double _markupPercent;
+    [ObservableProperty] private double _labourAmount;
+    [ObservableProperty] private double _additionalAmount;
+    [ObservableProperty] private double _discountAmount;
+    [ObservableProperty] private double _partSell;
+    [ObservableProperty] private double _lineTotal;
+    [ObservableProperty] private double _lineProfit;
+
+    public string PartSellText => PartSell.ToString("0.00");
+    public string LineTotalText => LineTotal.ToString("0.00");
+
+    partial void OnPartSellChanged(double value) => OnPropertyChanged(nameof(PartSellText));
+    partial void OnLineTotalChanged(double value) => OnPropertyChanged(nameof(LineTotalText));
 }
 
 public partial class QuoteBuilderViewModel : ObservableObject
@@ -96,6 +104,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _issue = string.Empty;
     [ObservableProperty] private string _customerNotes = string.Empty;
     [ObservableProperty] private string _internalNotes = string.Empty;
+    // Summary totals stay decimal for API math; XAML binds to *Text helpers (string).
     [ObservableProperty] private decimal _partsSubtotal;
     [ObservableProperty] private decimal _labourSubtotal;
     [ObservableProperty] private decimal _discountTotal;
@@ -113,6 +122,17 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private bool _isFrozen;
     [ObservableProperty] private bool _canViewProfit;
     [ObservableProperty] private bool _canViewCost;
+
+    public string PartsSubtotalText => PartsSubtotal.ToString("0.00");
+    public string LabourSubtotalText => LabourSubtotal.ToString("0.00");
+    public string DiscountTotalText => DiscountTotal.ToString("0.00");
+    public string SubtotalText => Subtotal.ToString("0.00");
+    public string GstAmountText => GstAmount.ToString("0.00");
+    public string TotalText => Total.ToString("0.00");
+    public string CostTotalText => CostTotal.ToString("0.00");
+    public string ProfitTotalText => ProfitTotal.ToString("0.00");
+    public string MarginPercentText => MarginPercent.ToString("0.0");
+    public string MarginWarningText => MarginWarning ?? string.Empty;
 
     public bool ShowNewCustomerFields => !UseExistingCustomer;
     public bool HasCustomers => Customers.Count > 0;
@@ -223,21 +243,21 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 ServiceName = l.ServiceName,
                 PartName = l.PartName,
                 SupplierName = l.SupplierName,
-                Sku = l.Sku,
+                Sku = l.Sku ?? string.Empty,
                 InventoryItemId = l.InventoryItemId,
                 ServicePricingId = l.ServicePricingId,
                 DifficultyLevelKey = l.DifficultyLevelKey,
-                Quantity = l.Quantity,
-                PartCost = l.PartCost,
-                ShippingCost = l.ShippingCost,
-                OtherCost = l.OtherCost,
-                MarkupPercent = l.MarkupPercent,
-                LabourAmount = l.LabourAmount,
-                AdditionalAmount = l.AdditionalAmount,
-                DiscountAmount = l.DiscountAmount,
-                PartSell = l.PartSell,
-                LineTotal = l.LineTotal,
-                LineProfit = l.LineProfit
+                Quantity = (double)l.Quantity,
+                PartCost = (double)l.PartCost,
+                ShippingCost = (double)l.ShippingCost,
+                OtherCost = (double)l.OtherCost,
+                MarkupPercent = (double)l.MarkupPercent,
+                LabourAmount = (double)l.LabourAmount,
+                AdditionalAmount = (double)l.AdditionalAmount,
+                DiscountAmount = (double)l.DiscountAmount,
+                PartSell = (double)l.PartSell,
+                LineTotal = (double)l.LineTotal,
+                LineProfit = (double)l.LineProfit
             });
         }
         ApplyPreviewTotals(q.PartsSubtotal, q.LabourSubtotal, q.DiscountTotal, q.Subtotal, q.GstAmount, q.Total,
@@ -273,10 +293,10 @@ public partial class QuoteBuilderViewModel : ObservableObject
     public void ApplyInventoryPart(QuoteLineDraft line, InventoryListItemDto item)
     {
         line.InventoryItemId = item.Id;
-        line.Sku = item.Sku;
+        line.Sku = item.Sku ?? string.Empty;
         line.PartName = item.Name;
         line.Description = string.IsNullOrWhiteSpace(line.Description) ? item.Name : line.Description;
-        line.PartCost = CanViewCost ? item.Cost : line.PartCost;
+        line.PartCost = CanViewCost ? (double)item.Cost : line.PartCost;
         line.SupplierName = item.SupplierName;
         line.Type = "PART";
         _ = RecalcAsync();
@@ -286,8 +306,8 @@ public partial class QuoteBuilderViewModel : ObservableObject
     {
         line.ServicePricingId = service.Id;
         line.ServiceName = service.Name;
-        line.LabourAmount = service.DefaultLabourFee;
-        if (service.DefaultPartMarkupPercent is decimal m) line.MarkupPercent = m;
+        line.LabourAmount = (double)service.DefaultLabourFee;
+        if (service.DefaultPartMarkupPercent is decimal m) line.MarkupPercent = (double)m;
         if (string.IsNullOrWhiteSpace(line.Description)) line.Description = service.Name;
         _ = RecalcAsync();
     }
@@ -304,11 +324,11 @@ public partial class QuoteBuilderViewModel : ObservableObject
             {
                 var src = preview.Lines[i];
                 var dst = Lines[i];
-                dst.PartSell = src.PartSell;
-                dst.LineTotal = src.LineTotal;
-                dst.LineProfit = src.LineProfit;
-                if (dst.MarkupPercent == 0) dst.MarkupPercent = src.MarkupPercent;
-                if (dst.LabourAmount == 0) dst.LabourAmount = src.LabourAmount;
+                dst.PartSell = (double)src.PartSell;
+                dst.LineTotal = (double)src.LineTotal;
+                dst.LineProfit = (double)src.LineProfit;
+                if (dst.MarkupPercent == 0) dst.MarkupPercent = (double)src.MarkupPercent;
+                if (dst.LabourAmount == 0) dst.LabourAmount = (double)src.LabourAmount;
             }
             ApplyPreviewTotals(preview.PartsSubtotal, preview.LabourSubtotal, preview.DiscountTotal,
                 preview.Subtotal, preview.GstAmount, preview.Total, preview.CostTotal, preview.ProfitTotal,
@@ -332,14 +352,34 @@ public partial class QuoteBuilderViewModel : ObservableObject
         MarginPercent = margin;
         RequiresApproval = requiresApproval;
         MarginWarning = warning;
+        NotifySummaryText();
+    }
+
+    private void NotifySummaryText()
+    {
+        OnPropertyChanged(nameof(PartsSubtotalText));
+        OnPropertyChanged(nameof(LabourSubtotalText));
+        OnPropertyChanged(nameof(DiscountTotalText));
+        OnPropertyChanged(nameof(SubtotalText));
+        OnPropertyChanged(nameof(GstAmountText));
+        OnPropertyChanged(nameof(TotalText));
+        OnPropertyChanged(nameof(CostTotalText));
+        OnPropertyChanged(nameof(ProfitTotalText));
+        OnPropertyChanged(nameof(MarginPercentText));
+        OnPropertyChanged(nameof(MarginWarningText));
     }
 
     private static QuoteLineCalcInput ToInput(QuoteLineDraft l) => new(
         l.Type, string.IsNullOrWhiteSpace(l.Description) ? (l.PartName ?? l.ServiceName ?? "Line") : l.Description,
-        l.ServiceName, l.PartName, l.SupplierName, l.Sku, l.InventoryItemId, l.ServicePricingId,
-        l.DifficultyLevelKey, l.Quantity <= 0 ? 1 : l.Quantity, l.PartCost, l.ShippingCost, l.OtherCost,
-        l.MarkupPercent > 0 ? l.MarkupPercent : null, null, null,
-        l.LabourAmount > 0 ? l.LabourAmount : null, l.AdditionalAmount, l.DiscountAmount, null);
+        l.ServiceName, l.PartName, l.SupplierName,
+        string.IsNullOrWhiteSpace(l.Sku) ? null : l.Sku,
+        l.InventoryItemId, l.ServicePricingId,
+        l.DifficultyLevelKey,
+        (decimal)(l.Quantity <= 0 ? 1 : l.Quantity),
+        (decimal)l.PartCost, (decimal)l.ShippingCost, (decimal)l.OtherCost,
+        l.MarkupPercent > 0 ? (decimal)l.MarkupPercent : null, null, null,
+        l.LabourAmount > 0 ? (decimal)l.LabourAmount : null,
+        (decimal)l.AdditionalAmount, (decimal)l.DiscountAmount, null);
 
     private async Task<Guid> EnsureCustomerAsync()
     {
@@ -359,10 +399,15 @@ public partial class QuoteBuilderViewModel : ObservableObject
     private List<QuoteLineInputDto> ToLineInputs() =>
         Lines.Select(l => new QuoteLineInputDto(
             l.Type, string.IsNullOrWhiteSpace(l.Description) ? (l.PartName ?? "Line") : l.Description,
-            l.ServiceName, l.PartName, l.SupplierName, l.Sku, l.InventoryItemId, l.ServicePricingId,
-            l.DifficultyLevelKey, l.Quantity <= 0 ? 1 : l.Quantity, l.PartCost, l.ShippingCost, l.OtherCost,
-            l.MarkupPercent > 0 ? l.MarkupPercent : null, null, null,
-            l.LabourAmount > 0 ? l.LabourAmount : null, l.AdditionalAmount, l.DiscountAmount, null)).ToList();
+            l.ServiceName, l.PartName, l.SupplierName,
+            string.IsNullOrWhiteSpace(l.Sku) ? null : l.Sku,
+            l.InventoryItemId, l.ServicePricingId,
+            l.DifficultyLevelKey,
+            (decimal)(l.Quantity <= 0 ? 1 : l.Quantity),
+            (decimal)l.PartCost, (decimal)l.ShippingCost, (decimal)l.OtherCost,
+            l.MarkupPercent > 0 ? (decimal)l.MarkupPercent : null, null, null,
+            l.LabourAmount > 0 ? (decimal)l.LabourAmount : null,
+            (decimal)l.AdditionalAmount, (decimal)l.DiscountAmount, null)).ToList();
 
     [RelayCommand]
     private async Task SaveAsync()

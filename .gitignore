@@ -38,6 +38,8 @@ data/
 *.rdb
 node_modules/
 .next/
+workshopos-build-client-*.zip
+packaging/out/
 
 # Packaging outputs
 packaging/dist/

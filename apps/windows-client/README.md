@@ -124,7 +124,7 @@ Then relaunch a **1.2.8+** build — you always land on Connect / pairing UI.
 
 1. Sync latest packaging scripts (`git pull`, or overwrite `packaging\build-client.ps1` / `build-client.cmd` from the remote if GitHub looks stale).
 2. Open **Developer PowerShell for VS 2022** (Start menu) — preferred over a normal PowerShell window.
-3. From the **repo root**, confirm the banner prints **`WorkshopOS client build script v5`**:
+3. From the **repo root**, confirm the banner prints **`WorkshopOS client build script v6`**:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.8 -SkipInstaller

@@ -15,19 +15,95 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptVersion = "v5"
+$ScriptVersion = "v6"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Proj = Join-Path $Root "apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csproj"
+$ProjDir = Split-Path $Proj -Parent
 $PublishDir = Join-Path $Root "packaging\out\client"
 $DistDir = Join-Path $Root "packaging\dist"
+$LogDir = Join-Path $Root "packaging\out\logs"
+$PublishLog = Join-Path $LogDir "publish-last.log"
 
 Write-Host "WorkshopOS client build script $ScriptVersion" -ForegroundColor Cyan
 Write-Host "  Unpackaged zip publish (WindowsPackageType=None, EnableMsixTooling=true)" -ForegroundColor DarkCyan
 Write-Host "  Repo: $Root"
 
+function Write-XamlCompilerDiagnostics {
+    Write-Host ""
+    Write-Host "===== XamlCompiler / MSBuild diagnostics =====" -ForegroundColor Yellow
+
+    if (Test-Path $PublishLog) {
+        Write-Host "-- Last publish log (filtered XAML / error lines) --" -ForegroundColor DarkYellow
+        Get-Content $PublishLog -ErrorAction SilentlyContinue |
+            Select-String -Pattern 'error |XamlCompiler|MarkupCompile|CS[0-9]{4}|WMC[0-9]|xaml' -CaseSensitive:$false |
+            Select-Object -Last 80 |
+            ForEach-Object { $_.Line }
+        Write-Host "-- Tail of publish log --" -ForegroundColor DarkYellow
+        Get-Content $PublishLog -Tail 60 -ErrorAction SilentlyContinue
+    }
+
+    $objRoots = @(
+        (Join-Path $ProjDir "obj"),
+        (Join-Path $ProjDir "obj\x64"),
+        (Join-Path $ProjDir "obj\x64\$Configuration")
+    )
+    $foundJson = $false
+    foreach ($root in $objRoots) {
+        if (-not (Test-Path $root)) { continue }
+        $outputs = Get-ChildItem -Path $root -Recurse -Filter "output.json" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'intermediatexaml|XamlSaveState|win-x64' -or $_.DirectoryName -match 'net8\.0-windows' } |
+            Select-Object -First 20
+        foreach ($json in $outputs) {
+            $foundJson = $true
+            Write-Host "-- XamlCompiler output: $($json.FullName) --" -ForegroundColor DarkYellow
+            try {
+                $raw = Get-Content $json.FullName -Raw -ErrorAction Stop
+                Write-Host $raw.Substring(0, [Math]::Min(4000, $raw.Length))
+            } catch {
+                Write-Host "(could not read $($json.FullName))"
+            }
+        }
+        $errLogs = Get-ChildItem -Path $root -Recurse -Include "*.err","*.log","*.txt" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match 'Xaml|Markup|Compile' } |
+            Select-Object -First 10
+        foreach ($f in $errLogs) {
+            Write-Host "-- $($f.FullName) --" -ForegroundColor DarkYellow
+            Get-Content $f.FullName -Tail 40 -ErrorAction SilentlyContinue
+        }
+    }
+    if (-not $foundJson) {
+        Write-Host "No XamlCompiler output.json found under obj yet." -ForegroundColor DarkYellow
+        Write-Host "Tip: open Developer PowerShell for VS, then re-run with /v:detailed if needed."
+    }
+
+    Write-Host "Full log: $PublishLog" -ForegroundColor Cyan
+    Write-Host "===== end diagnostics =====" -ForegroundColor Yellow
+    Write-Host ""
+}
+
 function Assert-LastExit([string]$Step) {
     if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        throw "$Step failed with exit code $LASTEXITCODE"
+        Write-XamlCompilerDiagnostics
+        throw "$Step failed with exit code $LASTEXITCODE (see XamlCompiler diagnostics above)"
+    }
+}
+
+function Invoke-LoggedProcess {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string[]]$ArgumentList,
+        [Parameter(Mandatory)][string]$Step
+    )
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+    Write-Host "Logging $Step -> $PublishLog"
+    # Capture exit code before Tee-Object / pipeline can overwrite LASTEXITCODE (PS 5.1).
+    $output = & $FilePath @ArgumentList 2>&1
+    $code = $LASTEXITCODE
+    $output | Out-File -FilePath $PublishLog -Encoding utf8
+    $output | ForEach-Object { Write-Host $_ }
+    if ($null -ne $code -and $code -ne 0) {
+        Write-XamlCompilerDiagnostics
+        throw "$Step failed with exit code $code (see XamlCompiler diagnostics above)"
     }
 }
 
@@ -101,6 +177,7 @@ Assert-LastExit "dotnet restore"
 
 if (Test-Path $PublishDir) { Remove-Item $PublishDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 $MSBuild = Find-MSBuild
 $usedEngine = $null
@@ -124,14 +201,16 @@ if ($MSBuild) {
     }
 
     Write-Host "==> Publishing self-contained win-x64 ($Configuration) via VS MSBuild"
-    & $MSBuild $Proj `
-        /restore `
-        /t:Restore,Publish `
-        @PublishProps `
-        /p:PublishDir="$PublishDir\" `
-        /p:OutDir="$PublishDir\" `
-        /v:m
-    Assert-LastExit "MSBuild Publish"
+    # /v:n shows XamlCompiler file/line; still quieter than detailed
+    Invoke-LoggedProcess -FilePath $MSBuild -Step "MSBuild Publish" -ArgumentList (@(
+        $Proj
+        "/restore"
+        "/t:Restore,Publish"
+    ) + $PublishProps + @(
+        "/p:PublishDir=$PublishDir\"
+        "/p:OutDir=$PublishDir\"
+        "/v:n"
+    ))
     $usedEngine = "VS MSBuild"
 } else {
     Write-Warning @"
@@ -144,21 +223,31 @@ https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/set-up-your-devel
 "@
 
     Write-Host "==> Publishing self-contained win-x64 ($Configuration) via dotnet publish"
-    & dotnet publish $Proj `
-        --configuration $Configuration `
-        --runtime win-x64 `
-        --self-contained true `
-        --output $PublishDir `
-        /p:Platform=x64 `
-        /p:WindowsAppSDKSelfContained=true `
-        /p:WindowsPackageType=None `
-        /p:EnableMsixTooling=true `
-        /p:GenerateAppxPackageOnBuild=false `
-        /p:AppxPackageSigningEnabled=false `
-        /p:AppxPackage=false `
-        /p:PublishSingleFile=false `
-        /p:PublishReadyToRun=false
-    Assert-LastExit "dotnet publish"
+    Invoke-LoggedProcess -FilePath "dotnet" -Step "dotnet publish" -ArgumentList @(
+        "publish"
+        $Proj
+        "--configuration"
+        $Configuration
+        "--runtime"
+        "win-x64"
+        "--self-contained"
+        "true"
+        "--output"
+        $PublishDir
+        "/p:Platform=x64"
+        "/p:WindowsAppSDKSelfContained=true"
+        "/p:WindowsPackageType=None"
+        "/p:EnableMsixTooling=true"
+        "/p:GenerateAppxPackageOnBuild=false"
+        "/p:AppxPackageSigningEnabled=false"
+        "/p:AppxPackage=false"
+        "/p:PublishSingleFile=false"
+        "/p:PublishReadyToRun=false"
+        "/p:Version=$Version"
+        "/p:InformationalVersion=$Version"
+        "-v"
+        "n"
+    )
     $usedEngine = "dotnet publish"
 }
 
@@ -182,16 +271,18 @@ $Exe = Join-Path $PublishDir "WorkshopOS.Client.exe"
 if (-not (Test-Path $Exe)) {
     Write-Host "Publish folder contents:"
     Get-ChildItem $PublishDir -ErrorAction SilentlyContinue | Format-Table Name, Length
+    Write-XamlCompilerDiagnostics
     throw @"
 WorkshopOS.Client.exe missing after $usedEngine - refusing to create a zip.
 
-If you still see ExpandPriContent / Pri.Tasks.dll errors:
-  1. Confirm this script printed ``WorkshopOS client build script v4``
+If you still see ExpandPriContent / Pri.Tasks.dll / XamlCompiler errors:
+  1. Confirm this script printed ``WorkshopOS client build script v6``
   2. Confirm csproj has ``<EnableMsixTooling>true</EnableMsixTooling>``
   3. Open Visual Studio Installer -> Modify -> enable:
        - Workload: WinUI application development
        - Individual: Windows App Packaging, Windows 10/11 SDK
   4. Re-run from Developer PowerShell for VS
+  5. Read packaging\out\logs\publish-last.log for the real XAML line
 
 Guide: https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/set-up-your-development-environment
 "@
@@ -199,6 +290,7 @@ Guide: https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/set-up-you
 
 $fileCount = (Get-ChildItem $PublishDir -Recurse -File | Measure-Object).Count
 if ($fileCount -lt 5) {
+    Write-XamlCompilerDiagnostics
     throw "Publish output looks empty ($fileCount files) - refusing to create a zip. Engine=$usedEngine"
 }
 

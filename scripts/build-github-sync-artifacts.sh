@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.8)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.8 + XamlCompiler fix)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -76,7 +76,7 @@ PowerShell (ASCII-safe):
   Set-Location \$repo
   git add -A
   git status
-  git commit -m "Client 1.2.8: quote builder and automatic pricing"
+  git commit -m "Fix QuoteBuilder XamlCompiler (NumberBox double bind) + build script v6"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
 
@@ -97,7 +97,7 @@ WSL / bash:
   curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO"
-  git add -A && git commit -m "Client 1.2.8: quote builder and automatic pricing"
+  git add -A && git commit -m "Fix QuoteBuilder XamlCompiler (NumberBox double bind) + build script v6"
   git push -u origin main
 
 ────────────────────────────────────────────────────────────
@@ -114,6 +114,8 @@ OPTION B: git bundle
 Key 1.2.8 changes in this sync
 ────────────────────────────────────────────────────────────
   Quote Builder + automatic pricing (markup, labour, rounding, margins)
+  FIX: NumberBox x:Bind uses double (not decimal) — was XamlCompiler MSB3073
+  build-client.ps1 v6 dumps XamlCompiler log on failure
   Settings → Pricing / Services / Tax; Create Quote from repair detail
   Quote APIs (preview, send/accept/revise/convert/print) + calculator tests
   Client Version 1.2.8 / packaging defaults / WINDOWS_CLIENT_1.2.8_REBUILD.txt

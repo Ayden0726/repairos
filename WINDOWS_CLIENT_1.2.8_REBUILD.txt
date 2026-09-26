@@ -2,14 +2,14 @@ WorkshopOS Windows client 1.2.8 - rebuild on Windows
 ====================================================
 
 Banner must show: Client 1.2.8
+Build script banner must show: WorkshopOS client build script v6
 
-Changes in 1.2.8:
-- Quote Builder (Work → Quotes) with live pricing summary, send/print/convert
-- Create Quote from repair detail; inventory part + service lookup
-- Settings → Pricing / Services / Tax (GST rate, inclusive/exclusive)
-- Server-side PricingCalculator + quote revisions / audit / margin guards
+XamlCompiler fix (1.2.8 republish):
+- QuoteBuilder NumberBox fields use double (not decimal) — WinUI x:Bind
+  TwoWay decimal→NumberBox.Value caused MSB3073 / XamlCompiler exit 1
+- Removed x:Name inside line-item DataTemplate; summary binds string helpers
 
-From repo root (Developer PowerShell for VS 2022):
+From repo root — use Developer PowerShell for VS 2022 (so MSBuild is found):
 
   git pull origin main
 
@@ -18,6 +18,9 @@ From repo root (Developer PowerShell for VS 2022):
 Or wipe + verify + build + launch:
 
   powershell -ExecutionPolicy Bypass -File .\packaging\rebuild-client.ps1
+
+On failure, read:
+  packaging\out\logs\publish-last.log
 
 Outputs:
   packaging\dist\WorkshopOS-Client-win-x64-v1.2.8.zip

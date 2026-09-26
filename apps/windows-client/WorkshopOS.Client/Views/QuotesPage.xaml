@@ -73,7 +73,9 @@
                   </Border>
                 </StackPanel>
                 <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-                  <Run Text="{x:Bind CustomerName}" /><Run Text=" · Rev " /><Run Text="{x:Bind RevisionNumber}" />
+                  <Run Text="{x:Bind CustomerName}" />
+                  <Run Text=" · Rev " />
+                  <Run Text="{x:Bind RevisionNumber}" />
                 </TextBlock>
               </StackPanel>
               <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold"

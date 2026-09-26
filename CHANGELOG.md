@@ -2,6 +2,11 @@
 
 ## 1.2.8 — 2026-09-26
 
+### Fixed
+
+- WinUI **XamlCompiler MSB3073**: Quote Builder `NumberBox` TwoWay `x:Bind` used `decimal` (NumberBox.Value is `double`); line drafts now use `double` + string summary helpers; no `x:Name` inside line DataTemplate
+- `build-client.ps1` **v6** logs XamlCompiler/MSBuild details to `packaging/out/logs/publish-last.log` on failure
+
 ### Added
 
 - **Repair Quote & Automatic Pricing System**: `PricingCalculator`, pricing settings (`pricing.settings`), markup tiers, service pricing catalogue
