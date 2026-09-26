@@ -20,7 +20,7 @@
 ### SALES
 | Item | Status |
 | --- | --- |
-| Quotes | List (+ API create/status) |
+| Quotes | Quote list + **Quote Builder** (live pricing, send/print/convert) |
 | Invoices | List (+ API from-repair / payments) |
 | Used Tech | List (+ API create/status) |
 

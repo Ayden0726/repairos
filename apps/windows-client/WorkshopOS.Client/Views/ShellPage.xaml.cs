@@ -153,7 +153,7 @@ public sealed partial class ShellPage : Page
                     ContentFrame.Navigate(typeof(ReportsPage));
                     return;
                 case "quotes":
-                    ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Quotes", "api/quotes"));
+                    ContentFrame.Navigate(typeof(QuotesPage));
                     return;
                 case "invoices":
                     ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Invoices", "api/invoices"));

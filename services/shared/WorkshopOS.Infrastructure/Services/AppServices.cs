@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WorkshopOS.Application.Abstractions;
 using WorkshopOS.Application.Common;
 using WorkshopOS.Contracts.Auth;
+using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Domain.Entities;
 using WorkshopOS.Domain.Enums;
 using WorkshopOS.Infrastructure.Persistence;
@@ -122,8 +123,22 @@ public sealed class SetupService : ISetupService
             request.DefaultLabourRate <= 0 ? 110m : request.DefaultLabourRate);
 
         await DbSeed.SetSettingAsync(_db, SettingKeys.BusinessProfile, profile, owner.Id, ct);
-        await DbSeed.SetSettingAsync(_db, SettingKeys.Gst, new { registered = profile.GstRegistered, rate = profile.GstRate }, owner.Id, ct);
+        await DbSeed.SetSettingAsync(_db, SettingKeys.Gst, new { registered = profile.GstRegistered, rate = profile.GstRate, inclusive = true }, owner.Id, ct);
         await DbSeed.SetSettingAsync(_db, SettingKeys.FinanceDefaults, new { labourRate = profile.DefaultLabourRate, diagnosticFee = 89m }, owner.Id, ct);
+        var pricingDefaults = PricingCalculator.DefaultSettings() with
+        {
+            Labour = PricingCalculator.DefaultSettings().Labour with
+            {
+                DefaultLabourFee = request.DefaultLabourRate > 0 ? Math.Min(request.DefaultLabourRate, 200m) : 50m
+            },
+            Tax = new TaxPricingDto(profile.GstRegistered, profile.GstRate <= 0 ? 0.10m : profile.GstRate, true)
+        };
+        // Seed labour default fee 50 as pricing default; business DefaultLabourRate remains hourly catalogue rate.
+        pricingDefaults = pricingDefaults with
+        {
+            Labour = pricingDefaults.Labour with { DefaultLabourFee = 50m }
+        };
+        await DbSeed.SetSettingAsync(_db, SettingKeys.PricingSettings, pricingDefaults, owner.Id, ct);
         await DbSeed.SetSettingAsync(_db, SettingKeys.SetupCompleted, true, owner.Id, ct);
         await _audit.WriteAsync(owner.Id, "setup.completed", "Business", owner.Id.ToString(), ip: ip, ct: ct);
     }

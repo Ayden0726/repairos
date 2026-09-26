@@ -7,16 +7,39 @@ public class Quote : SoftDeleteEntity
     public Customer Customer { get; set; } = null!;
     public Guid? RepairTicketId { get; set; }
     public RepairTicket? RepairTicket { get; set; }
-    public string Status { get; set; } = "Draft"; // Draft, Sent, Approved, Declined, Expired
+    /// <summary>Draft|Sent|Viewed|Accepted|Declined|Expired|Converted|Cancelled</summary>
+    public string Status { get; set; } = "Draft";
     public string? Issue { get; set; }
     public string? CustomerNotes { get; set; }
     public string? InternalNotes { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
+    public int ValidityDays { get; set; } = 14;
+    public int RevisionNumber { get; set; } = 1;
     public Guid CreatedById { get; set; }
+    public DateTimeOffset? AcceptedAt { get; set; }
+    public Guid? AcceptedById { get; set; }
+    public decimal? AcceptedTotal { get; set; }
+    public int? AcceptedVersion { get; set; }
+    public bool IsFrozen { get; set; }
+    public string? DeviceBrand { get; set; }
+    public string? DeviceModel { get; set; }
+    public string? DeviceSerial { get; set; }
+    public string? DeviceCategory { get; set; }
+    public decimal PartsSubtotal { get; set; }
+    public decimal LabourSubtotal { get; set; }
+    public decimal DiscountTotal { get; set; }
+    public decimal CostTotal { get; set; }
+    public decimal ProfitTotal { get; set; }
+    public decimal MarginPercent { get; set; }
+    public bool RequiresApproval { get; set; }
+    public string? RoundingMethod { get; set; }
+    public decimal PreRoundTotal { get; set; }
     public decimal Subtotal { get; set; }
     public decimal GstAmount { get; set; }
     public decimal Total { get; set; }
     public ICollection<QuoteLine> Lines { get; set; } = new List<QuoteLine>();
+    public ICollection<QuoteRevision> Revisions { get; set; } = new List<QuoteRevision>();
+    public ICollection<QuoteAuditEntry> AuditEntries { get; set; } = new List<QuoteAuditEntry>();
 }
 
 public class QuoteLine
@@ -24,11 +47,77 @@ public class QuoteLine
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid QuoteId { get; set; }
     public Quote Quote { get; set; } = null!;
-    public string Type { get; set; } = "SERVICE";
+    public string Type { get; set; } = "SERVICE"; // SERVICE, PART, LABOUR, OTHER
     public string Description { get; set; } = string.Empty;
+    public string? ServiceName { get; set; }
+    public string? PartName { get; set; }
+    public string? SupplierName { get; set; }
+    public string? Sku { get; set; }
+    public Guid? InventoryItemId { get; set; }
+    public InventoryItem? InventoryItem { get; set; }
+    public Guid? ServicePricingId { get; set; }
+    public ServicePricing? ServicePricing { get; set; }
+    public string? DifficultyLevelKey { get; set; }
     public decimal Quantity { get; set; } = 1;
+    public decimal PartCost { get; set; }
+    public decimal ShippingCost { get; set; }
+    public decimal OtherCost { get; set; }
+    public decimal LandedCost { get; set; }
+    public decimal MarkupPercent { get; set; }
+    public decimal MarkupAmount { get; set; }
+    public decimal PartSell { get; set; }
+    public decimal LabourAmount { get; set; }
+    public decimal AdditionalAmount { get; set; }
+    public decimal DiscountAmount { get; set; }
     public decimal UnitPrice { get; set; }
+    public decimal LineSubtotal { get; set; }
+    public decimal LineTotal { get; set; }
+    public decimal LineProfit { get; set; }
     public int SortOrder { get; set; }
+}
+
+public class MarkupTier : SoftDeleteEntity
+{
+    public decimal MinCost { get; set; }
+    public decimal? MaxCost { get; set; }
+    public decimal MarkupPercent { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public class ServicePricing : SoftDeleteEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Category { get; set; }
+    public string? Description { get; set; }
+    public decimal DefaultLabourFee { get; set; }
+    public decimal? DefaultPartMarkupPercent { get; set; }
+    public bool IsActive { get; set; } = true;
+    public int SortOrder { get; set; }
+}
+
+public class QuoteRevision
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid QuoteId { get; set; }
+    public Quote Quote { get; set; } = null!;
+    public int RevisionNumber { get; set; }
+    public string SnapshotJson { get; set; } = "{}";
+    public Guid CreatedById { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? Reason { get; set; }
+}
+
+public class QuoteAuditEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid QuoteId { get; set; }
+    public Quote Quote { get; set; } = null!;
+    public string Action { get; set; } = string.Empty;
+    public string? Detail { get; set; }
+    public Guid? ActorUserId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? OldValueJson { get; set; }
+    public string? NewValueJson { get; set; }
 }
 
 public class Invoice : SoftDeleteEntity

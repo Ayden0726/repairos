@@ -88,10 +88,27 @@ public interface IDashboardService
 
 public interface IQuoteService
 {
-    Task<IReadOnlyList<QuoteListItemDto>> ListAsync(CancellationToken ct = default);
-    Task<QuoteDetailDto> GetAsync(Guid id, CancellationToken ct = default);
-    Task<QuoteDetailDto> CreateAsync(CreateQuoteRequest request, Guid actorId, CancellationToken ct = default);
-    Task<QuoteDetailDto> SetStatusAsync(Guid id, string status, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<QuoteListItemDto>> ListAsync(string? q = null, string? status = null, Guid? customerId = null, Guid? repairTicketId = null, CancellationToken ct = default);
+    Task<QuoteDetailDto> GetAsync(Guid id, bool includeInternalFinancials, CancellationToken ct = default);
+    Task<QuoteDetailDto> CreateAsync(CreateQuoteRequest request, Guid actorId, IReadOnlySet<string> permissions, CancellationToken ct = default);
+    Task<QuoteDetailDto> UpdateAsync(Guid id, UpdateQuoteRequest request, Guid actorId, IReadOnlySet<string> permissions, CancellationToken ct = default);
+    Task<QuoteDetailDto> SetStatusAsync(Guid id, string status, Guid actorId, IReadOnlySet<string> permissions, CancellationToken ct = default);
+    Task<QuoteDetailDto> ReviseAsync(Guid id, UpdateQuoteRequest request, Guid actorId, IReadOnlySet<string> permissions, CancellationToken ct = default);
+    Task<QuoteDetailDto> ConvertToRepairAsync(Guid id, ConvertQuoteToRepairRequest request, Guid actorId, CancellationToken ct = default);
+    Task<string> BuildCustomerPrintHtmlAsync(Guid id, CancellationToken ct = default);
+}
+
+public interface IPricingSettingsService
+{
+    Task<PricingSettingsDto> GetAsync(CancellationToken ct = default);
+    Task<PricingSettingsDto> UpdateAsync(PricingSettingsDto settings, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<MarkupTierDto>> ListTiersAsync(CancellationToken ct = default);
+    Task<MarkupTierDto> UpsertTierAsync(UpsertMarkupTierRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteTierAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<ServicePricingDto>> ListServicesAsync(CancellationToken ct = default);
+    Task<ServicePricingDto> UpsertServiceAsync(UpsertServicePricingRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteServiceAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<PricingPreviewResponse> PreviewAsync(PricingPreviewRequest request, CancellationToken ct = default);
 }
 
 public interface IInvoiceService

@@ -8,7 +8,17 @@ public sealed record DashboardDto(
     int UnassignedJobs,
     IReadOnlyList<LowStockDto> LowStock,
     IReadOnlyList<ActivityDto> RecentActivity,
-    IReadOnlyList<TodayItemDto> TodaysWork);
+    IReadOnlyList<TodayItemDto> TodaysWork,
+    QuoteAnalyticsDto? QuoteAnalytics = null);
+
+public sealed record QuoteAnalyticsDto(
+    int QuotesSent30Days,
+    int QuotesAccepted30Days,
+    int QuotesDeclined30Days,
+    int QuotesExpired30Days,
+    decimal ConversionRatePercent,
+    decimal AverageAcceptedTotal,
+    decimal AverageAcceptedMarginPercent);
 
 public sealed record DashboardCardsDto(
     int OpenJobs, int DueToday, int AwaitingApproval, int WaitingForParts,
@@ -21,12 +31,92 @@ public sealed record LowStockDto(Guid Id, string Sku, string Name, int Available
 public sealed record ActivityDto(Guid Id, DateTimeOffset At, string Action, string Summary, string? Route);
 public sealed record TodayItemDto(string Kind, string Title, DateTimeOffset When, string? Route);
 
-public sealed record QuoteListItemDto(Guid Id, string Number, string CustomerName, string Status, decimal Total, DateTimeOffset CreatedAt);
-public sealed record QuoteDetailDto(Guid Id, string Number, Guid CustomerId, string CustomerName, string Status, string? Issue, decimal Subtotal, decimal GstAmount, decimal Total, DateTimeOffset? ExpiresAt, IReadOnlyList<LineDto> Lines);
-public sealed record CreateQuoteRequest(Guid CustomerId, string? Issue, IReadOnlyList<LineInputDto> Lines);
+public sealed record QuoteListItemDto(
+    Guid Id, string Number, string CustomerName, string Status, decimal Total,
+    DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, Guid? RepairTicketId, int RevisionNumber,
+    decimal? MarginPercent, bool RequiresApproval);
+
+public sealed record QuoteLineDetailDto(
+    Guid Id, string Type, string Description, string? ServiceName, string? PartName,
+    string? SupplierName, string? Sku, Guid? InventoryItemId, Guid? ServicePricingId,
+    string? DifficultyLevelKey, decimal Quantity,
+    decimal PartCost, decimal ShippingCost, decimal OtherCost, decimal LandedCost,
+    decimal MarkupPercent, decimal MarkupAmount, decimal PartSell, decimal LabourAmount,
+    decimal AdditionalAmount, decimal DiscountAmount, decimal UnitPrice,
+    decimal LineSubtotal, decimal LineTotal, decimal LineProfit);
+
+public sealed record QuoteDetailDto(
+    Guid Id, string Number, Guid CustomerId, string CustomerName, Guid? RepairTicketId,
+    string Status, string? Issue, string? CustomerNotes, string? InternalNotes,
+    string? DeviceBrand, string? DeviceModel, string? DeviceSerial, string? DeviceCategory,
+    int ValidityDays, int RevisionNumber, DateTimeOffset? ExpiresAt,
+    DateTimeOffset? AcceptedAt, Guid? AcceptedById, decimal? AcceptedTotal, int? AcceptedVersion,
+    bool IsFrozen, decimal PartsSubtotal, decimal LabourSubtotal, decimal DiscountTotal,
+    decimal CostTotal, decimal ProfitTotal, decimal MarginPercent, bool RequiresApproval,
+    string? RoundingMethod, decimal PreRoundTotal,
+    decimal Subtotal, decimal GstAmount, decimal Total,
+    IReadOnlyList<QuoteLineDetailDto> Lines,
+    IReadOnlyList<QuoteRevisionDto>? Revisions,
+    bool IncludeInternalFinancials);
+
+public sealed record QuoteRevisionDto(Guid Id, int RevisionNumber, DateTimeOffset CreatedAt, string? Reason);
+public sealed record QuoteAuditDto(Guid Id, string Action, string? Detail, DateTimeOffset CreatedAt, Guid? ActorUserId);
+
 public sealed record LineInputDto(string Type, string Description, decimal Quantity, decimal UnitPrice);
 public sealed record LineDto(Guid Id, string Type, string Description, decimal Quantity, decimal UnitPrice, decimal LineTotal);
+
+public sealed record QuoteLineInputDto(
+    string Type,
+    string Description,
+    string? ServiceName,
+    string? PartName,
+    string? SupplierName,
+    string? Sku,
+    Guid? InventoryItemId,
+    Guid? ServicePricingId,
+    string? DifficultyLevelKey,
+    decimal Quantity,
+    decimal PartCost,
+    decimal ShippingCost,
+    decimal OtherCost,
+    decimal? MarkupPercent,
+    decimal? MarkupAmount,
+    decimal? PartSell,
+    decimal? LabourAmount,
+    decimal AdditionalAmount,
+    decimal DiscountAmount,
+    decimal? UnitPrice);
+
+public sealed record CreateQuoteRequest(
+    Guid CustomerId,
+    Guid? RepairTicketId,
+    string? Issue,
+    string? CustomerNotes,
+    string? InternalNotes,
+    string? DeviceBrand,
+    string? DeviceModel,
+    string? DeviceSerial,
+    string? DeviceCategory,
+    int? ValidityDays,
+    IReadOnlyList<QuoteLineInputDto>? Lines,
+    /// <summary>Legacy simple lines (UnitPrice × Qty). Prefer Lines.</summary>
+    IReadOnlyList<LineInputDto>? SimpleLines = null);
+
+public sealed record UpdateQuoteRequest(
+    string? Issue,
+    string? CustomerNotes,
+    string? InternalNotes,
+    string? DeviceBrand,
+    string? DeviceModel,
+    string? DeviceSerial,
+    string? DeviceCategory,
+    int? ValidityDays,
+    IReadOnlyList<QuoteLineInputDto> Lines,
+    string? ReviseReason);
+
 public sealed record QuoteStatusRequest(string Status);
+public sealed record QuoteSearchRequest(string? Q, string? Status, Guid? CustomerId, Guid? RepairTicketId, DateTimeOffset? From, DateTimeOffset? To);
+public sealed record ConvertQuoteToRepairRequest(Guid? RepairTicketId);
 
 public sealed record InvoiceListItemDto(Guid Id, string Number, string CustomerName, string Status, decimal Total, decimal AmountPaid, decimal Balance, DateTimeOffset CreatedAt);
 public sealed record InvoiceDetailDto(Guid Id, string Number, Guid CustomerId, string CustomerName, Guid? RepairTicketId, string Status, decimal Subtotal, decimal GstAmount, decimal Total, decimal AmountPaid, decimal Balance, IReadOnlyList<LineDto> Lines, IReadOnlyList<PaymentDto> Payments);
@@ -34,7 +124,9 @@ public sealed record CreateInvoiceFromRepairRequest(Guid RepairTicketId);
 public sealed record RecordPaymentRequest(string Method, decimal Amount, string? Reference, bool IsDeposit);
 public sealed record PaymentDto(Guid Id, string Method, decimal Amount, string? Reference, DateTimeOffset PaidAt, bool IsDeposit);
 
-public sealed record InventoryListItemDto(Guid Id, string Sku, string Name, string Category, int OnHand, int Reserved, int Available, int Minimum, decimal SellPrice, bool IsLow);
+public sealed record InventoryListItemDto(
+    Guid Id, string Sku, string Name, string Category, int OnHand, int Reserved, int Available,
+    int Minimum, decimal SellPrice, bool IsLow, decimal Cost = 0m, string? SupplierName = null);
 public sealed record UpsertInventoryRequest(Guid? Id, string Sku, string? Barcode, string Name, string Category, decimal Cost, decimal SellPrice, int QuantityOnHand, int MinimumStock, int ReorderQuantity, string? LocationBin, Guid? SupplierId);
 public sealed record AdjustStockRequest(int QuantityDelta, string Reason);
 public sealed record ReserveStockRequest(Guid ItemId, Guid TicketId, int Quantity);

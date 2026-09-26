@@ -341,6 +341,13 @@ public sealed class ApiClient
         return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
     }
 
+    public async Task DeleteAsync(string path, CancellationToken ct = default)
+    {
+        using var http = CreateClient();
+        using var response = await http.DeleteAsync(path, ct);
+        await EnsureSuccess(response);
+    }
+
     public async Task<WorkshopOS.Contracts.Common.HealthDto> HealthAsync(CancellationToken ct = default, TimeSpan? timeout = null) =>
         await GetAsync<WorkshopOS.Contracts.Common.HealthDto>("api/health", ct, timeout);
 

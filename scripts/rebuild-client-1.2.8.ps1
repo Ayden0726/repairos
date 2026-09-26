@@ -64,9 +64,9 @@ $bld  = Get-Content $bps -Raw
 $checks = [ordered]@{
   'MainWindow navigates ServerConnectPage' = ($main -match 'Navigate\(typeof\(Views\.ServerConnectPage\)\)')
   'MainWindow does NOT navigate Bootstrap first' = ($main -notmatch 'Navigate\(typeof\(Views\.BootstrapPage\)\)')
-  'ServerConnect banner Client 1.2.8' = ($xaml -match 'Client 1\.2\.8')
-  'csproj Version 1.2.8' = ($proj -match '<Version>1\.2\.8</Version>')
-  'build-client.ps1 default 1.2.8' = ($bld -match 'Version\s*=\s*"1\.2\.8"')
+  'ServerConnect banner Client 1.2.8' = ($xaml -match 'Client 1\.2\.7')
+  'csproj Version 1.2.8' = ($proj -match '<Version>1\.2\.7</Version>')
+  'build-client.ps1 default 1.2.8' = ($bld -match 'Version\s*=\s*"1\.2\.7"')
   'build-client.ps1 script v5' = ($bld -match 'ScriptVersion\s*=\s*"v5"')
 }
 

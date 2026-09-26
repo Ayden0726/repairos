@@ -26,7 +26,8 @@ Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup
 | Module | Features |
 | --- | --- |
 | **Dashboard** | Open/due/awaiting/parts/ready/overdue cards, pipeline, urgent jobs, tech workload, low stock, recent activity, 30-day revenue & gross profit |
-| **Quotes** | GST-aware quotes, line items, status workflow (draft → sent → approved/…) |
+| **Quotes** | Quote builder with automatic pricing (markup, labour, rounding, margin guards), statuses Draft→Sent→Accepted/…, revisions, customer HTML print (no costs), convert to repair |
+| **Pricing** | Settings-driven labour/parts/profitability/rounding/discounts; markup tiers; service catalogue; tax from business GST (rate + inclusive/exclusive) |
 | **Inventory** | SKUs, on-hand / reserved / available, min stock, adjust, reserve & consume against tickets |
 | **Purchasing** | Suppliers, purchase orders, receive lines into stock |
 | **Invoices & payments** | Create from repair, record payments/deposits, balances |

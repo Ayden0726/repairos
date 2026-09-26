@@ -8,7 +8,7 @@ Self-hosted repair-shop operations for Australian electronics / computer repair 
 
 ## Features
 
-See **[docs/FEATURES.md](docs/FEATURES.md)**.
+See **[docs/FEATURES.md](docs/FEATURES.md)**. Pricing & quotes: **[docs/PRICING_QUOTES.md](docs/PRICING_QUOTES.md)**.
 
 ## Install server — one command
 

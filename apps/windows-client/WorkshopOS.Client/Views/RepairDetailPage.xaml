@@ -36,6 +36,7 @@
                        Text="{x:Bind ViewModel.Repair.DeviceLabel, Mode=OneWay}" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Create Quote" Click="CreateQuote_Click" Style="{StaticResource AccentButtonStyle}" />
             <Button Content="Customer" Click="OpenCustomer_Click" />
             <Button Content="Print job sheet" Click="Print_Click" />
           </StackPanel>

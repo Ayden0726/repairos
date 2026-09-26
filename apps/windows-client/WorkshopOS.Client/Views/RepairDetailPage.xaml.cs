@@ -32,6 +32,14 @@ public sealed partial class RepairDetailPage : Page
         await ViewModel.PrintAsync();
     }
 
+    private void CreateQuote_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Repair is null) return;
+        Frame.Navigate(typeof(QuoteBuilderPage), new QuoteBuilderArgs(
+            RepairTicketId: ViewModel.Repair.Id,
+            CustomerId: ViewModel.Repair.CustomerId));
+    }
+
     private async void StatusChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn || btn.Tag is not Guid statusId) return;

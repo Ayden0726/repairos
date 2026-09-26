@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddScoped<IRepairService, RepairService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IPricingSettingsService, PricingSettingsService>();
         services.AddScoped<IQuoteService, QuoteService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInventoryService, InventoryService>();

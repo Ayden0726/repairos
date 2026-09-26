@@ -1,0 +1,28 @@
+WorkshopOS Windows client 1.2.8 - rebuild on Windows
+====================================================
+
+Banner must show: Client 1.2.8
+
+Changes in 1.2.8:
+- Quote Builder (Work → Quotes) with live pricing summary, send/print/convert
+- Create Quote from repair detail; inventory part + service lookup
+- Settings → Pricing / Services / Tax (GST rate, inclusive/exclusive)
+- Server-side PricingCalculator + quote revisions / audit / margin guards
+
+From repo root (Developer PowerShell for VS 2022):
+
+  git pull origin main
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.8 -SkipInstaller
+
+Or wipe + verify + build + launch:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\rebuild-client.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.8.zip
+  packaging\dist\WorkshopOS-Setup-1.2.8.exe  (if Inno Setup 6 installed)
+
+Optional agent overlay if GitHub looks stale:
+  http://127.0.0.1:28765/repairos-github-sync.zip
+  Set $UseAgentOverlay = $true in packaging\rebuild-client.ps1

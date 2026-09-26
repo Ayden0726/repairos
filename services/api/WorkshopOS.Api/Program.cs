@@ -44,7 +44,13 @@ app.UseExceptionHandler(errorApp =>
             return;
         }
         context.Response.StatusCode = 500;
-        await context.Response.WriteAsJsonAsync(new { title = "An unexpected error occurred.", status = 500 });
+        var isDev = context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment();
+        await context.Response.WriteAsJsonAsync(new
+        {
+            title = "An unexpected error occurred.",
+            status = 500,
+            detail = isDev ? ex?.ToString() : null
+        });
     });
 });
 

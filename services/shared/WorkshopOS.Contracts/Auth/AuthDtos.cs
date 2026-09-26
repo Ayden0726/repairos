@@ -58,4 +58,5 @@ public sealed record BusinessProfileDto(
     bool GstRegistered,
     decimal GstRate,
     string Currency,
-    decimal DefaultLabourRate);
+    decimal DefaultLabourRate,
+    bool GstInclusive = true);

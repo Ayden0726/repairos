@@ -28,6 +28,14 @@ public static class PermissionKeys
         ("payments.refund", "Finance", "Issue refunds"),
         ("pricing.view", "Finance", "View pricing"),
         ("pricing.edit", "Finance", "Edit pricing"),
+        ("pricing.view_cost", "Finance", "View part cost"),
+        ("pricing.view_profit", "Finance", "View profit and margin"),
+        ("pricing.change_markup", "Finance", "Change markup"),
+        ("pricing.override_labour", "Finance", "Override labour fee"),
+        ("pricing.apply_discount", "Finance", "Apply discounts"),
+        ("pricing.override_price", "Finance", "Override recommended price"),
+        ("pricing.approve_low_margin", "Finance", "Approve below-minimum margin quotes"),
+        ("pricing.edit_settings", "Finance", "Edit pricing settings"),
         ("reports.view", "Reports", "View reports"),
         ("reports.financial", "Reports", "View financial reports"),
         ("builds.view", "PC Builds", "View PC builds"),
@@ -62,7 +70,8 @@ public static class PermissionKeys
         [
             "tickets.view", "tickets.create", "tickets.edit", "tickets.assign", "tickets.status",
             "tickets.internal_notes", "tickets.credentials.view",
-            "customers.view", "devices.view", "inventory.view", "quotes.view",
+            "customers.view", "devices.view", "inventory.view", "quotes.view", "quotes.manage",
+            "pricing.view", "pricing.apply_discount",
             "builds.view", "builds.manage", "used.view", "bookings.view",
             "knowledge.view", "knowledge.manage", "ai.use"
         ],
@@ -71,19 +80,22 @@ public static class PermissionKeys
             "tickets.view", "tickets.create", "tickets.edit", "tickets.assign", "tickets.status",
             "customers.view", "customers.manage", "devices.view", "devices.manage", "inventory.view",
             "quotes.view", "quotes.manage", "invoices.view", "invoices.manage",
-            "payments.view", "payments.record", "builds.view", "used.view",
+            "payments.view", "payments.record", "pricing.view", "pricing.apply_discount",
+            "builds.view", "used.view",
             "bookings.view", "bookings.manage", "knowledge.view", "ai.use"
         ],
         ["sales"] =
         [
             "customers.view", "customers.manage", "quotes.view", "quotes.manage",
+            "pricing.view", "pricing.view_cost", "pricing.view_profit", "pricing.change_markup",
+            "pricing.apply_discount", "pricing.override_labour",
             "used.view", "used.manage", "inventory.view", "builds.view", "ai.use"
         ],
         ["read_only"] =
         [
             "tickets.view", "customers.view", "devices.view", "inventory.view",
             "quotes.view", "invoices.view", "payments.view", "builds.view",
-            "used.view", "bookings.view", "knowledge.view", "reports.view"
+            "used.view", "bookings.view", "knowledge.view", "reports.view", "pricing.view"
         ]
     };
 }

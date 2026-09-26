@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Version>1.2.7</Version>
-    <InformationalVersion>1.2.7</InformationalVersion>
+    <Version>1.2.8</Version>
+    <InformationalVersion>1.2.8</InformationalVersion>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>WorkshopOS.Client</RootNamespace>

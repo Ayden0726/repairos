@@ -10,7 +10,7 @@
     </Grid.RowDefinitions>
     <StackPanel Spacing="4">
       <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold" />
-      <TextBlock Text="Appearance, staff, backups, and server connection." Opacity="0.7" />
+      <TextBlock Text="Appearance, pricing, tax, staff, backups, and server connection." Opacity="0.7" />
     </StackPanel>
     <Pivot x:Name="SettingsPivot" Grid.Row="1" SelectionChanged="SettingsPivot_SelectionChanged">
       <PivotItem Header="App">
@@ -24,7 +24,87 @@
               <ComboBoxItem Content="Dark" Tag="Dark" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.7" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.8" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+      </PivotItem>
+      <PivotItem Header="Pricing" Tag="pricing">
+        <ScrollViewer Padding="0,16,0,0">
+          <StackPanel Spacing="12" MaxWidth="640">
+            <TextBlock Text="Automatic pricing" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="Labour, parts markup, profitability, rounding, discounts, and quote defaults. Seed defaults are $50 labour / 20% markup — change them here." Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="PricingStatusText" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="PricingErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
+            <NumberBox x:Name="DefaultLabourBox" Header="Default labour fee" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="MinLabourBox" Header="Minimum labour fee" SpinButtonPlacementMode="Compact" />
+            <CheckBox x:Name="DifficultyPricingCheck" Content="Enable difficulty labour levels" />
+            <ComboBox x:Name="MarkupMethodCombo" Header="Parts markup method" Width="280">
+              <x:String>FlatPercent</x:String>
+              <x:String>Tiered</x:String>
+              <x:String>Fixed</x:String>
+              <x:String>Hybrid</x:String>
+            </ComboBox>
+            <NumberBox x:Name="DefaultMarkupBox" Header="Default markup %" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="FixedMarkupBox" Header="Fixed markup amount" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="MinPartProfitBox" Header="Minimum part profit" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="MinMarginBox" Header="Minimum gross margin %" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="WarnMarginBox" Header="Warn below margin %" SpinButtonPlacementMode="Compact" />
+            <CheckBox x:Name="ApprovalRequiredCheck" Content="Manager approval required below minimum margin" />
+            <ComboBox x:Name="RoundingCombo" Header="Rounding" Width="280">
+              <x:String>None</x:String>
+              <x:String>Nearest1</x:String>
+              <x:String>Nearest5</x:String>
+              <x:String>Nearest10</x:String>
+              <x:String>End9</x:String>
+              <x:String>End995</x:String>
+              <x:String>Custom</x:String>
+            </ComboBox>
+            <NumberBox x:Name="MaxTechDiscountBox" Header="Max tech discount %" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="ValidityDaysBox" Header="Default quote validity (days)" SpinButtonPlacementMode="Compact" />
+            <CheckBox x:Name="AutoExpireCheck" Content="Auto-expire quotes past validity" />
+            <Button Content="Save pricing settings" Click="SavePricing_Click" Style="{StaticResource AccentButtonStyle}" />
+            <TextBlock Text="Markup tiers (Option B)" FontWeight="SemiBold" Margin="0,12,0,0" />
+            <ListView x:Name="TiersList" MinHeight="80" />
+            <Grid ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <NumberBox x:Name="TierMinBox" Header="Min cost" />
+              <NumberBox Grid.Column="1" x:Name="TierMaxBox" Header="Max cost" />
+              <NumberBox Grid.Column="2" x:Name="TierPctBox" Header="Markup %" />
+              <Button Grid.Column="3" Content="Add tier" VerticalAlignment="Bottom" Click="AddTier_Click" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </PivotItem>
+      <PivotItem Header="Services" Tag="services">
+        <ScrollViewer Padding="0,16,0,0">
+          <StackPanel Spacing="12" MaxWidth="640">
+            <TextBlock Text="Service pricing catalogue" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock x:Name="ServicesStatusText" Opacity="0.7" />
+            <TextBlock x:Name="ServicesErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
+            <ListView x:Name="ServicesList" MinHeight="120" />
+            <TextBox x:Name="ServiceNameBox" Header="Name" />
+            <TextBox x:Name="ServiceCategoryBox" Header="Category" />
+            <NumberBox x:Name="ServiceLabourBox" Header="Default labour fee" />
+            <NumberBox x:Name="ServiceMarkupBox" Header="Default part markup %" />
+            <Button Content="Add / update service" Click="SaveService_Click" Style="{StaticResource AccentButtonStyle}" />
+          </StackPanel>
+        </ScrollViewer>
+      </PivotItem>
+      <PivotItem Header="Tax" Tag="tax">
+        <ScrollViewer Padding="0,16,0,0">
+          <StackPanel Spacing="12" MaxWidth="520">
+            <TextBlock Text="Business tax (GST)" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="Rate and inclusive/exclusive pricing. Not hardcoded to AUD — uses the business profile currency." Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="TaxStatusText" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="TaxErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
+            <CheckBox x:Name="TaxEnabledCheck" Content="Tax registered / enabled" />
+            <NumberBox x:Name="TaxRateBox" Header="Tax rate (e.g. 0.10 for 10%)" SmallChange="0.01" LargeChange="0.05" />
+            <CheckBox x:Name="TaxInclusiveCheck" Content="Prices are tax-inclusive" />
+            <TextBox x:Name="CurrencyBox" Header="Currency code" />
+            <Button Content="Save tax settings" Click="SaveTax_Click" Style="{StaticResource AccentButtonStyle}" />
           </StackPanel>
         </ScrollViewer>
       </PivotItem>

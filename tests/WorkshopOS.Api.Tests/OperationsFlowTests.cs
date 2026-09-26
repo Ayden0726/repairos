@@ -41,8 +41,8 @@ public sealed class OperationsFlowTests
             null, "Melbourne", "VIC", "3000", null, PreferredContact.Email, false));
 
         var quote = await PostJson<QuoteDetailDto>("/api/quotes", new CreateQuoteRequest(
-            customer.Id, "Screen replacement quote",
-            [new LineInputDto("PART", "OLED assembly", 1, 220m)]));
+            customer.Id, null, "Screen replacement quote", null, null, null, null, null, null, null,
+            null, SimpleLines: [new LineInputDto("PART", "OLED assembly", 1, 220m)]));
         quote.Number.Should().StartWith("QTE-");
         quote.Total.Should().BeGreaterThan(0);
 

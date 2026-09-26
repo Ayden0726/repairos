@@ -11,27 +11,6 @@ using WorkshopOS.Infrastructure.Persistence;
 
 namespace WorkshopOS.Infrastructure.Services;
 
-/// <summary>GST-inclusive AUD helpers (10%): line totals are tax-inclusive; split into Subtotal + Gst.</summary>
-public static class MoneyGst
-{
-    public const decimal InclusiveRate = 0.10m;
-    public const decimal InclusiveDivisor = 1.10m;
-
-    public static (decimal Subtotal, decimal Gst, decimal Total) FromInclusiveTotal(decimal inclusiveTotal)
-    {
-        var total = Math.Round(inclusiveTotal, 2, MidpointRounding.AwayFromZero);
-        var subtotal = Math.Round(total / InclusiveDivisor, 2, MidpointRounding.AwayFromZero);
-        var gst = total - subtotal;
-        return (subtotal, gst, total);
-    }
-
-    public static (decimal Subtotal, decimal Gst, decimal Total) FromInclusiveLines(IEnumerable<(decimal Qty, decimal UnitPrice)> lines)
-    {
-        var inclusive = lines.Sum(l => Math.Round(l.Qty * l.UnitPrice, 2, MidpointRounding.AwayFromZero));
-        return FromInclusiveTotal(inclusive);
-    }
-}
-
 internal static class DocumentNumbering
 {
     public static async Task<string> NextAsync(WorkshopDbContext db, string prefix, CancellationToken ct)
@@ -154,93 +133,27 @@ public sealed class DashboardService : IDashboardService
             .ToListAsync(ct);
         var todaysWork = todaysRepairs.Concat(todaysBookings).OrderBy(x => x.When).ToList();
 
-        return new DashboardDto(cards, pipeline, urgent, workload, unassigned, lowStock, activity, todaysWork);
+        var quoteAnalytics = await BuildQuoteAnalyticsAsync(since30, ct);
+        return new DashboardDto(cards, pipeline, urgent, workload, unassigned, lowStock, activity, todaysWork, quoteAnalytics);
     }
-}
 
-public sealed class QuoteService : IQuoteService
-{
-    private readonly WorkshopDbContext _db;
-    private readonly IAuditService _audit;
-
-    public QuoteService(WorkshopDbContext db, IAuditService audit)
+    private async Task<QuoteAnalyticsDto> BuildQuoteAnalyticsAsync(DateTimeOffset since30, CancellationToken ct)
     {
-        _db = db;
-        _audit = audit;
-    }
-
-    public async Task<IReadOnlyList<QuoteListItemDto>> ListAsync(CancellationToken ct = default) =>
-        await _db.Quotes.AsNoTracking().Include(q => q.Customer)
-            .Where(q => q.ArchivedAt == null)
-            .OrderByDescending(q => q.CreatedAt)
-            .Select(q => new QuoteListItemDto(q.Id, q.Number, q.Customer.DisplayName, q.Status, q.Total, q.CreatedAt))
+        var quotes = await _db.Quotes.AsNoTracking()
+            .Where(q => q.ArchivedAt == null && q.CreatedAt >= since30)
+            .Select(q => new { q.Status, q.Total, q.MarginPercent, q.AcceptedAt })
             .ToListAsync(ct);
-
-    public async Task<QuoteDetailDto> GetAsync(Guid id, CancellationToken ct = default)
-    {
-        var q = await _db.Quotes.AsNoTracking().Include(x => x.Customer).Include(x => x.Lines)
-            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
-            ?? throw new AppException("not_found", "Quote was not found.", 404);
-        return Map(q);
+        var sentLike = quotes.Count(q => q.Status is "Sent" or "Viewed" or "Accepted" or "Declined" or "Expired" or "Converted");
+        var accepted = quotes.Where(q => q.Status is "Accepted" or "Converted").ToList();
+        var declined = quotes.Count(q => q.Status == "Declined");
+        var expired = quotes.Count(q => q.Status == "Expired");
+        var conversion = sentLike > 0
+            ? Math.Round(accepted.Count * 100m / sentLike, 2, MidpointRounding.AwayFromZero)
+            : 0m;
+        var avgTotal = accepted.Count > 0 ? Math.Round(accepted.Average(a => a.Total), 2, MidpointRounding.AwayFromZero) : 0m;
+        var avgMargin = accepted.Count > 0 ? Math.Round(accepted.Average(a => a.MarginPercent), 2, MidpointRounding.AwayFromZero) : 0m;
+        return new QuoteAnalyticsDto(sentLike, accepted.Count, declined, expired, conversion, avgTotal, avgMargin);
     }
-
-    public async Task<QuoteDetailDto> CreateAsync(CreateQuoteRequest request, Guid actorId, CancellationToken ct = default)
-    {
-        _ = await _db.Customers.FirstOrDefaultAsync(c => c.Id == request.CustomerId && c.ArchivedAt == null, ct)
-            ?? throw new AppException("not_found", "Customer was not found.", 404);
-        if (request.Lines is null || request.Lines.Count == 0)
-            throw new ValidationAppException("At least one line is required.");
-
-        var (sub, gst, total) = MoneyGst.FromInclusiveLines(request.Lines.Select(l => (l.Quantity, l.UnitPrice)));
-        var number = await DocumentNumbering.NextAsync(_db, "QTE", ct);
-        var quote = new Quote
-        {
-            Number = number,
-            CustomerId = request.CustomerId,
-            Status = "Draft",
-            Issue = request.Issue?.Trim(),
-            CreatedById = actorId,
-            Subtotal = sub,
-            GstAmount = gst,
-            Total = total,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(14)
-        };
-        var order = 0;
-        foreach (var line in request.Lines)
-        {
-            quote.Lines.Add(new QuoteLine
-            {
-                Type = string.IsNullOrWhiteSpace(line.Type) ? "SERVICE" : line.Type.Trim(),
-                Description = line.Description.Trim(),
-                Quantity = line.Quantity,
-                UnitPrice = line.UnitPrice,
-                SortOrder = order++
-            });
-        }
-        _db.Quotes.Add(quote);
-        await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(actorId, "quote.create", "Quote", quote.Id.ToString(), newValue: new { quote.Number }, ct: ct);
-        return await GetAsync(quote.Id, ct);
-    }
-
-    public async Task<QuoteDetailDto> SetStatusAsync(Guid id, string status, Guid actorId, CancellationToken ct = default)
-    {
-        var allowed = new[] { "Draft", "Sent", "Approved", "Declined", "Expired" };
-        if (!allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
-            throw new ValidationAppException("Invalid quote status.");
-        var quote = await _db.Quotes.FirstOrDefaultAsync(q => q.Id == id && q.ArchivedAt == null, ct)
-            ?? throw new AppException("not_found", "Quote was not found.", 404);
-        quote.Status = allowed.First(a => a.Equals(status, StringComparison.OrdinalIgnoreCase));
-        quote.UpdatedAt = DateTimeOffset.UtcNow;
-        await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(actorId, "quote.status", "Quote", id.ToString(), newValue: quote.Status, ct: ct);
-        return await GetAsync(id, ct);
-    }
-
-    private static QuoteDetailDto Map(Quote q) => new(
-        q.Id, q.Number, q.CustomerId, q.Customer.DisplayName, q.Status, q.Issue,
-        q.Subtotal, q.GstAmount, q.Total, q.ExpiresAt,
-        q.Lines.OrderBy(l => l.SortOrder).Select(l => new LineDto(l.Id, l.Type, l.Description, l.Quantity, l.UnitPrice, Math.Round(l.Quantity * l.UnitPrice, 2))).ToList());
 }
 
 public sealed class InvoiceService : IInvoiceService
@@ -360,12 +273,14 @@ public sealed class InventoryService : IInventoryService
 
     public async Task<IReadOnlyList<InventoryListItemDto>> ListAsync(CancellationToken ct = default) =>
         await _db.InventoryItems.AsNoTracking()
+            .Include(i => i.Supplier)
             .Where(i => i.ArchivedAt == null)
             .OrderBy(i => i.Sku)
             .Select(i => new InventoryListItemDto(
                 i.Id, i.Sku, i.Name, i.Category, i.QuantityOnHand, i.QuantityReserved,
                 Math.Max(0, i.QuantityOnHand - i.QuantityReserved), i.MinimumStock, i.SellPrice,
-                (i.QuantityOnHand - i.QuantityReserved) <= i.MinimumStock))
+                (i.QuantityOnHand - i.QuantityReserved) <= i.MinimumStock,
+                i.Cost, i.Supplier != null ? i.Supplier.Name : null))
             .ToListAsync(ct);
 
     public async Task<InventoryListItemDto> UpsertAsync(UpsertInventoryRequest request, Guid actorId, CancellationToken ct = default)

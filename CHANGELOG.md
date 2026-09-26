@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.8 — 2026-09-26
+
+### Added
+
+- **Repair Quote & Automatic Pricing System**: `PricingCalculator`, pricing settings (`pricing.settings`), markup tiers, service pricing catalogue
+- Quote statuses Draft|Sent|Viewed|Accepted|Declined|Expired|Converted|Cancelled; revisions + audit log; frozen accepted quotes
+- APIs: pricing settings/tiers/services/preview; quote create/update/send/accept/decline/revise/convert/print; dashboard quote analytics
+- WinUI **Quote Builder** (Work → Quotes), Create Quote from repair detail, Settings → Pricing / Services / Tax
+- Permissions: `pricing.view_cost`, `pricing.view_profit`, `pricing.change_markup`, `pricing.override_labour`, `pricing.apply_discount`, `pricing.override_price`, `pricing.approve_low_margin`, `pricing.edit_settings`
+
 ## 1.2.7 — 2026-09-25
 
 ### Added

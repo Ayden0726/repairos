@@ -30,6 +30,10 @@ public sealed class WorkshopDbContext : DbContext
 
     public DbSet<Quote> Quotes => Set<Quote>();
     public DbSet<QuoteLine> QuoteLines => Set<QuoteLine>();
+    public DbSet<QuoteRevision> QuoteRevisions => Set<QuoteRevision>();
+    public DbSet<QuoteAuditEntry> QuoteAuditEntries => Set<QuoteAuditEntry>();
+    public DbSet<MarkupTier> MarkupTiers => Set<MarkupTier>();
+    public DbSet<ServicePricing> ServicePricings => Set<ServicePricing>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -219,11 +223,25 @@ public sealed class WorkshopDbContext : DbContext
             e.HasIndex(x => x.Number).IsUnique();
             e.Property(x => x.Number).HasMaxLength(40).IsRequired();
             e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            e.Property(x => x.DeviceBrand).HasMaxLength(120);
+            e.Property(x => x.DeviceModel).HasMaxLength(120);
+            e.Property(x => x.DeviceSerial).HasMaxLength(120);
+            e.Property(x => x.DeviceCategory).HasMaxLength(64);
+            e.Property(x => x.RoundingMethod).HasMaxLength(32);
             e.Property(x => x.Subtotal).HasPrecision(12, 2);
             e.Property(x => x.GstAmount).HasPrecision(12, 2);
             e.Property(x => x.Total).HasPrecision(12, 2);
+            e.Property(x => x.PartsSubtotal).HasPrecision(12, 2);
+            e.Property(x => x.LabourSubtotal).HasPrecision(12, 2);
+            e.Property(x => x.DiscountTotal).HasPrecision(12, 2);
+            e.Property(x => x.CostTotal).HasPrecision(12, 2);
+            e.Property(x => x.ProfitTotal).HasPrecision(12, 2);
+            e.Property(x => x.MarginPercent).HasPrecision(12, 2);
+            e.Property(x => x.PreRoundTotal).HasPrecision(12, 2);
+            e.Property(x => x.AcceptedTotal).HasPrecision(12, 2);
             e.HasIndex(x => x.CreatedAt);
             e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.ExpiresAt);
             e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
             e.HasOne(x => x.RepairTicket).WithMany().HasForeignKey(x => x.RepairTicketId).OnDelete(DeleteBehavior.SetNull);
         });
@@ -234,9 +252,71 @@ public sealed class WorkshopDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Type).HasMaxLength(32);
             e.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            e.Property(x => x.ServiceName).HasMaxLength(200);
+            e.Property(x => x.PartName).HasMaxLength(200);
+            e.Property(x => x.SupplierName).HasMaxLength(200);
+            e.Property(x => x.Sku).HasMaxLength(80);
+            e.Property(x => x.DifficultyLevelKey).HasMaxLength(40);
             e.Property(x => x.Quantity).HasPrecision(12, 2);
+            e.Property(x => x.PartCost).HasPrecision(12, 2);
+            e.Property(x => x.ShippingCost).HasPrecision(12, 2);
+            e.Property(x => x.OtherCost).HasPrecision(12, 2);
+            e.Property(x => x.LandedCost).HasPrecision(12, 2);
+            e.Property(x => x.MarkupPercent).HasPrecision(12, 2);
+            e.Property(x => x.MarkupAmount).HasPrecision(12, 2);
+            e.Property(x => x.PartSell).HasPrecision(12, 2);
+            e.Property(x => x.LabourAmount).HasPrecision(12, 2);
+            e.Property(x => x.AdditionalAmount).HasPrecision(12, 2);
+            e.Property(x => x.DiscountAmount).HasPrecision(12, 2);
             e.Property(x => x.UnitPrice).HasPrecision(12, 2);
+            e.Property(x => x.LineSubtotal).HasPrecision(12, 2);
+            e.Property(x => x.LineTotal).HasPrecision(12, 2);
+            e.Property(x => x.LineProfit).HasPrecision(12, 2);
             e.HasOne(x => x.Quote).WithMany(q => q.Lines).HasForeignKey(x => x.QuoteId);
+            e.HasOne(x => x.InventoryItem).WithMany().HasForeignKey(x => x.InventoryItemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.ServicePricing).WithMany().HasForeignKey(x => x.ServicePricingId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<QuoteRevision>(e =>
+        {
+            e.ToTable("quote_revisions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.QuoteId, x.RevisionNumber }).IsUnique();
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.HasOne(x => x.Quote).WithMany(q => q.Revisions).HasForeignKey(x => x.QuoteId);
+        });
+
+        modelBuilder.Entity<QuoteAuditEntry>(e =>
+        {
+            e.ToTable("quote_audit_log");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Action).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Detail).HasMaxLength(1000);
+            e.HasIndex(x => new { x.QuoteId, x.CreatedAt });
+            e.HasOne(x => x.Quote).WithMany(q => q.AuditEntries).HasForeignKey(x => x.QuoteId);
+        });
+
+        modelBuilder.Entity<MarkupTier>(e =>
+        {
+            e.ToTable("markup_tiers");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.MinCost).HasPrecision(12, 2);
+            e.Property(x => x.MaxCost).HasPrecision(12, 2);
+            e.Property(x => x.MarkupPercent).HasPrecision(12, 2);
+            e.HasIndex(x => x.SortOrder);
+        });
+
+        modelBuilder.Entity<ServicePricing>(e =>
+        {
+            e.ToTable("service_pricing");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(120);
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.DefaultLabourFee).HasPrecision(12, 2);
+            e.Property(x => x.DefaultPartMarkupPercent).HasPrecision(12, 2);
+            e.HasIndex(x => x.Name);
+            e.HasIndex(x => x.SortOrder);
         });
 
         modelBuilder.Entity<Invoice>(e =>
@@ -448,6 +528,7 @@ public static class SettingKeys
     public const string FinanceDefaults = "finance.defaults";
     public const string ModuleVisibility = "modules.visibility";
     public const string PairingCode = "setup.pairing_code";
+    public const string PricingSettings = "pricing.settings";
 }
 
 public static class DbSeed

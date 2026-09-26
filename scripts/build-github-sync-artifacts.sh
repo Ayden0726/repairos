@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.7)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.8)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -76,19 +76,19 @@ PowerShell (ASCII-safe):
   Set-Location \$repo
   git add -A
   git status
-  git commit -m "Client 1.2.7: bell notifications, greeting, my tickets"
+  git commit -m "Client 1.2.8: quote builder and automatic pricing"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
 
 Then rebuild Windows client:
 
-  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.7 -SkipInstaller
+  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.8 -SkipInstaller
 
 Or wipe + verify + build + launch:
 
   powershell -ExecutionPolicy Bypass -File .\\packaging\\rebuild-client.ps1
 
-Banner must show: Client 1.2.7
+Banner must show: Client 1.2.8
 
 WSL / bash:
 
@@ -97,7 +97,7 @@ WSL / bash:
   curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO"
-  git add -A && git commit -m "Client 1.2.7: bell notifications, greeting, my tickets"
+  git add -A && git commit -m "Client 1.2.8: quote builder and automatic pricing"
   git push -u origin main
 
 ────────────────────────────────────────────────────────────
@@ -111,12 +111,12 @@ OPTION B: git bundle
   git push origin main
 
 ────────────────────────────────────────────────────────────
-Key 1.2.7 changes in this sync
+Key 1.2.8 changes in this sync
 ────────────────────────────────────────────────────────────
-  Shell bell icon + notifications flyout + auto-dismiss InfoBar banner
-  Dashboard greeting (Good morning/afternoon/evening + tech name)
-  Dashboard My open tickets quick view for signed-in technician
-  Client Version 1.2.7 / packaging defaults / WINDOWS_CLIENT_1.2.7_REBUILD.txt
+  Quote Builder + automatic pricing (markup, labour, rounding, margins)
+  Settings → Pricing / Services / Tax; Create Quote from repair detail
+  Quote APIs (preview, send/accept/revise/convert/print) + calculator tests
+  Client Version 1.2.8 / packaging defaults / WINDOWS_CLIENT_1.2.8_REBUILD.txt
 EOF
 cp -f "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" "$SERVE/"
 ls -lh "$OUT/repairos-github-sync.zip" "$OUT/repairos-main.bundle" "$SERVE/repairos-github-sync.zip"
