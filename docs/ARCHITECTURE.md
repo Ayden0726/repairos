@@ -51,7 +51,7 @@ ASP.NET Core API  ──►  PostgreSQL
 | Component | OS | Notes |
 | --- | --- | --- |
 | API / Worker | Linux (Docker) or Windows Server | Primary deploy: Docker on home/business server / Proxmox |
-| Client | Windows 10/11 x64 | Installed via MSI/MSIX later (Phase 12) |
+| Client | Windows 10/11 x64 | Install via **`WorkshopOS-Setup-*.exe`** from GitHub Releases |
 | PostgreSQL 16 | Same host or separate | Required |
 
 ## Phase 1 scope (this milestone)

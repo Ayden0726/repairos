@@ -43,7 +43,8 @@ Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup
 
 ## Windows client modules
 
-Sidebar: Dashboard, Tickets, Customers, Calendar, Notifications, Quotes, Invoices, Refurbished, Inventory, Purchasing, PC Builds, Knowledge, AI Assist, Reports, Backups, Users, Settings.
+Slim sidebar (1.2.7+): Dashboard, Work (Tickets / Quotes / Invoices / Calendar / PC Builds), Inventory (incl. Purchasing / Refurbished), Customers, Reports, Settings.  
+AI Assist and Knowledge Base are available from Settings / module flags when enabled — not primary nav. Install the client from **GitHub Releases** (`WorkshopOS-Setup-*.exe`).
 
 ## What is intentionally not fake
 

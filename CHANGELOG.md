@@ -2,6 +2,12 @@
 
 ## 1.2.13 — 2026-09-27
 
+### Docs / setup
+
+- **Install path clarified**: server via `get-workshopos.sh`; Windows client via GitHub Release **`WorkshopOS-Setup-x.y.z.exe`** (build-from-source demoted to maintainer notes)
+- Rewrote `README.md` + `docs/INSTALL.md` (architecture, pairing, wizard, pricing overview, password reset, clean install, troubleshooting: 404/old server, Smart App Control, divergent git, chmod, Docker, ports, health)
+- Improved `scripts/get-workshopos.sh` (banners, `--update`, health, pairing/next-steps, ASCII-safe) + `restart-workshopos.sh` / `continue-workshopos-setup.sh`
+
 ### Added
 
 - **Password reset (staff)**: Owner/Admin in **Settings → Users & Roles** → **Reset password…** (same password rules; revokes that user’s sessions)

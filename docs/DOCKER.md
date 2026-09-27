@@ -39,4 +39,5 @@ Default development URLs: `http://127.0.0.1:5088`
 
 ## Client
 
-The Windows installer only installs the client. Point it at `https://your-server` during first connection / setup.
+Install **`WorkshopOS-Setup-x.y.z.exe`** from [GitHub Releases](https://github.com/Ayden0726/repairos/releases).  
+Point it at your server during pairing (`/connect` or LAN discovery). See [INSTALL.md](INSTALL.md).

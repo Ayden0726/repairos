@@ -2,58 +2,87 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Architecture:** Windows WinUI 3 client → REST + SignalR → ASP.NET Core API → PostgreSQL.
+**Current version: 1.2.13+**
 
-**Live API (this environment):** [Health](http://127.0.0.1:5088/api/health) · [Connect / pairing](http://127.0.0.1:5088/connect) · [Swagger](http://127.0.0.1:5088/swagger)
+## What it is
 
-## Features
+WorkshopOS runs your shop’s day-to-day work on **your own server**:
 
-See **[docs/FEATURES.md](docs/FEATURES.md)**. Pricing & quotes: **[docs/PRICING_QUOTES.md](docs/PRICING_QUOTES.md)**.
+- Repair tickets, customers, devices, quotes, invoices, inventory, purchasing, PC builds, refurbished stock, calendar, reports, backups, and staff roles
+- A **Windows desktop app** on each shop PC
+- A **central server** (Docker) you host on a Linux PC, NAS, VM, or WSL
 
-## Install server — one command
+Nothing is required from a SaaS cloud — data stays on your machine / LAN.
 
-Needs [Docker](https://docs.docker.com/get-docker/) + [Git](https://git-scm.com/downloads):
+## How it works
+
+```
+  Windows PCs                         Your server
+  -----------                         -----------
+  WorkshopOS Client  --REST+SignalR-->  ASP.NET Core API
+  (Setup.exe)                           |
+                                        +--> PostgreSQL
+                                        +--> Worker (jobs / backups)
+```
+
+1. **Server** — one command installs Git/Docker if needed, clones the repo, starts API + Postgres.
+2. **Client** — download **`WorkshopOS-Setup-x.y.z.exe`** from [GitHub Releases](https://github.com/Ayden0726/repairos/releases) (do **not** compile WinUI yourself).
+3. **Pair** — open `http://<server>:5088/connect`, enter the `WOS-XXXX` code in the app (or Find on this network).
+4. **First PC** — setup wizard creates the business profile + owner account. Other PCs sign in; add staff under **Settings → Users & Roles**.
+
+Features: **[docs/FEATURES.md](docs/FEATURES.md)** · Pricing & quotes: **[docs/PRICING_QUOTES.md](docs/PRICING_QUOTES.md)** · Auth / passwords: **[docs/AUTH.md](docs/AUTH.md)**
+
+## Install the server (one command)
+
+Needs a Linux / WSL / macOS host. The script auto-installs **Git** and **Docker** (Compose v2) on common Linux distros when missing:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
 ```
 
-Then open **`http://<server-ip>:5088/connect`** — you’ll get a pairing code (`WOS-XXXX`) for the Windows app.
+When it finishes:
 
-**Clean wipe (deletes DB):** see **[docs/INSTALL.md](docs/INSTALL.md)** → *Clean server install*.
+- Open **`http://127.0.0.1:5088/connect`** (or `http://<lan-ip>:5088/connect`)
+- Copy the pairing code (`WOS-XXXX`)
+- Re-run / update later: `~/workshopos/scripts/get-workshopos.sh --update`
 
-Full guide: **[docs/INSTALL.md](docs/INSTALL.md)** · Auth / password reset: **[docs/AUTH.md](docs/AUTH.md)**
-## Connect Windows PCs
+If you cloned the repo and scripts say “Permission denied”:
 
-1. Start the **server** first; open `http://<server-ip>:5088/connect` for the pairing code.  
-2. Install the WorkshopOS client (Release zip/setup, or build below).  
-3. On the connect screen (appears within a few seconds — tap **Enter server / pairing code** if needed): enter the **pairing code**, or **Find on this network**, or paste the server URL.  
-4. **First PC** runs the shop **setup wizard** (business + owner). Other PCs sign in; add staff under **Users**.  
-5. Stuck on an old URL? Delete `%LOCALAPPDATA%\WorkshopOS\client-settings.json` and relaunch.
-
-## Build the Windows client
-
-**Windows 10/11 x64 only.** Install these first (all linked):
-
-| Tool | Link |
-| --- | --- |
-| Git for Windows | https://git-scm.com/download/win |
-| Visual Studio 2022 Community | https://visualstudio.microsoft.com/downloads/ |
-| WinUI / Windows App SDK tools | https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/set-up-your-development-environment |
-| .NET 8 SDK (x64) | https://dotnet.microsoft.com/download/dotnet/8.0 |
-| Inno Setup 6 (optional `.exe` installer) | https://jrsoftware.org/isdl.php |
-| Windows SDK | https://developer.microsoft.com/windows/downloads/windows-sdk/ |
-
-In Visual Studio Installer, enable workload **WinUI application development**.
-
-```powershell
-git clone https://github.com/Ayden0726/repairos.git
-cd repairos
-# Developer PowerShell for VS; expect banner "WorkshopOS client build script v4"
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.2 -SkipInstaller
+```bash
+chmod +x scripts/*.sh
 ```
 
-Step-by-step + workload checklist: **[apps/windows-client/README.md](apps/windows-client/README.md)**
+Full guide (clean install, troubleshooting, ports): **[docs/INSTALL.md](docs/INSTALL.md)**
+
+## Install the Windows client
+
+1. Go to **[GitHub Releases](https://github.com/Ayden0726/repairos/releases)**
+2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.13.exe`)
+3. Run the installer on each Windows 10/11 **x64** PC
+4. Enter the pairing code from `/connect`, or tap **Find on this network**
+
+Stuck on an old server URL?
+
+```powershell
+Remove-Item -Force -ErrorAction SilentlyContinue "$env:LOCALAPPDATA\WorkshopOS\client-settings.json"
+```
+
+Then relaunch and pair again.
+
+## First-run wizard & staff
+
+| Step | Who | What |
+| --- | --- | --- |
+| Setup wizard | First PC after pairing | Business name / ABN / GST + owner account |
+| Login | Every PC | Email + password |
+| Staff | Owner / admin | **Settings → Users & Roles** (create, roles, reset password) |
+| Change password | Any user | **Settings → App → Change password…** |
+
+Locked out of the owner account (server access only): see **[docs/AUTH.md](docs/AUTH.md)** / `scripts/reset-owner-password.sh`.
+
+## Pricing & quotes (overview)
+
+Server-side pricing (labour, markup, rounding, GST) drives quote totals. Configure under **Settings → Pricing / Tax / Services**. Details: **[docs/PRICING_QUOTES.md](docs/PRICING_QUOTES.md)**.
 
 ## Repository layout
 
@@ -61,14 +90,22 @@ Step-by-step + workload checklist: **[apps/windows-client/README.md](apps/window
 apps/windows-client/   WinUI 3 desktop app
 services/api/          ASP.NET Core API + /connect portal
 docker/                Compose + Dockerfiles
-packaging/             Windows client build + Inno Setup
-scripts/               get-workshopos.sh (one-liner), install, publish
-docs/                  Features, install, architecture
+packaging/             Maintainer: client build + Inno Setup
+scripts/               get-workshopos.sh, restart, password reset
+docs/                  Install, features, architecture
 ```
 
-## Develop / test API
+## Docs
 
-```bash
-cd services/api/WorkshopOS.Api && dotnet run
-dotnet test WorkshopOS.sln
-```
+| Doc | Topic |
+| --- | --- |
+| [docs/INSTALL.md](docs/INSTALL.md) | Server + client install, clean wipe, troubleshooting |
+| [docs/FEATURES.md](docs/FEATURES.md) | Feature list |
+| [docs/AUTH.md](docs/AUTH.md) | Login, JWT, password reset |
+| [docs/PRICING_QUOTES.md](docs/PRICING_QUOTES.md) | Pricing & quotes |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Topology |
+| [docs/DOCKER.md](docs/DOCKER.md) | Compose services |
+
+## Maintainer / advanced
+
+Building the Windows client from source (Visual Studio, WinUI, Inno Setup) is **optional** and only for maintainers publishing a new Release. Shop installs should use **Setup.exe** from Releases. See [apps/windows-client/README.md](apps/windows-client/README.md) and [packaging/README.md](packaging/README.md).

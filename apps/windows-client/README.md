@@ -1,5 +1,14 @@
 # Windows client (WinUI 3)
 
+**Shop / production install:** download **`WorkshopOS-Setup-x.y.z.exe`** from  
+**[GitHub Releases](https://github.com/Ayden0726/repairos/releases)** — do not build from source unless you are a maintainer.
+
+Server install: [docs/INSTALL.md](../../docs/INSTALL.md) (`get-workshopos.sh`).
+
+---
+
+## Maintainer: build from source
+
 Build and run on **Windows 10 version 1809+** or **Windows 11**, **64-bit only**.  
 This project **cannot** be built on Linux — use a Windows PC or the `windows-latest` GitHub Actions job.
 
