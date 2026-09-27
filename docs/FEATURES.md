@@ -33,7 +33,7 @@ Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup
 | **Invoices & payments** | Create from repair, record payments/deposits, balances |
 | **Notifications** | Per-user inbox; mark read (SMS/email providers optional / “not configured”) |
 | **PC Builds** | Build jobs with parts, cost/sell/margin |
-| **Used Tech** | Buy-in / refurb / sell pipeline with expected margin |
+| **Refurbished** | Buy-in / refurb / sell stock with purchase, parts, asking price, condition, status, margin |
 | **Calendar** | Bookings (drop-off, consult, pickup, etc.) |
 | **Knowledge** | Internal KB articles by category/tags |
 | **QA** | Per-repair QA checklist results |
@@ -43,7 +43,7 @@ Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup
 
 ## Windows client modules
 
-Sidebar: Dashboard, Tickets, Customers, Calendar, Notifications, Quotes, Invoices, Used Tech, Inventory, Purchasing, PC Builds, Knowledge, AI Assist, Reports, Backups, Users, Settings.
+Sidebar: Dashboard, Tickets, Customers, Calendar, Notifications, Quotes, Invoices, Refurbished, Inventory, Purchasing, PC Builds, Knowledge, AI Assist, Reports, Backups, Users, Settings.
 
 ## What is intentionally not fake
 

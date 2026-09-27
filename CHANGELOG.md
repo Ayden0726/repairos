@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.12 — 2026-09-27
+
+### Added
+
+- **Refurbished** (Used Tech module `used`): full list + create/edit UI under Inventory
+  - Device identity: brand, model, category, serial, IMEI, colour, storage, other specs
+  - Purchase price, parts/repair cost, total cost, asking price, actual sale price
+  - Condition (New refurbished / Excellent / Good / Fair) and status (In stock / Reserved / Listed / Sold)
+  - Notes, supplier/source, optional linked customer or repair ticket
+  - Search + status filter; margin shown when `pricing.view` (or cost/profit) is allowed
+- API: `GET/POST /api/used-tech`, `GET/PUT /api/used-tech/{id}`, status endpoint returns full detail
+- EF migration `RefurbishedUsedDeviceFields` (brand/model/category/colour/storage/specs/notes/source/customer/ticket)
+
+### Server
+
+- Product version `1.2.12` on health/discovery; ClientMinVersion `1.2.12`
+
 ## 1.2.11 — 2026-09-27
 
 ### Fixed

@@ -166,9 +166,11 @@ public interface IPcBuildService
 
 public interface IUsedTechService
 {
-    Task<IReadOnlyList<UsedDeviceDto>> ListAsync(CancellationToken ct = default);
-    Task<UsedDeviceDto> CreateAsync(CreateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default);
-    Task<UsedDeviceDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<UsedDeviceDto>> ListAsync(string? q = null, string? status = null, CancellationToken ct = default);
+    Task<UsedDeviceDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<UsedDeviceDetailDto> CreateAsync(CreateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default);
+    Task<UsedDeviceDetailDto> UpdateAsync(Guid id, UpdateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default);
+    Task<UsedDeviceDetailDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default);
 }
 
 public interface IQaService

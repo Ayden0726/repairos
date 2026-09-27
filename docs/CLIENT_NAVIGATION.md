@@ -22,7 +22,7 @@
 | --- | --- |
 | Quotes | Quote list + **Quote Builder** (live pricing, send/print/convert) |
 | Invoices | List (+ API from-repair / payments) |
-| Used Tech | List (+ API create/status) |
+| Refurbished | List / create / edit (costs, condition, margin, links) |
 
 ### STOCK
 | Item | Status |

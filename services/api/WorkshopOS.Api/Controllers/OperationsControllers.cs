@@ -372,16 +372,26 @@ public sealed class UsedTechController : ControllerBase
 
     [HttpGet]
     [Authorize(Policy = "perm:used.view")]
-    public Task<IReadOnlyList<UsedDeviceDto>> List(CancellationToken ct) => _used.ListAsync(ct);
+    public Task<IReadOnlyList<UsedDeviceDto>> List([FromQuery] string? q, [FromQuery] string? status, CancellationToken ct) =>
+        _used.ListAsync(q, status, ct);
+
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "perm:used.view")]
+    public Task<UsedDeviceDetailDto> Get(Guid id, CancellationToken ct) => _used.GetAsync(id, ct);
 
     [HttpPost]
     [Authorize(Policy = "perm:used.manage")]
-    public Task<UsedDeviceDto> Create([FromBody] CreateUsedDeviceRequest request, CancellationToken ct) =>
+    public Task<UsedDeviceDetailDto> Create([FromBody] CreateUsedDeviceRequest request, CancellationToken ct) =>
         _used.CreateAsync(request, UserId(), ct);
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "perm:used.manage")]
+    public Task<UsedDeviceDetailDto> Update(Guid id, [FromBody] UpdateUsedDeviceRequest request, CancellationToken ct) =>
+        _used.UpdateAsync(id, request, UserId(), ct);
 
     [HttpPost("{id:guid}/status")]
     [Authorize(Policy = "perm:used.manage")]
-    public Task<UsedDeviceDto> Status(Guid id, [FromBody] UpdateUsedStatusRequest request, CancellationToken ct) =>
+    public Task<UsedDeviceDetailDto> Status(Guid id, [FromBody] UpdateUsedStatusRequest request, CancellationToken ct) =>
         _used.UpdateStatusAsync(id, request, UserId(), ct);
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);

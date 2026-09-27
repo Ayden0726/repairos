@@ -487,15 +487,26 @@ public sealed class WorkshopDbContext : DbContext
             e.ToTable("used_devices");
             e.HasKey(x => x.Id);
             e.Property(x => x.Summary).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Brand).HasMaxLength(120);
+            e.Property(x => x.Model).HasMaxLength(120);
+            e.Property(x => x.Category).HasMaxLength(64);
             e.Property(x => x.Serial).HasMaxLength(120);
             e.Property(x => x.Imei).HasMaxLength(32);
-            e.Property(x => x.ConditionGrade).HasMaxLength(8);
+            e.Property(x => x.Colour).HasMaxLength(64);
+            e.Property(x => x.StorageCapacity).HasMaxLength(64);
+            e.Property(x => x.Specs).HasMaxLength(500);
+            e.Property(x => x.ConditionGrade).HasMaxLength(32);
             e.Property(x => x.Status).HasMaxLength(32);
             e.Property(x => x.PurchasePrice).HasPrecision(12, 2);
             e.Property(x => x.ExpectedResale).HasPrecision(12, 2);
             e.Property(x => x.ExpectedRepairCost).HasPrecision(12, 2);
             e.Property(x => x.ActualSalePrice).HasPrecision(12, 2);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.Property(x => x.Source).HasMaxLength(240);
+            e.Ignore(x => x.TotalCost);
             e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.CustomerId);
+            e.HasIndex(x => x.RepairTicketId);
         });
 
         modelBuilder.Entity<QaChecklist>(e =>

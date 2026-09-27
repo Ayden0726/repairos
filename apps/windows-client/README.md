@@ -57,9 +57,9 @@ dotnet run --project WorkshopOS.Client\WorkshopOS.Client.csproj
 
 ### Startup / connect screen
 
-On launch (**Client 1.2.11+**):
+On launch (**Client 1.2.12+**):
 
-1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.11**. No “Connecting to server…” splash — Bootstrap is never the initial page.
+1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.12**. No “Connecting to server…” splash — Bootstrap is never the initial page.
 2. After you connect successfully → **Setup** (first-run shop + owner) or **Login**.
 
 Connect options on ServerConnect:
@@ -70,7 +70,7 @@ Connect options on ServerConnect:
 
 **Change server** (Login / Settings → Connection) and **Clear saved server** wipe URL + tokens (JSON + WinRT LocalSettings + PasswordVault). Theme preference is kept.
 
-### Shell navigation (1.2.11)
+### Shell navigation (1.2.12)
 
 Slim left nav — AI Assist and Knowledge Base are **not** in the sidebar:
 
@@ -78,7 +78,7 @@ Slim left nav — AI Assist and Knowledge Base are **not** in the sidebar:
 | --- | --- |
 | Dashboard | Includes **Upcoming calendar** (next 7 days) |
 | Work | **Tickets** (filters, New ticket, detail workflow), Quotes, Invoices, Calendar, PC Builds |
-| Inventory | Inventory, Purchasing, Used Tech |
+| Inventory | Inventory, Purchasing, Refurbished |
 | Customers | — |
 | Reports | Top-level |
 | **Settings** (gear) | App (theme) · Users & Roles · Backups · Connection |
@@ -110,7 +110,7 @@ Get-ChildItem "$env:LOCALAPPDATA\Packages" -Directory -ErrorAction SilentlyConti
   Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
-Then relaunch a **1.2.11+** build — you always land on Connect / pairing UI.
+Then relaunch a **1.2.12+** build — you always land on Connect / pairing UI.
 
 ### Account / shop setup wizard?
 
@@ -127,7 +127,7 @@ Then relaunch a **1.2.11+** build — you always land on Connect / pairing UI.
 3. From the **repo root**, confirm the banner prints **`WorkshopOS client build script v6`**:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.11 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.12 -SkipInstaller
 ```
 
 Or double-click `packaging\build-client.cmd`.
@@ -135,13 +135,13 @@ Or double-click `packaging\build-client.cmd`.
 Optional Setup.exe (needs [Inno Setup 6](https://jrsoftware.org/isdl.php)):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.11
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.12
 ```
 
 Outputs in `packaging\dist\` (only after a successful publish — failed builds do **not** zip stale output):
 
-- `WorkshopOS-Client-win-x64-v1.2.11.zip` — portable  
-- `WorkshopOS-Setup-1.2.11.exe` — if Inno is installed  
+- `WorkshopOS-Client-win-x64-v1.2.12.zip` — portable  
+- `WorkshopOS-Setup-1.2.12.exe` — if Inno is installed  
 
 ### ExpandPriContent / Pri.Tasks.dll
 

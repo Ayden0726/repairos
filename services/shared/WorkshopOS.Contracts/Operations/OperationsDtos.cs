@@ -148,8 +148,100 @@ public sealed record PcBuildListItemDto(Guid Id, string Number, string? Customer
 public sealed record CreatePcBuildRequest(Guid? CustomerId, string? UseCase, decimal? Budget, IReadOnlyList<PcPartInputDto> Parts);
 public sealed record PcPartInputDto(string Category, string Name, Guid? InventoryItemId, decimal Cost, decimal SellPrice);
 
-public sealed record UsedDeviceDto(Guid Id, string Summary, string Status, string ConditionGrade, decimal PurchasePrice, decimal ExpectedResale, decimal? ActualSalePrice, decimal? Profit);
-public sealed record CreateUsedDeviceRequest(string Summary, string? Serial, string? Imei, string ConditionGrade, decimal PurchasePrice, decimal ExpectedResale, decimal ExpectedRepairCost, string? Faults, Guid? SellerCustomerId);
+public sealed record UsedDeviceDto(
+    Guid Id,
+    string Summary,
+    string? Brand,
+    string? Model,
+    string? Category,
+    string Status,
+    string ConditionGrade,
+    decimal PurchasePrice,
+    decimal PartsCost,
+    decimal TotalCost,
+    decimal AskingPrice,
+    decimal? ActualSalePrice,
+    decimal? Margin,
+    string? Serial,
+    string? Colour,
+    string? StorageCapacity);
+
+public sealed record UsedDeviceDetailDto(
+    Guid Id,
+    string Summary,
+    string? Brand,
+    string? Model,
+    string? Category,
+    string? Serial,
+    string? Imei,
+    string? Colour,
+    string? StorageCapacity,
+    string? Specs,
+    string Status,
+    string ConditionGrade,
+    decimal PurchasePrice,
+    decimal PartsCost,
+    decimal TotalCost,
+    decimal AskingPrice,
+    decimal? ActualSalePrice,
+    decimal? Margin,
+    string? Faults,
+    string? Notes,
+    string? Source,
+    Guid? SellerCustomerId,
+    string? SellerCustomerName,
+    Guid? CustomerId,
+    string? CustomerName,
+    Guid? RepairTicketId,
+    string? RepairTicketNumber,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record CreateUsedDeviceRequest(
+    string? Summary,
+    string? Brand,
+    string? Model,
+    string? Category,
+    string? Serial,
+    string? Imei,
+    string? Colour,
+    string? StorageCapacity,
+    string? Specs,
+    string ConditionGrade,
+    string? Status,
+    decimal PurchasePrice,
+    decimal AskingPrice,
+    decimal PartsCost,
+    string? Faults,
+    string? Notes,
+    string? Source,
+    Guid? SellerCustomerId,
+    Guid? CustomerId,
+    Guid? RepairTicketId);
+
+public sealed record UpdateUsedDeviceRequest(
+    string? Summary,
+    string? Brand,
+    string? Model,
+    string? Category,
+    string? Serial,
+    string? Imei,
+    string? Colour,
+    string? StorageCapacity,
+    string? Specs,
+    string ConditionGrade,
+    string Status,
+    decimal PurchasePrice,
+    decimal AskingPrice,
+    decimal PartsCost,
+    decimal? ActualSalePrice,
+    string? Faults,
+    string? Notes,
+    string? Source,
+    Guid? SellerCustomerId,
+    Guid? CustomerId,
+    Guid? RepairTicketId);
+
 public sealed record UpdateUsedStatusRequest(string Status, decimal? ActualSalePrice);
 
 public sealed record QaItemDto(Guid Id, string Item, string Result, int SortOrder);

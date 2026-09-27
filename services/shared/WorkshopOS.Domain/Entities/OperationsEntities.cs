@@ -317,16 +317,30 @@ public class PcBuildPart
 public class UsedDevice : SoftDeleteEntity
 {
     public string Summary { get; set; } = string.Empty;
+    public string? Brand { get; set; }
+    public string? Model { get; set; }
+    public string? Category { get; set; }
     public string? Serial { get; set; }
     public string? Imei { get; set; }
-    public string ConditionGrade { get; set; } = "B";
-    public string Status { get; set; } = "Purchased";
+    public string? Colour { get; set; }
+    public string? StorageCapacity { get; set; }
+    public string? Specs { get; set; }
+    /// <summary>New refurbished / Excellent / Good / Fair (legacy grades A/B/C still accepted).</summary>
+    public string ConditionGrade { get; set; } = "Good";
+    /// <summary>In stock / Reserved / Sold / Listed (legacy Purchased/Refurbishing still accepted).</summary>
+    public string Status { get; set; } = "In stock";
     public decimal PurchasePrice { get; set; }
     public decimal ExpectedResale { get; set; }
     public decimal ExpectedRepairCost { get; set; }
     public decimal? ActualSalePrice { get; set; }
     public string? Faults { get; set; }
+    public string? Notes { get; set; }
+    public string? Source { get; set; }
     public Guid? SellerCustomerId { get; set; }
+    public Guid? CustomerId { get; set; }
+    public Guid? RepairTicketId { get; set; }
+
+    public decimal TotalCost => PurchasePrice + ExpectedRepairCost;
 }
 
 public class QaChecklist

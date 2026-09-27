@@ -2,7 +2,9 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
+using WorkshopOS.Contracts.Workshop;
 
 namespace WorkshopOS.Client.Views;
 
@@ -272,5 +274,331 @@ public partial class AiAssistViewModel : ObservableObject
             Result = $"[{response.Provider}] {(response.Enabled ? "on" : "offline")}\n{response.Output}\n\n{response.Disclaimer}";
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public sealed class UsedDeviceRowVm
+{
+    public UsedDeviceRowVm(UsedDeviceDto dto, bool showMargin)
+    {
+        Dto = dto;
+        ShowMargin = showMargin;
+        DeviceLabel = string.IsNullOrWhiteSpace(dto.Brand) && string.IsNullOrWhiteSpace(dto.Model)
+            ? dto.Summary
+            : string.Join(" ", new[] { dto.Brand, dto.Model, dto.StorageCapacity }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        SpecsLine = string.Join(" · ", new[] { dto.Category, dto.Colour, dto.Serial }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        CostLine = $"Buy ${dto.PurchasePrice:0.00} + parts ${dto.PartsCost:0.00} = ${dto.TotalCost:0.00}";
+        SellLine = dto.ActualSalePrice is decimal sold
+            ? $"Sold ${sold:0.00}"
+            : $"Ask ${dto.AskingPrice:0.00}";
+        MarginLine = showMargin && dto.Margin is decimal m ? $"Margin ${m:0.00}" : "";
+    }
+
+    public UsedDeviceDto Dto { get; }
+    public Guid Id => Dto.Id;
+    public string DeviceLabel { get; }
+    public string SpecsLine { get; }
+    public string Status => Dto.Status;
+    public string ConditionGrade => Dto.ConditionGrade;
+    public string CostLine { get; }
+    public string SellLine { get; }
+    public string MarginLine { get; }
+    public bool ShowMargin { get; }
+    public bool HasMargin => ShowMargin && !string.IsNullOrEmpty(MarginLine);
+}
+
+public sealed class UsedPickItem
+{
+    public UsedPickItem(Guid id, string label)
+    {
+        Id = id;
+        Label = label;
+    }
+
+    public Guid Id { get; }
+    public string Label { get; }
+}
+
+public partial class UsedTechViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    private readonly AuthSession _session;
+    private Guid? _editingId;
+
+    public ObservableCollection<UsedDeviceRowVm> Items { get; } = new();
+    public ObservableCollection<UsedPickItem> Customers { get; } = new();
+    public ObservableCollection<UsedPickItem> Repairs { get; } = new();
+    public ObservableCollection<string> StatusOptions { get; } = new(["All", "In stock", "Reserved", "Listed", "Sold"]);
+    public ObservableCollection<string> FormStatusOptions { get; } = new(["In stock", "Reserved", "Listed", "Sold"]);
+    public ObservableCollection<string> ConditionOptions { get; } = new(["New refurbished", "Excellent", "Good", "Fair"]);
+
+    [ObservableProperty] private string _query = string.Empty;
+    [ObservableProperty] private string _statusFilter = "All";
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _statusMessage;
+    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _canViewPricing;
+    [ObservableProperty] private bool _canManage;
+    [ObservableProperty] private string _formTitle = "Add refurbished device";
+    [ObservableProperty] private string _saveButtonLabel = "Add device";
+
+    [ObservableProperty] private string _brand = string.Empty;
+    [ObservableProperty] private string _model = string.Empty;
+    [ObservableProperty] private string _category = string.Empty;
+    [ObservableProperty] private string _serial = string.Empty;
+    [ObservableProperty] private string _imei = string.Empty;
+    [ObservableProperty] private string _colour = string.Empty;
+    [ObservableProperty] private string _storage = string.Empty;
+    [ObservableProperty] private string _specs = string.Empty;
+    [ObservableProperty] private string _condition = "Good";
+    [ObservableProperty] private string _status = "In stock";
+    [ObservableProperty] private string _purchasePrice = "0";
+    [ObservableProperty] private string _partsCost = "0";
+    [ObservableProperty] private string _askingPrice = "0";
+    [ObservableProperty] private string _actualSalePrice = string.Empty;
+    [ObservableProperty] private string _faults = string.Empty;
+    [ObservableProperty] private string _notes = string.Empty;
+    [ObservableProperty] private string _source = string.Empty;
+    [ObservableProperty] private UsedPickItem? _selectedCustomer;
+    [ObservableProperty] private UsedPickItem? _selectedRepair;
+    [ObservableProperty] private string _totalCostPreview = "$0.00";
+    [ObservableProperty] private string _marginPreview = "";
+
+    public UsedTechViewModel(ApiClient api, AuthSession session)
+    {
+        _api = api;
+        _session = session;
+        UpdatePermissions();
+        RecalcPreview();
+    }
+
+    private void UpdatePermissions()
+    {
+        var perms = _session.User?.Permissions ?? Array.Empty<string>();
+        var owner = _session.User?.IsOwner == true;
+        CanViewPricing = owner || perms.Contains("pricing.view") || perms.Contains("pricing.view_profit")
+            || perms.Contains("pricing.view_cost");
+        CanManage = owner || perms.Contains("used.manage") || perms.Contains("inventory.manage");
+    }
+
+    partial void OnPurchasePriceChanged(string value) => RecalcPreview();
+    partial void OnPartsCostChanged(string value) => RecalcPreview();
+    partial void OnAskingPriceChanged(string value) => RecalcPreview();
+    partial void OnActualSalePriceChanged(string value) => RecalcPreview();
+
+    private void RecalcPreview()
+    {
+        _ = decimal.TryParse(PurchasePrice, out var buy);
+        _ = decimal.TryParse(PartsCost, out var parts);
+        _ = decimal.TryParse(AskingPrice, out var ask);
+        var total = buy + parts;
+        TotalCostPreview = $"${total:0.00}";
+        if (!CanViewPricing)
+        {
+            MarginPreview = "";
+            return;
+        }
+        decimal? sold = decimal.TryParse(ActualSalePrice, out var s) ? s : null;
+        var margin = (sold ?? ask) - total;
+        MarginPreview = $"${margin:0.00}";
+    }
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        IsBusy = true;
+        UpdatePermissions();
+        try
+        {
+            await LoadLookupsAsync();
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Query))
+                parts.Add($"q={Uri.EscapeDataString(Query.Trim())}");
+            if (!string.IsNullOrWhiteSpace(StatusFilter) && StatusFilter != "All")
+                parts.Add($"status={Uri.EscapeDataString(StatusFilter)}");
+            var path = "api/used-tech" + (parts.Count > 0 ? "?" + string.Join("&", parts) : "");
+            var list = await _api.GetAsync<IReadOnlyList<UsedDeviceDto>>(path);
+            Items.Clear();
+            foreach (var d in list)
+                Items.Add(new UsedDeviceRowVm(d, CanViewPricing));
+            StatusMessage = Items.Count == 0
+                ? "No refurbished devices yet. Fill the form and add one."
+                : $"{Items.Count} device(s)";
+        }
+        catch (Exception ex)
+        {
+            Error = Friendly(ex.Message);
+            Items.Clear();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void NewDevice()
+    {
+        _editingId = null;
+        FormTitle = "Add refurbished device";
+        SaveButtonLabel = "Add device";
+        Brand = Model = Category = Serial = Imei = Colour = Storage = Specs = string.Empty;
+        Condition = "Good";
+        Status = "In stock";
+        PurchasePrice = "0";
+        PartsCost = "0";
+        AskingPrice = "0";
+        ActualSalePrice = Faults = Notes = Source = string.Empty;
+        SelectedCustomer = null;
+        SelectedRepair = null;
+        Error = null;
+        RecalcPreview();
+    }
+
+    public async Task LoadDeviceAsync(Guid id)
+    {
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            var d = await _api.GetAsync<UsedDeviceDetailDto>($"api/used-tech/{id}");
+            _editingId = d.Id;
+            FormTitle = "Edit refurbished device";
+            SaveButtonLabel = "Save changes";
+            Brand = d.Brand ?? "";
+            Model = d.Model ?? "";
+            Category = d.Category ?? "";
+            Serial = d.Serial ?? "";
+            Imei = d.Imei ?? "";
+            Colour = d.Colour ?? "";
+            Storage = d.StorageCapacity ?? "";
+            Specs = d.Specs ?? "";
+            Condition = string.IsNullOrWhiteSpace(d.ConditionGrade) ? "Good" : d.ConditionGrade;
+            Status = string.IsNullOrWhiteSpace(d.Status) ? "In stock" : d.Status;
+            PurchasePrice = d.PurchasePrice.ToString("0.##");
+            PartsCost = d.PartsCost.ToString("0.##");
+            AskingPrice = d.AskingPrice.ToString("0.##");
+            ActualSalePrice = d.ActualSalePrice?.ToString("0.##") ?? "";
+            Faults = d.Faults ?? "";
+            Notes = d.Notes ?? "";
+            Source = d.Source ?? "";
+            SelectedCustomer = d.CustomerId is Guid cid
+                ? Customers.FirstOrDefault(c => c.Id == cid) ?? new UsedPickItem(cid, d.CustomerName ?? cid.ToString()[..8])
+                : null;
+            SelectedRepair = d.RepairTicketId is Guid tid
+                ? Repairs.FirstOrDefault(r => r.Id == tid) ?? new UsedPickItem(tid, d.RepairTicketNumber ?? tid.ToString()[..8])
+                : null;
+            RecalcPreview();
+        }
+        catch (Exception ex)
+        {
+            Error = Friendly(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        if (!CanManage)
+        {
+            Error = "You do not have permission to manage refurbished devices.";
+            return;
+        }
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(Brand) && string.IsNullOrWhiteSpace(Model))
+            {
+                Error = "Brand or model is required.";
+                return;
+            }
+            if (!decimal.TryParse(PurchasePrice, out var purchase)) purchase = 0m;
+            if (!decimal.TryParse(PartsCost, out var parts)) parts = 0m;
+            if (!decimal.TryParse(AskingPrice, out var ask)) ask = 0m;
+            decimal? sold = decimal.TryParse(ActualSalePrice, out var s) ? s : null;
+
+            Guid? customerId = SelectedCustomer is { Id: var cid } && cid != Guid.Empty ? cid : null;
+            Guid? repairId = SelectedRepair is { Id: var rid } && rid != Guid.Empty ? rid : null;
+
+            if (_editingId is Guid id)
+            {
+                await _api.PutAsync<UpdateUsedDeviceRequest, UsedDeviceDetailDto>(
+                    $"api/used-tech/{id}",
+                    new UpdateUsedDeviceRequest(
+                        null, NullIfEmpty(Brand), NullIfEmpty(Model), NullIfEmpty(Category),
+                        NullIfEmpty(Serial), NullIfEmpty(Imei), NullIfEmpty(Colour), NullIfEmpty(Storage), NullIfEmpty(Specs),
+                        string.IsNullOrWhiteSpace(Condition) ? "Good" : Condition.Trim(),
+                        string.IsNullOrWhiteSpace(Status) ? "In stock" : Status.Trim(),
+                        purchase, ask, parts, sold,
+                        NullIfEmpty(Faults), NullIfEmpty(Notes), NullIfEmpty(Source),
+                        null, customerId, repairId));
+                StatusMessage = "Device updated.";
+            }
+            else
+            {
+                await _api.PostAsync<CreateUsedDeviceRequest, UsedDeviceDetailDto>(
+                    "api/used-tech",
+                    new CreateUsedDeviceRequest(
+                        null, NullIfEmpty(Brand), NullIfEmpty(Model), NullIfEmpty(Category),
+                        NullIfEmpty(Serial), NullIfEmpty(Imei), NullIfEmpty(Colour), NullIfEmpty(Storage), NullIfEmpty(Specs),
+                        string.IsNullOrWhiteSpace(Condition) ? "Good" : Condition.Trim(),
+                        string.IsNullOrWhiteSpace(Status) ? "In stock" : Status.Trim(),
+                        purchase, ask, parts,
+                        NullIfEmpty(Faults), NullIfEmpty(Notes), NullIfEmpty(Source),
+                        null, customerId, repairId));
+                StatusMessage = "Device added.";
+            }
+
+            NewDevice();
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = Friendly(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        try
+        {
+            var page = await _api.GetAsync<PagedResult<CustomerListItemDto>>("api/customers?page=1&pageSize=80");
+            Customers.Clear();
+            Customers.Add(new UsedPickItem(Guid.Empty, "(none)"));
+            foreach (var c in page.Items)
+                Customers.Add(new UsedPickItem(c.Id, $"{c.DisplayName} · {c.Phone ?? c.Email ?? c.Id.ToString()[..8]}"));
+        }
+        catch { /* optional */ }
+
+        try
+        {
+            var page = await _api.GetAsync<PagedResult<RepairListItemDto>>("api/repairs?page=1&pageSize=80");
+            Repairs.Clear();
+            Repairs.Add(new UsedPickItem(Guid.Empty, "(none)"));
+            foreach (var r in page.Items)
+                Repairs.Add(new UsedPickItem(r.Id, $"{r.TicketNumber} · {r.CustomerName}"));
+        }
+        catch { /* optional */ }
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string Friendly(string message)
+    {
+        if (message.Contains("404", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+            return "Server outdated — update/restart WorkshopOS server (git pull + docker compose up -d --build), then reconnect. " + message;
+        return message;
     }
 }

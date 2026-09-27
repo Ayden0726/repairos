@@ -300,7 +300,7 @@ public sealed class SettingsService : ISettingsService
             new("notifications", "Workshop", "Notifications", 7, IsVisible(hidden, "notifications"), true),
             new("quotes", "Sales", "Quotes", 4, IsVisible(hidden, "quotes"), true),
             new("invoices", "Sales", "Invoices", 6, IsVisible(hidden, "invoices"), true),
-            new("used", "Sales", "Used Tech", 8, IsVisible(hidden, "used"), true),
+            new("used", "Sales", "Refurbished", 8, IsVisible(hidden, "used"), true),
             new("inventory", "Stock", "Inventory", 5, IsVisible(hidden, "inventory"), true),
             new("purchasing", "Stock", "Purchasing", 5, IsVisible(hidden, "purchasing"), true),
             new("builds", "Services", "PC Builds", 8, IsVisible(hidden, "builds"), true),

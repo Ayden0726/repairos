@@ -721,6 +721,10 @@ public sealed class PcBuildService : IPcBuildService
 
 public sealed class UsedTechService : IUsedTechService
 {
+    private static readonly string[] AllowedStatuses = ["In stock", "Reserved", "Sold", "Listed", "Purchased", "Refurbishing"];
+    private static readonly string[] AllowedConditions =
+        ["New refurbished", "Excellent", "Good", "Fair", "A", "B", "C", "D"];
+
     private readonly WorkshopDbContext _db;
     private readonly IAuditService _audit;
 
@@ -730,47 +734,207 @@ public sealed class UsedTechService : IUsedTechService
         _audit = audit;
     }
 
-    public async Task<IReadOnlyList<UsedDeviceDto>> ListAsync(CancellationToken ct = default) =>
-        await _db.UsedDevices.AsNoTracking().Where(d => d.ArchivedAt == null)
-            .OrderByDescending(d => d.CreatedAt)
-            .Select(d => new UsedDeviceDto(d.Id, d.Summary, d.Status, d.ConditionGrade, d.PurchasePrice, d.ExpectedResale, d.ActualSalePrice,
-                d.ActualSalePrice.HasValue ? d.ActualSalePrice - d.PurchasePrice - d.ExpectedRepairCost : null))
-            .ToListAsync(ct);
-
-    public async Task<UsedDeviceDto> CreateAsync(CreateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UsedDeviceDto>> ListAsync(string? q = null, string? status = null, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Summary)) throw new ValidationAppException("Summary is required.");
+        var query = _db.UsedDevices.AsNoTracking().Where(d => d.ArchivedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(status) && !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+            query = query.Where(d => d.Status == status.Trim());
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim().ToLowerInvariant();
+            query = query.Where(d =>
+                d.Summary.ToLower().Contains(term) ||
+                (d.Brand != null && d.Brand.ToLower().Contains(term)) ||
+                (d.Model != null && d.Model.ToLower().Contains(term)) ||
+                (d.Category != null && d.Category.ToLower().Contains(term)) ||
+                (d.Serial != null && d.Serial.ToLower().Contains(term)) ||
+                (d.Imei != null && d.Imei.ToLower().Contains(term)) ||
+                (d.Colour != null && d.Colour.ToLower().Contains(term)) ||
+                (d.StorageCapacity != null && d.StorageCapacity.ToLower().Contains(term)) ||
+                (d.Source != null && d.Source.ToLower().Contains(term)) ||
+                (d.Notes != null && d.Notes.ToLower().Contains(term)));
+        }
+
+        var rows = await query.OrderByDescending(d => d.CreatedAt).ToListAsync(ct);
+        return rows.Select(MapList).ToList();
+    }
+
+    public async Task<UsedDeviceDetailDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var d = await _db.UsedDevices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Used device was not found.", 404);
+        return await MapDetailAsync(d, ct);
+    }
+
+    public async Task<UsedDeviceDetailDto> CreateAsync(CreateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var brand = Norm(request.Brand);
+        var model = Norm(request.Model);
+        var summary = BuildSummary(request.Summary, brand, model, request.Category, request.StorageCapacity);
+        if (string.IsNullOrWhiteSpace(summary))
+            throw new ValidationAppException("Brand/model or summary is required.");
+
+        var condition = NormalizeCondition(request.ConditionGrade);
+        var status = string.IsNullOrWhiteSpace(request.Status) ? "In stock" : NormalizeStatus(request.Status);
+
         var d = new UsedDevice
         {
-            Summary = request.Summary.Trim(),
-            Serial = request.Serial?.Trim(),
-            Imei = request.Imei?.Trim(),
-            ConditionGrade = string.IsNullOrWhiteSpace(request.ConditionGrade) ? "B" : request.ConditionGrade.Trim(),
-            Status = "Purchased",
+            Summary = summary,
+            Brand = brand,
+            Model = model,
+            Category = Norm(request.Category),
+            Serial = Norm(request.Serial),
+            Imei = Norm(request.Imei),
+            Colour = Norm(request.Colour),
+            StorageCapacity = Norm(request.StorageCapacity),
+            Specs = Norm(request.Specs),
+            ConditionGrade = condition,
+            Status = status,
             PurchasePrice = request.PurchasePrice,
-            ExpectedResale = request.ExpectedResale,
-            ExpectedRepairCost = request.ExpectedRepairCost,
-            Faults = request.Faults?.Trim(),
-            SellerCustomerId = request.SellerCustomerId
+            ExpectedResale = request.AskingPrice,
+            ExpectedRepairCost = request.PartsCost,
+            Faults = Norm(request.Faults),
+            Notes = Norm(request.Notes),
+            Source = Norm(request.Source),
+            SellerCustomerId = request.SellerCustomerId,
+            CustomerId = request.CustomerId,
+            RepairTicketId = request.RepairTicketId
         };
         _db.UsedDevices.Add(d);
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "used.create", "UsedDevice", d.Id.ToString(), ct: ct);
-        return new UsedDeviceDto(d.Id, d.Summary, d.Status, d.ConditionGrade, d.PurchasePrice, d.ExpectedResale, d.ActualSalePrice, null);
+        return await MapDetailAsync(d, ct);
     }
 
-    public async Task<UsedDeviceDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task<UsedDeviceDetailDto> UpdateAsync(Guid id, UpdateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default)
     {
         var d = await _db.UsedDevices.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
             ?? throw new AppException("not_found", "Used device was not found.", 404);
-        d.Status = request.Status.Trim();
+
+        var brand = Norm(request.Brand);
+        var model = Norm(request.Model);
+        var summary = BuildSummary(request.Summary, brand, model, request.Category, request.StorageCapacity);
+        if (string.IsNullOrWhiteSpace(summary))
+            throw new ValidationAppException("Brand/model or summary is required.");
+
+        d.Summary = summary;
+        d.Brand = brand;
+        d.Model = model;
+        d.Category = Norm(request.Category);
+        d.Serial = Norm(request.Serial);
+        d.Imei = Norm(request.Imei);
+        d.Colour = Norm(request.Colour);
+        d.StorageCapacity = Norm(request.StorageCapacity);
+        d.Specs = Norm(request.Specs);
+        d.ConditionGrade = NormalizeCondition(request.ConditionGrade);
+        d.Status = NormalizeStatus(request.Status);
+        d.PurchasePrice = request.PurchasePrice;
+        d.ExpectedResale = request.AskingPrice;
+        d.ExpectedRepairCost = request.PartsCost;
+        d.ActualSalePrice = request.ActualSalePrice;
+        d.Faults = Norm(request.Faults);
+        d.Notes = Norm(request.Notes);
+        d.Source = Norm(request.Source);
+        d.SellerCustomerId = request.SellerCustomerId;
+        d.CustomerId = request.CustomerId;
+        d.RepairTicketId = request.RepairTicketId;
+        d.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "used.update", "UsedDevice", id.ToString(), ct: ct);
+        return await MapDetailAsync(d, ct);
+    }
+
+    public async Task<UsedDeviceDetailDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var d = await _db.UsedDevices.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Used device was not found.", 404);
+        d.Status = NormalizeStatus(request.Status);
         if (request.ActualSalePrice is decimal sale) d.ActualSalePrice = sale;
         d.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "used.status", "UsedDevice", id.ToString(), newValue: d.Status, ct: ct);
-        return new UsedDeviceDto(d.Id, d.Summary, d.Status, d.ConditionGrade, d.PurchasePrice, d.ExpectedResale, d.ActualSalePrice,
-            d.ActualSalePrice.HasValue ? d.ActualSalePrice - d.PurchasePrice - d.ExpectedRepairCost : null);
+        return await MapDetailAsync(d, ct);
     }
+
+    private static UsedDeviceDto MapList(UsedDevice d)
+    {
+        var total = d.PurchasePrice + d.ExpectedRepairCost;
+        var margin = d.ActualSalePrice.HasValue
+            ? d.ActualSalePrice.Value - total
+            : d.ExpectedResale - total;
+        return new UsedDeviceDto(
+            d.Id, d.Summary, d.Brand, d.Model, d.Category, d.Status, d.ConditionGrade,
+            d.PurchasePrice, d.ExpectedRepairCost, total, d.ExpectedResale, d.ActualSalePrice, margin,
+            d.Serial, d.Colour, d.StorageCapacity);
+    }
+
+    private async Task<UsedDeviceDetailDto> MapDetailAsync(UsedDevice d, CancellationToken ct)
+    {
+        string? sellerName = null;
+        string? customerName = null;
+        string? ticketNumber = null;
+
+        if (d.SellerCustomerId is Guid sellerId)
+            sellerName = await _db.Customers.AsNoTracking()
+                .Where(c => c.Id == sellerId).Select(c => c.DisplayName).FirstOrDefaultAsync(ct);
+        if (d.CustomerId is Guid customerId)
+            customerName = await _db.Customers.AsNoTracking()
+                .Where(c => c.Id == customerId).Select(c => c.DisplayName).FirstOrDefaultAsync(ct);
+        if (d.RepairTicketId is Guid ticketId)
+            ticketNumber = await _db.RepairTickets.AsNoTracking()
+                .Where(t => t.Id == ticketId).Select(t => t.TicketNumber).FirstOrDefaultAsync(ct);
+
+        var total = d.PurchasePrice + d.ExpectedRepairCost;
+        var margin = d.ActualSalePrice.HasValue
+            ? d.ActualSalePrice.Value - total
+            : d.ExpectedResale - total;
+
+        return new UsedDeviceDetailDto(
+            d.Id, d.Summary, d.Brand, d.Model, d.Category,
+            d.Serial, d.Imei, d.Colour, d.StorageCapacity, d.Specs,
+            d.Status, d.ConditionGrade,
+            d.PurchasePrice, d.ExpectedRepairCost, total, d.ExpectedResale, d.ActualSalePrice, margin,
+            d.Faults, d.Notes, d.Source,
+            d.SellerCustomerId, sellerName,
+            d.CustomerId, customerName,
+            d.RepairTicketId, ticketNumber,
+            d.CreatedAt, d.UpdatedAt);
+    }
+
+    private static string BuildSummary(string? summary, string? brand, string? model, string? category, string? storage)
+    {
+        if (!string.IsNullOrWhiteSpace(summary)) return summary.Trim();
+        var parts = new[] { brand, model, storage, category }
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim());
+        return string.Join(" ", parts);
+    }
+
+    private static string NormalizeCondition(string? value)
+    {
+        var v = string.IsNullOrWhiteSpace(value) ? "Good" : value.Trim();
+        var match = AllowedConditions.FirstOrDefault(a => a.Equals(v, StringComparison.OrdinalIgnoreCase));
+        return match ?? (v.Length <= 32 ? v : v[..32]);
+    }
+
+    private static string NormalizeStatus(string? value)
+    {
+        var v = string.IsNullOrWhiteSpace(value) ? "In stock" : value.Trim();
+        // Map legacy statuses to the new set where obvious
+        if (v.Equals("Purchased", StringComparison.OrdinalIgnoreCase)) return "In stock";
+        if (v.Equals("Refurbishing", StringComparison.OrdinalIgnoreCase)) return "In stock";
+        if (v.Equals("Listed for sale", StringComparison.OrdinalIgnoreCase)) return "Listed";
+        var match = AllowedStatuses.FirstOrDefault(a => a.Equals(v, StringComparison.OrdinalIgnoreCase));
+        if (match is null) throw new ValidationAppException("Status must be In stock, Reserved, Sold, or Listed.");
+        return match is "Purchased" or "Refurbishing" ? "In stock" : match;
+    }
+
+    private static string? Norm(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed class QaService : IQaService

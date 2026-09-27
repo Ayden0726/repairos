@@ -103,7 +103,7 @@ public partial class GenericListViewModel : ObservableObject
                 break;
             case "used-tech":
                 CreatePanelTitle = "Add used device";
-                EmptyHint = "No used-tech stock yet. Fill the form on the right and click Add device.";
+                EmptyHint = "No used-tech stock yet. Open Refurbished from the Inventory menu.";
                 ShowUsedFields = true;
                 break;
             case "notifications":
@@ -252,12 +252,14 @@ public partial class GenericListViewModel : ObservableObject
                     }
                     if (!decimal.TryParse(UsedPurchase, out var purchase)) purchase = 0m;
                     if (!decimal.TryParse(UsedResale, out var resale)) resale = 0m;
-                    await _api.PostAsync<CreateUsedDeviceRequest, UsedDeviceDto>(
+                    await _api.PostAsync<CreateUsedDeviceRequest, UsedDeviceDetailDto>(
                         "api/used-tech",
                         new CreateUsedDeviceRequest(
-                            UsedSummary.Trim(), null, null,
-                            string.IsNullOrWhiteSpace(UsedCondition) ? "B" : UsedCondition.Trim(),
-                            purchase, resale, 0m, null, null));
+                            UsedSummary.Trim(), null, null, null,
+                            null, null, null, null, null,
+                            string.IsNullOrWhiteSpace(UsedCondition) ? "Good" : UsedCondition.Trim(),
+                            "In stock",
+                            purchase, resale, 0m, null, null, null, null, null, null));
                     UsedSummary = string.Empty;
                     Status = "Used device added.";
                     break;

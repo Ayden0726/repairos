@@ -89,7 +89,7 @@ public sealed partial class ShellPage : Page
         "builds" => "PC Builds",
         "inventory" => "Inventory",
         "purchasing" => "Purchasing",
-        "used" => "Used Tech",
+        "used" => "Refurbished",
         "customers" => "Customers",
         "reports" => "Reports",
         "notifications" => "Notifications",
@@ -168,7 +168,7 @@ public sealed partial class ShellPage : Page
                     ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("PC Builds", "api/builds"));
                     return;
                 case "used":
-                    ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Used Tech", "api/used-tech"));
+                    ContentFrame.Navigate(typeof(UsedTechPage));
                     return;
                 case "notifications":
                     ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Notifications", "api/notifications"));
