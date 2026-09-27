@@ -17,6 +17,7 @@ public interface IAuthService
     Task<AuthResponse> RefreshAsync(string refreshToken, string? ip, CancellationToken ct = default);
     Task LogoutAsync(Guid userId, string? refreshToken, CancellationToken ct = default);
     Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default);
+    Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default);
 }
 
 public interface ISettingsService
@@ -39,6 +40,7 @@ public interface IStaffService
     Task<IReadOnlyList<StaffUserDto>> ListAsync(CancellationToken ct = default);
     Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
     Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
+    Task ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default);
 }
 
 public interface ISearchService

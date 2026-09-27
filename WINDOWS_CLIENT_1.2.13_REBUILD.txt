@@ -1,0 +1,35 @@
+WorkshopOS Windows client 1.2.13 - rebuild on Windows
+=====================================================
+
+Banner must show: Client 1.2.13
+Build script banner must show: WorkshopOS client build script v6
+
+1.2.13 adds:
+- Settings → Users & Roles: Reset password for staff (staff.manage / owner)
+- Settings → App: Change password (current + new)
+- API: PUT /api/users/{id}/password, PUT /api/auth/password
+- scripts/reset-owner-password.sh emergency owner reset
+- Clean server install docs in docs/INSTALL.md
+
+IMPORTANT — update the SERVER first:
+
+  cd ~/workshopos
+  git pull origin main
+  ./scripts/restart-workshopos.sh --update
+
+Then rebuild the Windows client:
+
+  git pull origin main
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.13 -SkipInstaller
+
+Or wipe + verify + build + launch:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\rebuild-client.ps1
+
+On failure, read:
+  packaging\out\logs\publish-last.log
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.13.zip
+  packaging\dist\WorkshopOS-Setup-1.2.13.exe  (if Inno Setup 6 installed)

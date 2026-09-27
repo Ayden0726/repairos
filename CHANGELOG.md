@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.13 — 2026-09-27
+
+### Added
+
+- **Password reset (staff)**: Owner/Admin in **Settings → Users & Roles** → **Reset password…** (same password rules; revokes that user’s sessions)
+- **Change password**: logged-in user on **Settings → App** (current + new)
+- API: `PUT /api/users/{id}/password` (`staff.manage`), `PUT /api/auth/password` (self)
+- `scripts/reset-owner-password.sh` + `WORKSHOPOS_OWNER_PASSWORD_RESET` / `--reset-owner-password` for locked-out owner when you have Docker/server access
+- **Clean server install** section in `docs/INSTALL.md` (WSL wipe volumes + reinstall)
+
+### Server
+
+- Product version `1.2.13` on health/discovery; ClientMinVersion `1.2.13`
+
 ## 1.2.12 — 2026-09-27
 
 ### Added

@@ -60,6 +60,15 @@ public sealed class AuthController : ControllerBase
     [Authorize]
     public Task<UserDto> Me(CancellationToken ct) => _auth.GetMeAsync(CurrentUserId(), ct);
 
+    /// <summary>Logged-in user changes their own password (current + new).</summary>
+    [HttpPut("password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
+    {
+        await _auth.ChangePasswordAsync(CurrentUserId(), request, ct);
+        return NoContent();
+    }
+
     private Guid CurrentUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -319,6 +328,15 @@ public sealed class UsersController : ControllerBase
     [Authorize(Policy = "perm:staff.manage")]
     public Task<StaffUserDto> Update(Guid id, [FromBody] UpdateStaffUserRequest request, CancellationToken ct) =>
         _staff.UpdateAsync(id, request, UserId(), ct);
+
+    /// <summary>Owner/Admin with staff.manage sets a new password for a staff user.</summary>
+    [HttpPut("{id:guid}/password")]
+    [Authorize(Policy = "perm:staff.manage")]
+    public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetStaffPasswordRequest request, CancellationToken ct)
+    {
+        await _staff.ResetPasswordAsync(id, request, UserId(), ct);
+        return NoContent();
+    }
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

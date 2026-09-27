@@ -14,7 +14,16 @@ OpenAPI: `/swagger` (Development only by default)
 | POST | `/api/auth/refresh` | Anonymous | Rotate refresh token |
 | POST | `/api/auth/logout` | Bearer | Revoke refresh token |
 | GET | `/api/auth/me` | Bearer | Current user, roles, permissions |
+| PUT | `/api/auth/password` | Bearer | Change own password (current + new) |
 
+## Staff
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/api/users` | `staff.view` | List staff |
+| POST | `/api/users` | `staff.manage` | Create staff |
+| PUT | `/api/users/{id}` | `staff.manage` | Update role/status |
+| PUT | `/api/users/{id}/password` | `staff.manage` | Admin reset staff password |
 ## Settings & health
 
 | Method | Path | Auth | Description |

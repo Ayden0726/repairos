@@ -34,6 +34,55 @@ chmod +x scripts/get-workshopos.sh scripts/install-server.sh
 ./scripts/get-workshopos.sh --dir "$(pwd)"
 ```
 
+### Clean server install (wipe and reinstall)
+
+**WARNING:** This **deletes the database** and all shop data (repairs, customers, staff, backups volumes). Only use when you want a brand-new shop.
+
+**WSL / Linux — exact wipe + reinstall:**
+
+```bash
+# Stop and remove containers + named volumes (DESTROYS DB)
+cd ~/workshopos 2>/dev/null || cd ~/repairos 2>/dev/null || true
+if [[ -f docker/docker-compose.yml ]]; then
+  docker compose -f docker/docker-compose.yml down -v
+fi
+
+# Optional: remove the install directory entirely
+# rm -rf ~/workshopos
+
+# Fresh install (clone + compose up)
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash -s -- --dir ~/workshopos --port 5088
+
+# Or if you already have a clean clone:
+# git clone https://github.com/Ayden0726/repairos.git ~/workshopos
+# cd ~/workshopos
+# chmod +x scripts/*.sh
+# ./scripts/get-workshopos.sh --dir "$(pwd)"
+# # equivalent: docker compose -f docker/docker-compose.yml up -d --build
+
+# Verify
+curl -fsS http://127.0.0.1:5088/api/health
+# Open http://127.0.0.1:5088/connect for the pairing code, then run setup on the first Windows PC
+```
+
+To wipe **only** Docker data but keep the git tree:
+
+```bash
+cd ~/workshopos
+docker compose -f docker/docker-compose.yml down -v
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+### Locked out of the owner account?
+
+If you still have SSH/Docker access to the server (and do **not** want a clean wipe):
+
+```bash
+cd ~/workshopos
+./scripts/reset-owner-password.sh 'YourNewPassword1'
+```
+
+See [docs/AUTH.md](AUTH.md) for in-app password reset (Settings → Users & Roles) and change-password.
 ## 2. Connect the Windows client
 
 1. Install the client (from a [GitHub Release](https://github.com/Ayden0726/repairos/releases) zip/setup, or build it — see below).  

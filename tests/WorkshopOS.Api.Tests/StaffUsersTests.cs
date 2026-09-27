@@ -52,12 +52,61 @@ public sealed class StaffUsersTests
         var list = await _client.GetFromJsonAsync<List<StaffUserDto>>("/api/users");
         list!.Should().HaveCount(2);
 
-        var front = roles.First(r => r.Key == "front_desk");
+        var front = roles!.First(r => r.Key == "front_desk");
         var update = await _client.PutAsJsonAsync($"/api/users/{created.Id}",
             new UpdateStaffUserRequest(null, front.Key, "Suspended", null));
         update.EnsureSuccessStatusCode();
         var updated = await update.Content.ReadFromJsonAsync<StaffUserDto>();
         updated!.RoleKey.Should().Be("front_desk");
         updated.Status.Should().Be("Suspended");
+    }
+
+    [Fact]
+    public async Task Owner_Can_Reset_Staff_Password_And_User_Can_Change_Own()
+    {
+        await _factory.ResetDatabaseAsync();
+
+        var setup = new SetupRequest(
+            "Pwd Shop",
+            null, null, null, null, null, "VIC", null, null,
+            true, 0.10m, "AUD", 110m,
+            "Owner", "owner@pwd.test", "Workshop!2026", null);
+        (await _client.PostAsJsonAsync("/api/setup", setup)).EnsureSuccessStatusCode();
+
+        var login = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest("owner@pwd.test", "Workshop!2026"));
+        login.EnsureSuccessStatusCode();
+        var auth = await login.Content.ReadFromJsonAsync<AuthResponse>();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var roles = await _client.GetFromJsonAsync<List<RoleDto>>("/api/roles");
+        var tech = roles!.First(r => r.Key == "technician");
+        var create = await _client.PostAsJsonAsync("/api/users", new CreateStaffUserRequest(
+            "tech@pwd.test", "Tech", "Workshop!2026", tech.Key, null));
+        create.EnsureSuccessStatusCode();
+        var created = await create.Content.ReadFromJsonAsync<StaffUserDto>();
+
+        var reset = await _client.PutAsJsonAsync($"/api/users/{created!.Id}/password",
+            new ResetStaffPasswordRequest("Workshop!2027"));
+        reset.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        var techLogin = await _client.PostAsJsonAsync("/api/auth/login",
+            new LoginRequest("tech@pwd.test", "Workshop!2027"));
+        techLogin.EnsureSuccessStatusCode();
+        var techAuth = await techLogin.Content.ReadFromJsonAsync<AuthResponse>();
+
+        using var techClient = _factory.CreateClient();
+        techClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", techAuth!.AccessToken);
+
+        var change = await techClient.PutAsJsonAsync("/api/auth/password",
+            new ChangePasswordRequest("Workshop!2027", "Workshop!2028"));
+        change.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        (await _client.PostAsJsonAsync("/api/auth/login",
+            new LoginRequest("tech@pwd.test", "Workshop!2028"))).EnsureSuccessStatusCode();
+
+        var badCurrent = await techClient.PutAsJsonAsync("/api/auth/password",
+            new ChangePasswordRequest("wrong-password", "Workshop!2029"));
+        badCurrent.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
     }
 }

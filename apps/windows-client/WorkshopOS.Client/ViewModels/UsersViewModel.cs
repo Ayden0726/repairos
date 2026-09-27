@@ -282,6 +282,66 @@ public partial class UsersViewModel : ObservableObject
         }
     }
 
+    /// <summary>Admin/owner sets a new password for the selected staff user.</summary>
+    [RelayCommand]
+    private async Task ResetPasswordAsync(string? newPassword)
+    {
+        if (SelectedUser is null) return;
+        Error = null;
+        Status = null;
+        if (string.IsNullOrWhiteSpace(newPassword))
+        {
+            Error = "Enter a new password.";
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            await _api.PutAsync(
+                $"api/users/{SelectedUser.Id}/password",
+                new ResetStaffPasswordRequest(newPassword));
+            Status = $"Password reset for {SelectedUser.DisplayName}. They can sign in with the new password.";
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyRolesError(ex.Message);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    /// <summary>Logged-in user changes their own password.</summary>
+    public async Task ChangeOwnPasswordAsync(string currentPassword, string newPassword)
+    {
+        Error = null;
+        Status = null;
+        if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+        {
+            Error = "Enter current and new password.";
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            await _api.PutAsync(
+                "api/auth/password",
+                new ChangePasswordRequest(currentPassword, newPassword));
+            Status = "Your password was changed. Other sessions were signed out.";
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyRolesError(ex.Message);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
     [RelayCommand]
     private void NewRoleDraft()
     {

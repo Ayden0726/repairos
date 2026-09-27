@@ -243,6 +243,31 @@ public sealed class AuthService : IAuthService
         return ToUserDto(user, GetPermissions(user), business);
     }
 
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.ArchivedAt == null, ct)
+            ?? throw new UnauthorizedAppException();
+
+        if (!_tokens.VerifyPassword(user, request.CurrentPassword ?? string.Empty))
+            throw new ValidationAppException("Current password is incorrect.");
+
+        var problem = PasswordRules.Validate(request.NewPassword);
+        if (problem is not null) throw new ValidationAppException(problem);
+
+        user.PasswordHash = _tokens.HashPassword(user, request.NewPassword);
+        user.MustResetPassword = false;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await RevokeRefreshTokensAsync(user.Id, ct);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(userId, "auth.password_change", "User", user.Id.ToString(), ct: ct);
+    }
+
+    private async Task RevokeRefreshTokensAsync(Guid userId, CancellationToken ct)
+    {
+        var active = await _db.RefreshTokens.Where(t => t.UserId == userId && t.RevokedAt == null).ToListAsync(ct);
+        foreach (var t in active) t.RevokedAt = DateTimeOffset.UtcNow;
+    }
+
     private static List<string> GetPermissions(AppUser user) =>
         user.IsOwner
             ? Domain.Security.PermissionKeys.AllKeys.ToList()
@@ -545,6 +570,27 @@ public sealed class StaffService : IStaffService
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "staff.update", "User", user.Id.ToString(), newValue: request, ct: ct);
         return ToDto(user);
+    }
+
+    public async Task ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var user = await _db.Users.Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == id && u.ArchivedAt == null, ct)
+            ?? throw new ValidationAppException("User was not found.");
+
+        var problem = PasswordRules.Validate(request.NewPassword);
+        if (problem is not null) throw new ValidationAppException(problem);
+
+        user.PasswordHash = _tokens.HashPassword(user, request.NewPassword);
+        user.MustResetPassword = false;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var active = await _db.RefreshTokens.Where(t => t.UserId == user.Id && t.RevokedAt == null).ToListAsync(ct);
+        foreach (var t in active) t.RevokedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "staff.password_reset", "User", user.Id.ToString(),
+            newValue: new { user.Email }, ct: ct);
     }
 
     private static StaffUserDto ToDto(AppUser user) =>

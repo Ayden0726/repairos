@@ -25,7 +25,14 @@
               <ComboBoxItem Content="Dark" Tag="Dark" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.12" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.13" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+
+            <TextBlock Text="Your password" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
+            <TextBlock Text="Change the password for the account you are signed in as. Requires your current password."
+                       Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="ChangePasswordStatusText" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="ChangePasswordErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
+            <Button Content="Change password…" Click="ChangeOwnPassword_Click" />
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
@@ -148,7 +155,10 @@
                     <x:String>Active</x:String>
                     <x:String>Suspended</x:String>
                   </ComboBox>
-                  <Button Content="Save changes" Click="SaveUser_Click" Style="{StaticResource AccentButtonStyle}" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Save changes" Click="SaveUser_Click" Style="{StaticResource AccentButtonStyle}" />
+                    <Button Content="Reset password…" Click="ResetUserPassword_Click" />
+                  </StackPanel>
                 </StackPanel>
               </StackPanel>
               <Border Grid.Column="1" Padding="16" CornerRadius="8"

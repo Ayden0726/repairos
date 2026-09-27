@@ -346,6 +346,13 @@ public sealed class ApiClient
         return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
     }
 
+    public async Task PutAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
+    {
+        using var http = CreateClient();
+        using var response = await http.PutAsJsonAsync(path, body, JsonOptions, ct);
+        await EnsureSuccess(response);
+    }
+
     public async Task DeleteAsync(string path, CancellationToken ct = default)
     {
         using var http = CreateClient();

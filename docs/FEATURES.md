@@ -13,7 +13,7 @@ Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup
 | Auth | JWT login / refresh / logout, hashed refresh tokens, rate limiting |
 | Roles & permissions | Owner, Administrator, Manager, Technician, Front Desk, Sales, Read Only |
 | Health | `/api/health` (+ authenticated `/api/health/detail`) |
-| Users / settings | Staff accounts, business profile, module visibility |
+| Users / settings | Staff accounts, password reset/change, business profile, module visibility |
 | Customers | Individuals & businesses, contact prefs, create/list/detail |
 | Devices | Per-customer devices (category, brand/model, serial/IMEI) |
 | Repairs | Intake, ticket numbers `REP-YYYY-#####`, statuses, priorities, assign tech |

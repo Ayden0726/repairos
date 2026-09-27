@@ -40,4 +40,32 @@ Theme preference (`System` / `Light` / `Dark`) is stored in the same file and su
 
 ## Password rules (Phase 1)
 
-Minimum 10 characters, at least one upper, one lower, one digit. Reset-by-email lands in a later phase; Phase 1 supports admin disable only.
+Minimum 10 characters, at least one upper, one lower, one digit.
+
+### In-app reset / change (no email magic-link)
+
+- **Owner/Admin** with `staff.manage`: **Settings → Users & Roles** → select a staff user → **Reset password…** (sets a new password; revokes that user’s refresh tokens).
+- **Any signed-in user**: **Settings → App** → **Change password…** (current password + new; revokes other sessions for that user).
+- API:
+  - `PUT /api/users/{id}/password` — body `{ "newPassword": "..." }` — requires `staff.manage` (or owner)
+  - `PUT /api/auth/password` — body `{ "currentPassword": "...", "newPassword": "..." }` — authenticated self-service
+
+### Emergency owner reset (server access)
+
+If the owner is locked out and no admin can reset from the client:
+
+```bash
+cd ~/workshopos
+./scripts/reset-owner-password.sh 'YourNewPassword1'
+```
+
+Or set env once and recreate the API container:
+
+```bash
+export WORKSHOPOS_OWNER_PASSWORD_RESET='YourNewPassword1'
+docker compose -f docker/docker-compose.yml up -d --force-recreate api
+unset WORKSHOPOS_OWNER_PASSWORD_RESET
+docker compose -f docker/docker-compose.yml up -d --force-recreate api
+```
+
+Email reset-by-link remains a later phase.

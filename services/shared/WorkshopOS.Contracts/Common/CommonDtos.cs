@@ -3,9 +3,9 @@ namespace WorkshopOS.Contracts.Common;
 public static class ProductVersions
 {
     /// <summary>Informational API / product version shipped with this tree.</summary>
-    public const string Api = "1.2.12";
+    public const string Api = "1.2.13";
     /// <summary>Minimum Windows client recommended for current API surface (pricing, roles CRUD, system info).</summary>
-    public const string ClientMinimum = "1.2.12";
+    public const string ClientMinimum = "1.2.13";
 }
 
 public sealed record HealthDto(

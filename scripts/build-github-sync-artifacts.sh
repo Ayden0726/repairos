@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.12)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.13)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -76,11 +76,11 @@ PowerShell (ASCII-safe):
   Set-Location \$repo
   git add -A
   git status
-  git commit -m "Client 1.2.12: refurbished list/edit UI + used-tech API fields"
+  git commit -m "Client 1.2.13: staff password reset + clean install docs"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
 
-Then update SERVER (WSL) — required for migration + Refurbished API:
+Then update SERVER (WSL):
 
   cd ~/workshopos
   git pull origin main
@@ -88,13 +88,13 @@ Then update SERVER (WSL) — required for migration + Refurbished API:
 
 Then rebuild Windows client:
 
-  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.12 -SkipInstaller
+  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.13 -SkipInstaller
 
 Or wipe + verify + build + launch:
 
   powershell -ExecutionPolicy Bypass -File .\\packaging\\rebuild-client.ps1
 
-Banner must show: Client 1.2.12
+Banner must show: Client 1.2.13
 
 WSL / bash:
 
@@ -103,7 +103,7 @@ WSL / bash:
   curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO"
-  git add -A && git commit -m "Client 1.2.12: refurbished list/edit UI + used-tech API fields"
+  git add -A && git commit -m "Client 1.2.13: staff password reset + clean install docs"
   git push -u origin main
   ./scripts/restart-workshopos.sh --update
 
@@ -118,12 +118,13 @@ OPTION B: git bundle
   git push origin main
 
 ────────────────────────────────────────────────────────────
-Key 1.2.12 changes in this sync
+Key 1.2.13 changes in this sync
 ────────────────────────────────────────────────────────────
-  Refurbished (Used Tech) dedicated list + create/edit UI
-  Extended used_devices schema + GET/PUT API detail
-  Search/filter, costs, condition, status, margin (pricing.view)
-  Client Version 1.2.12 / packaging defaults / WINDOWS_CLIENT_1.2.12_REBUILD.txt
+  Staff password reset (Settings → Users & Roles) + change password (Settings → App)
+  PUT /api/users/{id}/password + PUT /api/auth/password
+  scripts/reset-owner-password.sh emergency owner reset
+  Clean server install docs (docs/INSTALL.md)
+  Client Version 1.2.13 / packaging defaults / WINDOWS_CLIENT_1.2.13_REBUILD.txt
 EOF
 cp -f "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" "$SERVE/"
 ls -lh "$OUT/repairos-github-sync.zip" "$OUT/repairos-main.bundle" "$SERVE/repairos-github-sync.zip"

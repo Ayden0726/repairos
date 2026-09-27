@@ -509,6 +509,89 @@ public sealed partial class SettingsPage : Page
             UsersErrorText.Text = Users.Error;
     }
 
+    private async void ResetUserPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (Users.SelectedUser is null) return;
+        UsersErrorText.Text = string.Empty;
+
+        var newBox = new PasswordBox { Header = "New password (min 10, upper/lower/digit)", Width = 320 };
+        var confirmBox = new PasswordBox { Header = "Confirm new password", Width = 320 };
+        var panel = new StackPanel { Spacing = 12 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Set a new password for {Users.SelectedUser.DisplayName} ({Users.SelectedUser.Email}).",
+            TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(newBox);
+        panel.Children.Add(confirmBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Reset password",
+            Content = panel,
+            PrimaryButtonText = "Reset",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var pwd = newBox.Password ?? string.Empty;
+        var confirm = confirmBox.Password ?? string.Empty;
+        if (!string.Equals(pwd, confirm, StringComparison.Ordinal))
+        {
+            UsersErrorText.Text = "New password and confirmation do not match.";
+            return;
+        }
+
+        await Users.ResetPasswordCommand.ExecuteAsync(pwd);
+        UsersStatusText.Text = Users.Status ?? UsersStatusText.Text;
+        if (!string.IsNullOrWhiteSpace(Users.Error))
+            UsersErrorText.Text = Users.Error;
+    }
+
+    private async void ChangeOwnPassword_Click(object sender, RoutedEventArgs e)
+    {
+        ChangePasswordErrorText.Text = string.Empty;
+        ChangePasswordStatusText.Text = string.Empty;
+
+        var currentBox = new PasswordBox { Header = "Current password", Width = 320 };
+        var newBox = new PasswordBox { Header = "New password (min 10, upper/lower/digit)", Width = 320 };
+        var confirmBox = new PasswordBox { Header = "Confirm new password", Width = 320 };
+        var panel = new StackPanel { Spacing = 12 };
+        panel.Children.Add(currentBox);
+        panel.Children.Add(newBox);
+        panel.Children.Add(confirmBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Change password",
+            Content = panel,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var current = currentBox.Password ?? string.Empty;
+        var pwd = newBox.Password ?? string.Empty;
+        var confirm = confirmBox.Password ?? string.Empty;
+        if (!string.Equals(pwd, confirm, StringComparison.Ordinal))
+        {
+            ChangePasswordErrorText.Text = "New password and confirmation do not match.";
+            return;
+        }
+
+        await Users.ChangeOwnPasswordAsync(current, pwd);
+        if (!string.IsNullOrWhiteSpace(Users.Error))
+            ChangePasswordErrorText.Text = Users.Error;
+        else
+            ChangePasswordStatusText.Text = Users.Status ?? "Password changed.";
+    }
+
     private void RolesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         Users.SelectedRole = RolesList.SelectedItem as RoleOption;

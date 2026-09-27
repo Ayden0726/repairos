@@ -20,8 +20,9 @@ curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get
 
 Then open **`http://<server-ip>:5088/connect`** — you’ll get a pairing code (`WOS-XXXX`) for the Windows app.
 
-Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**
+**Clean wipe (deletes DB):** see **[docs/INSTALL.md](docs/INSTALL.md)** → *Clean server install*.
 
+Full guide: **[docs/INSTALL.md](docs/INSTALL.md)** · Auth / password reset: **[docs/AUTH.md](docs/AUTH.md)**
 ## Connect Windows PCs
 
 1. Start the **server** first; open `http://<server-ip>:5088/connect` for the pairing code.  
