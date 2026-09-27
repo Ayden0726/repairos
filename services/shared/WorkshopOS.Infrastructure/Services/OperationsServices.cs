@@ -1036,8 +1036,8 @@ public sealed class BackupService : IBackupService
             dbOk ? "Healthy" : "Degraded",
             dbOk,
             WorkerHeartbeat: false,
-            typeof(BackupService).Assembly.GetName().Version?.ToString() ?? "1.0.0",
-            "1.0.0",
+            WorkshopOS.Contracts.Common.ProductVersions.Api,
+            WorkshopOS.Contracts.Common.ProductVersions.ClientMinimum,
             lastBackup,
             backupCount);
     }

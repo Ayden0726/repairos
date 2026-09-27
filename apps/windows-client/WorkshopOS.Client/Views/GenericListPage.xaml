@@ -1,18 +1,102 @@
 <Page x:Class="WorkshopOS.Client.Views.GenericListPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Grid Padding="24" RowSpacing="12">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-    </Grid.RowDefinitions>
-    <Grid>
-      <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
-      <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Right" />
+  <Grid Padding="24" ColumnSpacing="16">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="2*" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <Grid RowSpacing="12">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <Grid>
+        <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
+        <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Right" />
+      </Grid>
+      <StackPanel Grid.Row="1" Spacing="4">
+        <TextBlock Text="{x:Bind ViewModel.Status, Mode=OneWay}" Opacity="0.75" TextWrapping="Wrap" />
+        <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+      </StackPanel>
+      <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.Lines, Mode=OneWay}" />
     </Grid>
-    <StackPanel Grid.Row="1" Spacing="8">
-      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
-      <ListView ItemsSource="{x:Bind ViewModel.Lines, Mode=OneWay}" />
-    </StackPanel>
+
+    <Border Grid.Column="1"
+            Padding="16"
+            CornerRadius="8"
+            Background="{ThemeResource WorkshopSurfaceBrush}"
+            BorderBrush="{ThemeResource WorkshopBorderBrush}"
+            BorderThickness="1"
+            Visibility="{x:Bind ViewModel.ShowCreatePanel, Mode=OneWay}">
+      <ScrollViewer>
+        <StackPanel Spacing="8">
+          <TextBlock Text="{x:Bind ViewModel.CreatePanelTitle, Mode=OneWay}" FontWeight="SemiBold" FontSize="16" />
+
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowRepairPicker, Mode=OneWay}">
+            <ComboBox Header="Repair ticket"
+                      ItemsSource="{x:Bind ViewModel.Repairs, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedRepair, Mode=TwoWay}"
+                      DisplayMemberPath="Label"
+                      HorizontalAlignment="Stretch" />
+            <Button Content="Create invoice" Command="{x:Bind ViewModel.CreateCommand}"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowSupplierFields, Mode=OneWay}">
+            <ComboBox Header="Existing supplier (optional)"
+                      ItemsSource="{x:Bind ViewModel.Suppliers, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedSupplier, Mode=TwoWay}"
+                      DisplayMemberPath="Label"
+                      HorizontalAlignment="Stretch" />
+            <TextBox Header="Or new supplier name" Text="{x:Bind ViewModel.SupplierName, Mode=TwoWay}" />
+            <TextBox Header="Line description" Text="{x:Bind ViewModel.LineDescription, Mode=TwoWay}" />
+            <TextBox Header="Quantity" Text="{x:Bind ViewModel.LineQty, Mode=TwoWay}" />
+            <TextBox Header="Unit cost" Text="{x:Bind ViewModel.LineCost, Mode=TwoWay}" />
+            <Button Content="Create PO" Command="{x:Bind ViewModel.CreateCommand}"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowBookingFields, Mode=OneWay}">
+            <ComboBox Header="Customer"
+                      ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
+                      DisplayMemberPath="Label"
+                      HorizontalAlignment="Stretch" />
+            <TextBox Header="Type" Text="{x:Bind ViewModel.BookingType, Mode=TwoWay}" />
+            <TextBox Header="Starts (local yyyy-MM-dd HH:mm)" Text="{x:Bind ViewModel.BookingStartLocal, Mode=TwoWay}" />
+            <TextBox Header="Ends (local yyyy-MM-dd HH:mm)" Text="{x:Bind ViewModel.BookingEndLocal, Mode=TwoWay}" />
+            <TextBox Header="Notes" Text="{x:Bind ViewModel.BookingNotes, Mode=TwoWay}" />
+            <Button Content="Create booking" Command="{x:Bind ViewModel.CreateCommand}"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowBuildFields, Mode=OneWay}">
+            <ComboBox Header="Customer (optional)"
+                      ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
+                      DisplayMemberPath="Label"
+                      HorizontalAlignment="Stretch" />
+            <TextBox Header="Use case" Text="{x:Bind ViewModel.BuildUseCase, Mode=TwoWay}" />
+            <TextBox Header="Budget" Text="{x:Bind ViewModel.BuildBudget, Mode=TwoWay}" />
+            <TextBox Header="Part name" Text="{x:Bind ViewModel.BuildPartName, Mode=TwoWay}" />
+            <TextBox Header="Part cost" Text="{x:Bind ViewModel.BuildPartCost, Mode=TwoWay}" />
+            <TextBox Header="Part sell" Text="{x:Bind ViewModel.BuildPartSell, Mode=TwoWay}" />
+            <Button Content="Create build" Command="{x:Bind ViewModel.CreateCommand}"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowUsedFields, Mode=OneWay}">
+            <TextBox Header="Summary" Text="{x:Bind ViewModel.UsedSummary, Mode=TwoWay}" />
+            <TextBox Header="Condition grade" Text="{x:Bind ViewModel.UsedCondition, Mode=TwoWay}" />
+            <TextBox Header="Purchase price" Text="{x:Bind ViewModel.UsedPurchase, Mode=TwoWay}" />
+            <TextBox Header="Expected resale" Text="{x:Bind ViewModel.UsedResale, Mode=TwoWay}" />
+            <Button Content="Add device" Command="{x:Bind ViewModel.CreateCommand}"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
   </Grid>
 </Page>

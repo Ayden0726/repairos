@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.11 — 2026-09-27
+
+### Fixed
+
+- **404 Pricing / Services / Staff / Roles**: friendly “Server outdated — update/restart WorkshopOS server” when `/api/pricing/*`, `/api/users`, or `/api/roles` are missing on an old Docker image
+- **Empty list pages**: Invoices, Purchase Orders, Calendar/Bookings, PC Builds, Used Tech now have in-app Create panels (no more “create from the API” stub)
+
+### Added
+
+- Default roles seed (Owner, Administrator, Manager, Technician, Front Desk, Sales, Read Only) preserved across restarts; Owner/Admin can **create/edit custom roles** with permission checkboxes (`POST/PUT /api/roles`)
+- Settings → Connection **API strength** meter (latency + `/api/health` + version); `GET /api/system/info`; `POST /api/system/restart` (commands when `ALLOW_PROCESS_RESTART` is off)
+- `scripts/restart-workshopos.sh` (+ `--update` for git pull + rebuild)
+- Shell footer shows **display name + role** above Sign out
+
+### Server
+
+- Product version `1.2.11` on health/discovery; ClientMinVersion `1.2.11`
+
 ## 1.2.10 — 2026-09-26
 
 ### Fixed

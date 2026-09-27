@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -19,6 +20,7 @@ public sealed partial class SettingsPage : Page
     private bool _pricingLoaded;
     private bool _servicesLoaded;
     private bool _taxLoaded;
+    private bool _connectionHealthLoaded;
     private string? _initialSection;
     private PricingSettingsDto? _pricing;
     private BusinessProfileDto? _business;
@@ -48,6 +50,13 @@ public sealed partial class SettingsPage : Page
             ? "No server saved."
             : $"Connected server: {settings.ServerUrl}";
 
+        RestartCommandsBox.Text =
+            "cd ~/workshopos\n" +
+            "git pull origin main\n" +
+            "./scripts/restart-workshopos.sh --update\n" +
+            "# or:\n" +
+            "docker compose -f docker/docker-compose.yml up -d --build";
+
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
@@ -71,6 +80,8 @@ public sealed partial class SettingsPage : Page
             SettingsPivot.SelectedIndex = 4;
         else if (string.Equals(_initialSection, "backups", StringComparison.OrdinalIgnoreCase))
             SettingsPivot.SelectedIndex = 5;
+        else if (string.Equals(_initialSection, "connection", StringComparison.OrdinalIgnoreCase))
+            SettingsPivot.SelectedIndex = 6;
     }
 
     private void SelectThemeCombo(string theme)
@@ -123,6 +134,11 @@ public sealed partial class SettingsPage : Page
             _backupsLoaded = true;
             await RefreshBackupsUiAsync();
         }
+        else if (SettingsPivot.SelectedIndex == 6 && !_connectionHealthLoaded)
+        {
+            _connectionHealthLoaded = true;
+            await CheckHealthAsync();
+        }
     }
 
     private async Task LoadPricingAsync()
@@ -155,8 +171,16 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             PricingStatusText.Text = string.Empty;
-            PricingErrorText.Text = ex.Message;
+            PricingErrorText.Text = FormatPricingError(ex.Message);
         }
+    }
+
+    private static string FormatPricingError(string message)
+    {
+        if (message.Contains("404", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+            return "Server outdated — update/restart WorkshopOS server so /api/pricing/* exists, then reconnect. " + message;
+        return message;
     }
 
     private static void SelectComboString(ComboBox combo, string? value)
@@ -290,7 +314,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             ServicesStatusText.Text = string.Empty;
-            ServicesErrorText.Text = ex.Message;
+            ServicesErrorText.Text = FormatPricingError(ex.Message);
         }
     }
 
@@ -412,8 +436,13 @@ public sealed partial class SettingsPage : Page
                 NewRoleCombo.SelectedItem = Users.Roles[0];
 
             RolesHintText.Text = Users.Roles.Count == 0
-                ? "Role list empty — check GET /api/roles and staff.view permission."
+                ? "Role list empty — update/restart server (GET /api/roles) and confirm staff.view permission."
                 : string.Join(" · ", Users.Roles.Select(r => r.DisplayLabel));
+
+            RolesList.ItemsSource = Users.AllRoles;
+            PermissionsList.ItemsSource = Users.PermissionToggles;
+            RolesStatusText.Text = Users.RolesStatus ?? string.Empty;
+            RolesManageErrorText.Text = Users.RolesError ?? string.Empty;
 
             UsersStatusText.Text = Users.Status ?? (Users.Users.Count == 0 ? "No staff yet." : $"{Users.Users.Count} account(s)");
             if (!string.IsNullOrWhiteSpace(Users.Error))
@@ -478,6 +507,121 @@ public sealed partial class SettingsPage : Page
         UsersStatusText.Text = Users.Status ?? UsersStatusText.Text;
         if (!string.IsNullOrWhiteSpace(Users.Error))
             UsersErrorText.Text = Users.Error;
+    }
+
+    private void RolesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        Users.SelectedRole = RolesList.SelectedItem as RoleOption;
+        if (Users.SelectedRole is null) return;
+        RoleNameBox.Text = Users.RoleName;
+        RoleKeyBox.Text = Users.RoleKey;
+        RoleKeyBox.IsEnabled = false;
+        RoleDescriptionBox.Text = Users.RoleDescription;
+    }
+
+    private void NewRole_Click(object sender, RoutedEventArgs e)
+    {
+        RolesList.SelectedItem = null;
+        Users.NewRoleDraftCommand.Execute(null);
+        RoleNameBox.Text = string.Empty;
+        RoleKeyBox.Text = string.Empty;
+        RoleKeyBox.IsEnabled = true;
+        RoleDescriptionBox.Text = string.Empty;
+        RolesStatusText.Text = Users.RolesStatus ?? string.Empty;
+        RolesManageErrorText.Text = string.Empty;
+    }
+
+    private async void SaveRole_Click(object sender, RoutedEventArgs e)
+    {
+        Users.RoleName = RoleNameBox.Text ?? string.Empty;
+        Users.RoleKey = RoleKeyBox.Text ?? string.Empty;
+        Users.RoleDescription = RoleDescriptionBox.Text ?? string.Empty;
+        await Users.SaveRoleCommand.ExecuteAsync(null);
+        await RefreshUsersUiAsync();
+        RolesStatusText.Text = Users.RolesStatus ?? RolesStatusText.Text;
+        if (!string.IsNullOrWhiteSpace(Users.RolesError))
+            RolesManageErrorText.Text = Users.RolesError;
+    }
+
+    private async void CheckHealth_Click(object sender, RoutedEventArgs e) => await CheckHealthAsync();
+
+    private async Task CheckHealthAsync()
+    {
+        HealthErrorText.Text = string.Empty;
+        HealthStrengthText.Text = "Checking…";
+        HealthDetailText.Text = string.Empty;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var sw = Stopwatch.StartNew();
+            var health = await api.HealthAsync(timeout: TimeSpan.FromSeconds(8));
+            sw.Stop();
+            var ms = sw.ElapsedMilliseconds;
+
+            // Strength: lower latency + healthy DB = stronger signal (0–100).
+            var strength = 100;
+            if (!health.Database) strength -= 40;
+            if (!string.Equals(health.Status, "Healthy", StringComparison.OrdinalIgnoreCase)) strength -= 20;
+            if (ms > 150) strength -= 10;
+            if (ms > 400) strength -= 15;
+            if (ms > 1000) strength -= 20;
+            if (ms > 2500) strength -= 15;
+            strength = Math.Clamp(strength, 5, 100);
+            HealthStrengthBar.Value = strength;
+
+            var label = strength >= 80 ? "Strong" : strength >= 55 ? "OK" : strength >= 30 ? "Weak" : "Poor";
+            HealthStrengthText.Text = $"API strength: {label} ({strength}/100) · {ms} ms";
+
+            SystemInfoDto? info = null;
+            try { info = await api.GetAsync<SystemInfoDto>("api/system/info"); } catch { /* older servers */ }
+
+            var version = info?.ApiVersion ?? health.ApiVersion;
+            var minClient = info?.ClientMinVersion ?? health.ClientMinVersion ?? "?";
+            HealthDetailText.Text =
+                $"Status {health.Status} · API {version} · DB {(health.Database ? "ok" : "down")} · " +
+                $"client min {minClient} · server UTC {health.ServerTimeUtc:u}" +
+                (info is null ? "\n(system/info unavailable — server may need update)" : "") +
+                (info?.RestartAllowed == true ? "\nHTTP restart enabled (ALLOW_PROCESS_RESTART)." : "\nHTTP restart disabled — use the copyable commands below.");
+
+            if (info?.UpdateCommands is { Count: > 0 })
+            {
+                RestartCommandsBox.Text = string.Join("\n",
+                    info.RestartCommands.Concat(info.UpdateCommands).Distinct());
+            }
+        }
+        catch (Exception ex)
+        {
+            HealthStrengthBar.Value = 0;
+            HealthStrengthText.Text = "API strength: unreachable";
+            HealthErrorText.Text = FormatPricingError(ex.Message);
+        }
+    }
+
+    private async void RestartServer_Click(object sender, RoutedEventArgs e)
+    {
+        HealthErrorText.Text = string.Empty;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var result = await api.PostAsync<RestartResultDto>("api/system/restart");
+            HealthDetailText.Text = result.Message;
+            if (result.Commands is { Count: > 0 })
+                RestartCommandsBox.Text = string.Join("\n", result.Commands);
+            if (result.Restarted)
+            {
+                await Task.Delay(2500);
+                await CheckHealthAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            HealthErrorText.Text = FormatPricingError(ex.Message);
+            RestartCommandsBox.Text =
+                "cd ~/workshopos\n" +
+                "git pull origin main\n" +
+                "./scripts/restart-workshopos.sh --update\n" +
+                "docker compose -f docker/docker-compose.yml up -d --build";
+        }
     }
 
     private async void BackupsRefresh_Click(object sender, RoutedEventArgs e) => await RefreshBackupsUiAsync();

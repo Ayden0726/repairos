@@ -30,6 +30,8 @@ public interface IRoleService
 {
     Task<IReadOnlyList<RoleDto>> ListRolesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<PermissionDto>> ListPermissionsAsync(CancellationToken ct = default);
+    Task<RoleDto> CreateAsync(CreateRoleRequest request, Guid actorId, CancellationToken ct = default);
+    Task<RoleDto> UpdateAsync(Guid id, UpdateRoleRequest request, Guid actorId, CancellationToken ct = default);
 }
 
 public interface IStaffService

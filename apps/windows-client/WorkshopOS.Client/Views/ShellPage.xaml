@@ -23,10 +23,12 @@
       </StackPanel>
     </NavigationView.PaneHeader>
     <NavigationView.PaneFooter>
-      <StackPanel Padding="12,8" Spacing="8">
-        <TextBlock Text="{x:Bind ViewModel.UserDisplay, Mode=OneWay}" FontSize="12" TextWrapping="Wrap"
+      <StackPanel Padding="12,8" Spacing="4">
+        <TextBlock Text="{x:Bind ViewModel.UserDisplay, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                   Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+        <TextBlock Text="{x:Bind ViewModel.UserRole, Mode=OneWay}" FontSize="11" TextWrapping="Wrap"
                    Foreground="{ThemeResource WorkshopTextSecondaryBrush}" />
-        <Button Content="Sign out" Command="{x:Bind ViewModel.LogoutCommand}" HorizontalAlignment="Stretch" />
+        <Button Content="Sign out" Command="{x:Bind ViewModel.LogoutCommand}" HorizontalAlignment="Stretch" Margin="0,4,0,0" />
       </StackPanel>
     </NavigationView.PaneFooter>
     <Grid Background="{ThemeResource WorkshopPageBackgroundBrush}">

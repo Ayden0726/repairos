@@ -95,14 +95,14 @@ public sealed class SettingsController : ControllerBase
 [Route("api")]
 public sealed class MetaController : ControllerBase
 {
-    private readonly IRoleService _roles;
     private readonly ISearchService _search;
+    private readonly IRoleService _roles;
     private readonly WorkshopDbContext _db;
 
-    public MetaController(IRoleService roles, ISearchService search, WorkshopDbContext db)
+    public MetaController(ISearchService search, IRoleService roles, WorkshopDbContext db)
     {
-        _roles = roles;
         _search = search;
+        _roles = roles;
         _db = db;
     }
 
@@ -116,23 +116,187 @@ public sealed class MetaController : ControllerBase
 
         return new HealthDto(
             dbOk ? "Healthy" : "Degraded",
-            typeof(MetaController).Assembly.GetName().Version?.ToString() ?? "1.0.0",
+            ProductVersions.Api,
             dbOk,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            "WorkshopOS",
+            ProductVersions.ClientMinimum,
+            SystemController.IsRestartAllowed());
     }
-
-    [HttpGet("roles")]
-    [Authorize(Policy = "perm:staff.view")]
-    public Task<IReadOnlyList<RoleDto>> Roles(CancellationToken ct) => _roles.ListRolesAsync(ct);
 
     [HttpGet("permissions")]
     [Authorize(Policy = "perm:roles.manage")]
-    public Task<IReadOnlyList<PermissionDto>> Permissions(CancellationToken ct) => _roles.ListPermissionsAsync(ct);
+    public Task<IReadOnlyList<PermissionDto>> Permissions(CancellationToken ct) =>
+        _roles.ListPermissionsAsync(ct);
 
     [HttpGet("search")]
     [Authorize]
     public Task<SearchResponse> Search([FromQuery] string q, CancellationToken ct) =>
         _search.SearchAsync(q ?? string.Empty, ct);
+}
+
+[ApiController]
+[Route("api/roles")]
+public sealed class RolesController : ControllerBase
+{
+    private readonly IRoleService _roles;
+    public RolesController(IRoleService roles) => _roles = roles;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:staff.view")]
+    public Task<IReadOnlyList<RoleDto>> List(CancellationToken ct) => _roles.ListRolesAsync(ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:roles.manage")]
+    public Task<RoleDto> Create([FromBody] CreateRoleRequest request, CancellationToken ct) =>
+        _roles.CreateAsync(request, UserId(), ct);
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "perm:roles.manage")]
+    public Task<RoleDto> Update(Guid id, [FromBody] UpdateRoleRequest request, CancellationToken ct) =>
+        _roles.UpdateAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/system")]
+public sealed class SystemController : ControllerBase
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IBackupService _backups;
+    private readonly IConfiguration _config;
+    private readonly ILogger<SystemController> _log;
+
+    public SystemController(WorkshopDbContext db, IBackupService backups, IConfiguration config, ILogger<SystemController> log)
+    {
+        _db = db;
+        _backups = backups;
+        _config = config;
+        _log = log;
+    }
+
+    internal static bool IsRestartAllowed()
+    {
+        var env = Environment.GetEnvironmentVariable("ALLOW_PROCESS_RESTART");
+        if (string.Equals(env, "true", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static IReadOnlyList<string> UpdateCommands() =>
+    [
+        "cd ~/workshopos   # or your install dir",
+        "git pull origin main",
+        "docker compose -f docker/docker-compose.yml pull",
+        "docker compose -f docker/docker-compose.yml up -d --build"
+    ];
+
+    private static IReadOnlyList<string> RestartCommands() =>
+    [
+        "cd ~/workshopos && ./scripts/restart-workshopos.sh",
+        "cd ~/workshopos && docker compose -f docker/docker-compose.yml restart api worker"
+    ];
+
+    [HttpGet("info")]
+    [Authorize(Policy = "perm:settings.view")]
+    public async Task<SystemInfoDto> Info(CancellationToken ct)
+    {
+        var dbOk = false;
+        try { dbOk = await _db.Database.CanConnectAsync(ct); }
+        catch { /* degraded */ }
+
+        var detail = await _backups.HealthDetailAsync(ct);
+        return new SystemInfoDto(
+            "WorkshopOS",
+            ProductVersions.Api,
+            ProductVersions.ClientMinimum,
+            dbOk,
+            detail.WorkerHeartbeat,
+            IsRestartAllowed(),
+            dbOk ? "Healthy" : "Degraded",
+            DateTimeOffset.UtcNow,
+            UpdateCommands(),
+            RestartCommands());
+    }
+
+    [HttpPost("restart")]
+    [Authorize(Policy = "perm:settings.manage")]
+    public async Task<ActionResult<RestartResultDto>> Restart(CancellationToken ct)
+    {
+        if (!IsRestartAllowed() && !_config.GetValue("AllowProcessRestart", false))
+        {
+            return Ok(new RestartResultDto(
+                false,
+                "HTTP restart is disabled. Set ALLOW_PROCESS_RESTART=true on the API container, or run the commands below on the server (WSL/Linux).",
+                RestartCommands().Concat(UpdateCommands()).ToArray()));
+        }
+
+        // Prefer the documented script when present next to the compose file.
+        var candidates = new[]
+        {
+            Environment.GetEnvironmentVariable("WORKSHOPOS_HOME"),
+            "/app",
+            Directory.GetCurrentDirectory(),
+            Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", ".."))
+        }.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToArray();
+
+        foreach (var root in candidates)
+        {
+            var script = Path.Combine(root!, "scripts", "restart-workshopos.sh");
+            if (!System.IO.File.Exists(script)) continue;
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = script,
+                    WorkingDirectory = root,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc is null) continue;
+                _ = Task.Run(async () =>
+                {
+                    await proc.WaitForExitAsync();
+                    _log.LogInformation("restart-workshopos.sh exited {Code}", proc.ExitCode);
+                }, ct);
+                return Ok(new RestartResultDto(true,
+                    "Restart script started. The API may briefly disconnect — wait a few seconds then Check health again.",
+                    RestartCommands()));
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Failed to run restart script at {Script}", script);
+            }
+        }
+
+        // Fallback: touch a restart flag and exit so Docker restart policy / sidecar can recycle the process.
+        try
+        {
+            var flagDir = Environment.GetEnvironmentVariable("RESTART_FLAG_DIR")
+                ?? Path.Combine(Path.GetTempPath(), "workshopos");
+            Directory.CreateDirectory(flagDir);
+            var flag = Path.Combine(flagDir, "restart.flag");
+            await System.IO.File.WriteAllTextAsync(flag, DateTimeOffset.UtcNow.ToString("O"), ct);
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(750);
+                Environment.Exit(0);
+            });
+            return Ok(new RestartResultDto(true,
+                "Restart flag written; API process will exit so the container supervisor can restart it.",
+                RestartCommands()));
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Restart failed");
+            return Ok(new RestartResultDto(false,
+                $"Could not restart from HTTP: {ex.Message}. Run the commands below on the server.",
+                RestartCommands().Concat(UpdateCommands()).ToArray()));
+        }
+    }
 }
 
 [ApiController]

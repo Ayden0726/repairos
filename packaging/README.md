@@ -3,7 +3,7 @@
 | File | Purpose |
 | --- | --- |
 | `build-client.ps1` | Publish WinUI client (win-x64) + zip; optionally compile Inno installer (**v6**, UTF-8 BOM; dumps XamlCompiler diagnostics on failure) |
-| `rebuild-client.ps1` | Wipe local data, verify ServerConnect initial page, build 1.2.10, extract, launch (ASCII + UTF-8 BOM) |
+| `rebuild-client.ps1` | Wipe local data, verify ServerConnect initial page, build 1.2.11, extract, launch (ASCII + UTF-8 BOM) |
 | `build-client.cmd` | Double-click launcher for the PowerShell script |
 | `WorkshopOS-Setup.iss` | Inno Setup 6 script for `WorkshopOS-Setup-*.exe` |
 | `dist/` | Build outputs (gitignored) |
@@ -17,19 +17,19 @@ Use **Developer PowerShell for VS**. From repo root.
 Portable zip only:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.10 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.11 -SkipInstaller
 ```
 
 Zip **and** Inno Setup installer (omit `-SkipInstaller`; Inno must be installed):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.10
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.11
 ```
 
 Expect: `WorkshopOS client build script v6`. Outputs in `packaging\dist\`:
 
-- `WorkshopOS-Client-win-x64-v1.2.10.zip` — portable
-- `WorkshopOS-Setup-1.2.10.exe` — Inno installer (when ISCC is found)
+- `WorkshopOS-Client-win-x64-v1.2.11.zip` — portable
+- `WorkshopOS-Setup-1.2.11.exe` — Inno installer (when ISCC is found)
 
 The script always **publishes from source** into `packaging\out\client`, then zips that folder and (unless `-SkipInstaller`) compiles `WorkshopOS-Setup.iss` from the same publish dir. There is **no** “wrap an existing zip” path — you cannot feed a prebuilt `WorkshopOS-Client-*.zip` into the installer step alone. Packaging is **Inno Setup only** (not MSIX); `EnableMsixTooling` is for PRI build tasks, not an `.msix` output.
 

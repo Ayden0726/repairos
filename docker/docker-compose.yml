@@ -36,6 +36,8 @@ services:
       Jwt__Audience: WorkshopOS.Client
       Seed__Demo: ${SEED_DEMO:-false}
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      # Set to true only if you want Settings → Restart to exit/restart the API process.
+      ALLOW_PROCESS_RESTART: ${ALLOW_PROCESS_RESTART:-false}
     ports:
       - "${API_PORT:-5088}:8080"
     volumes:

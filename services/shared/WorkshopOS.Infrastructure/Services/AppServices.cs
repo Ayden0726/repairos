@@ -322,14 +322,17 @@ public sealed class SettingsService : ISettingsService
 public sealed class RoleService : IRoleService
 {
     private readonly WorkshopDbContext _db;
-    public RoleService(WorkshopDbContext db) => _db = db;
+    private readonly IAuditService _audit;
+    public RoleService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
 
     public async Task<IReadOnlyList<WorkshopOS.Contracts.Common.RoleDto>> ListRolesAsync(CancellationToken ct = default)
     {
         var roles = await _db.Roles.Include(r => r.Permissions).OrderBy(r => r.Name).ToListAsync(ct);
-        return roles.Select(r => new WorkshopOS.Contracts.Common.RoleDto(
-            r.Id, r.Key, r.Name, r.Description,
-            r.Permissions.Select(p => p.PermissionKey).OrderBy(x => x).ToArray())).ToList();
+        return roles.Select(ToDto).ToList();
     }
 
     public Task<IReadOnlyList<WorkshopOS.Contracts.Common.PermissionDto>> ListPermissionsAsync(CancellationToken ct = default)
@@ -339,6 +342,101 @@ public sealed class RoleService : IRoleService
             .ToList();
         return Task.FromResult<IReadOnlyList<WorkshopOS.Contracts.Common.PermissionDto>>(list);
     }
+
+    public async Task<WorkshopOS.Contracts.Common.RoleDto> CreateAsync(
+        WorkshopOS.Contracts.Common.CreateRoleRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var name = (request.Name ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ValidationAppException("Role name is required.");
+
+        var key = NormalizeRoleKey(string.IsNullOrWhiteSpace(request.Key) ? name : request.Key);
+        if (string.IsNullOrWhiteSpace(key) || key is "owner")
+            throw new ValidationAppException("Choose a role key other than Owner.");
+        if (await _db.Roles.AnyAsync(r => r.Key == key, ct))
+            throw new ConflictAppException("A role with that key already exists.");
+
+        var perms = SanitizePermissions(request.Permissions);
+        var role = new AppRole
+        {
+            Key = key,
+            Name = name,
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+            IsSystem = false
+        };
+        _db.Roles.Add(role);
+        await _db.SaveChangesAsync(ct);
+        foreach (var perm in perms)
+            _db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionKey = perm });
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "role.create", "Role", role.Id.ToString(),
+            newValue: new { role.Key, role.Name, Permissions = perms }, ct: ct);
+
+        role = await _db.Roles.Include(r => r.Permissions).SingleAsync(r => r.Id == role.Id, ct);
+        return ToDto(role);
+    }
+
+    public async Task<WorkshopOS.Contracts.Common.RoleDto> UpdateAsync(
+        Guid id, WorkshopOS.Contracts.Common.UpdateRoleRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var role = await _db.Roles.Include(r => r.Permissions).FirstOrDefaultAsync(r => r.Id == id, ct)
+            ?? throw new ValidationAppException("Role was not found.");
+        if (string.Equals(role.Key, "owner", StringComparison.OrdinalIgnoreCase))
+            throw new ValidationAppException("The Owner role cannot be edited.");
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            role.Name = request.Name.Trim();
+        if (request.Description is not null)
+            role.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+
+        if (request.Permissions is not null)
+        {
+            var perms = SanitizePermissions(request.Permissions);
+            if (string.Equals(role.Key, "administrator", StringComparison.OrdinalIgnoreCase) &&
+                perms.Length < Domain.Security.PermissionKeys.AllKeys.Count)
+            {
+                // Allow trimming admin, but never leave it empty.
+                if (perms.Length == 0)
+                    throw new ValidationAppException("Administrator must keep at least one permission.");
+            }
+            _db.RolePermissions.RemoveRange(role.Permissions);
+            foreach (var perm in perms)
+                _db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionKey = perm });
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "role.update", "Role", role.Id.ToString(), newValue: request, ct: ct);
+        role = await _db.Roles.Include(r => r.Permissions).SingleAsync(r => r.Id == role.Id, ct);
+        return ToDto(role);
+    }
+
+    private static WorkshopOS.Contracts.Common.RoleDto ToDto(AppRole r) =>
+        new(r.Id, r.Key, r.Name, r.Description,
+            r.Permissions.Select(p => p.PermissionKey).OrderBy(x => x).ToArray(),
+            r.IsSystem);
+
+    private static string NormalizeRoleKey(string raw)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in raw.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch)) sb.Append(ch);
+            else if (ch is ' ' or '-' or '_') sb.Append('_');
+        }
+        var key = sb.ToString().Trim('_');
+        while (key.Contains("__", StringComparison.Ordinal))
+            key = key.Replace("__", "_", StringComparison.Ordinal);
+        return key;
+    }
+
+    private static string[] SanitizePermissions(string[]? permissions) =>
+        (permissions ?? [])
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .Where(p => Domain.Security.PermissionKeys.AllKeys.Contains(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p)
+            .ToArray();
 }
 
 public sealed class StaffService : IStaffService

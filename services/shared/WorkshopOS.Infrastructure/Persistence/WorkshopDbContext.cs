@@ -560,12 +560,26 @@ public static class DbSeed
                 role = new AppRole { Key = key, Name = name, Description = description, IsSystem = true };
                 db.Roles.Add(role);
                 await db.SaveChangesAsync(ct);
-            }
 
-            var desired = PermissionKeys.DefaultRolePermissions[key];
-            db.RolePermissions.RemoveRange(role.Permissions);
-            foreach (var perm in desired)
-                db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionKey = perm });
+                var desired = PermissionKeys.DefaultRolePermissions[key];
+                foreach (var perm in desired)
+                    db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionKey = perm });
+            }
+            else
+            {
+                // Keep display metadata in sync; do not wipe custom permission edits on restart.
+                if (string.IsNullOrWhiteSpace(role.Name)) role.Name = name;
+                if (string.IsNullOrWhiteSpace(role.Description)) role.Description = description;
+                role.IsSystem = true;
+
+                // Owner / Administrator always gain newly catalogue'd permissions on upgrade.
+                if (key is "owner" or "administrator")
+                {
+                    var existing = role.Permissions.Select(p => p.PermissionKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    foreach (var perm in PermissionKeys.AllKeys.Where(p => !existing.Contains(p)))
+                        db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionKey = perm });
+                }
+            }
         }
 
         await EnsureOperationsDefaultsAsync(db, ct);

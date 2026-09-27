@@ -31,7 +31,7 @@ public sealed class DiscoveryController : ControllerBase
         catch { /* ignore */ }
 
         var urls = BuildSuggestedUrls(Request);
-        var version = typeof(DiscoveryController).Assembly.GetName().Version?.ToString() ?? "1.0.0";
+        var version = WorkshopOS.Contracts.Common.ProductVersions.Api;
         return new DiscoveryDto("WorkshopOS", code, setup, version, business, urls);
     }
 

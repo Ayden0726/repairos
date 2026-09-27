@@ -337,6 +337,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _productName = "WorkshopOS";
     [ObservableProperty] private string _businessName = string.Empty;
     [ObservableProperty] private string _userDisplay = string.Empty;
+    [ObservableProperty] private string _userRole = string.Empty;
     [ObservableProperty] private string _currentPageTitle = "Home";
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private string? _searchStatus;
@@ -370,6 +371,9 @@ public partial class ShellViewModel : ObservableObject
         if (session.User is not null)
         {
             UserDisplay = session.User.DisplayName;
+            UserRole = string.IsNullOrWhiteSpace(session.User.RoleName)
+                ? session.User.RoleKey
+                : session.User.RoleName;
             BusinessName = session.User.Business?.Name ?? string.Empty;
         }
     }

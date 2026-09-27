@@ -1,0 +1,35 @@
+WorkshopOS Windows client 1.2.11 - rebuild on Windows
+=====================================================
+
+Banner must show: Client 1.2.11
+Build script banner must show: WorkshopOS client build script v6
+
+1.2.11 fixes:
+- Friendly outdated-server message on pricing/services/users/roles 404
+- List pages (Invoices, POs, Bookings, Builds, Used Tech) have Create forms
+- Settings → Connection: API strength health meter + restart commands
+- Users & Roles: default roles + create/edit custom roles (Owner/Admin)
+- Shell shows role name under display name
+
+IMPORTANT — if Pricing/Staff show 404, update the SERVER first (old Docker image):
+
+  cd ~/workshopos
+  git pull origin main
+  ./scripts/restart-workshopos.sh --update
+
+Then rebuild the Windows client:
+
+  git pull origin main
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.11 -SkipInstaller
+
+Or wipe + verify + build + launch:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\rebuild-client.ps1
+
+On failure, read:
+  packaging\out\logs\publish-last.log
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.11.zip
+  packaging\dist\WorkshopOS-Setup-1.2.11.exe  (if Inno Setup 6 installed)

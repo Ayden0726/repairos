@@ -158,48 +158,6 @@ public sealed record DashboardCardVm(string Title, string Value, string? Filter)
 public sealed record DashboardBookingVm(Guid Id, string WhenLabel, string Status, string CustomerName, string TypeLine, string? Notes);
 public sealed record MyTicketVm(Guid Id, string TicketNumber, string CustomerName, string Status, string DueLabel, bool IsOverdue);
 
-public partial class GenericListViewModel : ObservableObject
-{
-    private readonly ApiClient _api;
-    private string _path = "";
-    [ObservableProperty] private string _title = "";
-    public ObservableCollection<string> Lines { get; } = new();
-    [ObservableProperty] private string? _error;
-
-    public GenericListViewModel(ApiClient api) => _api = api;
-
-    public void Configure(string title, string path)
-    {
-        Title = title;
-        _path = path;
-    }
-
-    [RelayCommand]
-    private async Task RefreshAsync()
-    {
-        Error = null;
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(await _api.GetRawAsync(_path));
-            Lines.Clear();
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var number = el.TryGetProperty("number", out var n) ? n.GetString() :
-                    el.TryGetProperty("title", out var t) ? t.GetString() :
-                    el.TryGetProperty("summary", out var s) ? s.GetString() :
-                    el.TryGetProperty("customerName", out var c) ? c.GetString() :
-                    el.TryGetProperty("name", out var nm) ? nm.GetString() : "Item";
-                var status = el.TryGetProperty("status", out var st) ? st.GetString() : "";
-                var extra = el.TryGetProperty("total", out var tot) ? tot.GetRawText() :
-                    el.TryGetProperty("available", out var av) ? $"avail {av.GetInt32()}" : "";
-                Lines.Add($"{number}  {status}  {extra}".Trim());
-            }
-            if (Lines.Count == 0) Lines.Add("No records yet — create them from the API or upcoming detail forms.");
-        }
-        catch (Exception ex) { Error = ex.Message; }
-    }
-}
-
 public partial class InventoryViewModel : ObservableObject
 {
     private readonly ApiClient _api;

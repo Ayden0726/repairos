@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.10 + XamlCompiler fix)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (Client 1.2.11)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -76,19 +76,25 @@ PowerShell (ASCII-safe):
   Set-Location \$repo
   git add -A
   git status
-  git commit -m "Client 1.2.10: Settings pricing/tax/services actually persist"
+  git commit -m "Client 1.2.11: fix 404s, list create UIs, roles, API health"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
 
+Then update SERVER (WSL) — required if Pricing/Staff show 404:
+
+  cd ~/workshopos
+  git pull origin main
+  ./scripts/restart-workshopos.sh --update
+
 Then rebuild Windows client:
 
-  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.10 -SkipInstaller
+  powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.11 -SkipInstaller
 
 Or wipe + verify + build + launch:
 
   powershell -ExecutionPolicy Bypass -File .\\packaging\\rebuild-client.ps1
 
-Banner must show: Client 1.2.10
+Banner must show: Client 1.2.11
 
 WSL / bash:
 
@@ -97,8 +103,9 @@ WSL / bash:
   curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO"
-  git add -A && git commit -m "Client 1.2.10: Settings pricing/tax/services actually persist"
+  git add -A && git commit -m "Client 1.2.11: fix 404s, list create UIs, roles, API health"
   git push -u origin main
+  ./scripts/restart-workshopos.sh --update
 
 ────────────────────────────────────────────────────────────
 OPTION B: git bundle
@@ -111,13 +118,13 @@ OPTION B: git bundle
   git push origin main
 
 ────────────────────────────────────────────────────────────
-Key 1.2.10 changes in this sync
+Key 1.2.11 changes in this sync
 ────────────────────────────────────────────────────────────
-  Settings Pricing/Tax/Services: save → PUT → reload GET (verified persist)
-  Business tax mirrors into pricing.settings; camelCase settings JSON
-  NumberBox NaN-safe reads; clearer forbidden errors
-  API tests: PUT then GET same values + raw jsonb check
-  Client Version 1.2.10 / packaging defaults / WINDOWS_CLIENT_1.2.10_REBUILD.txt
+  Fix 404 messaging for outdated server (pricing/users/roles)
+  Generic list Create UIs for invoices/POs/bookings/builds/used
+  Role CRUD + default role seed; shell shows role under username
+  API health strength + system info/restart + restart-workshopos.sh
+  Client Version 1.2.11 / packaging defaults / WINDOWS_CLIENT_1.2.11_REBUILD.txt
 EOF
 cp -f "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" "$SERVE/"
 ls -lh "$OUT/repairos-github-sync.zip" "$OUT/repairos-main.bundle" "$SERVE/repairos-github-sync.zip"

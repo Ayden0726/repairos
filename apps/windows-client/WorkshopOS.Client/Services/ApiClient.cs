@@ -403,6 +403,23 @@ public sealed class ApiClient
         if (response.StatusCode == System.Net.HttpStatusCode.Forbidden &&
             (string.IsNullOrWhiteSpace(message) || message == body || message.StartsWith("{")))
             message = "Forbidden — your account cannot save these settings.";
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            var path = response.RequestMessage?.RequestUri?.AbsolutePath ?? "";
+            if (path.Contains("/api/pricing", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/api/roles", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/api/users", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/api/system", StringComparison.OrdinalIgnoreCase))
+            {
+                message =
+                    "Server outdated — update/restart WorkshopOS server (git pull + ./scripts/restart-workshopos.sh --update), then reconnect. "
+                    + message;
+            }
+            else if (string.IsNullOrWhiteSpace(body) || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "404 Not Found";
+            }
+        }
         throw new InvalidOperationException(message);
     }
 }
