@@ -164,8 +164,12 @@ public sealed class PricingSettingsService : IPricingSettingsService
             FixedMarkupAmount = PricingCalculator.RoundMoney(s.Parts.FixedMarkupAmount),
             MinimumPartProfit = PricingCalculator.RoundMoney(s.Parts.MinimumPartProfit)
         };
+        var quote = s.Quote with
+        {
+            DefaultValidityDays = s.Quote.DefaultValidityDays <= 0 ? 14 : s.Quote.DefaultValidityDays
+        };
         var tax = s.Tax is null ? null : s.Tax with { Rate = s.Tax.Rate <= 0 ? 0.10m : s.Tax.Rate };
-        return s with { Labour = labour, Parts = parts, Tax = tax };
+        return s with { Labour = labour, Parts = parts, Quote = quote, Tax = tax };
     }
 }
 

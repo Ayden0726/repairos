@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Windows.System;
 using WorkshopOS.Client.Services;
 using WorkshopOS.Contracts.Operations;
 
@@ -29,6 +31,15 @@ public sealed partial class QuoteBuilderPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         _args = e.Parameter as QuoteBuilderArgs ?? new QuoteBuilderArgs();
+    }
+
+    private void CustomerSearch_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter && ViewModel.SearchCustomersCommand.CanExecute(null))
+        {
+            ViewModel.SearchCustomersCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private void Back_Click(object sender, RoutedEventArgs e) =>

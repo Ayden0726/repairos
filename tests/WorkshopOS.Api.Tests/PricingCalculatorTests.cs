@@ -41,4 +41,31 @@ public sealed class PricingCalculatorTests
     {
         PricingCalculator.RoundEndIn9(237.20m).Should().Be(239m);
     }
+
+    [Fact]
+    public void Uses_Custom_Settings_Defaults_When_No_Overrides()
+    {
+        var settings = PricingCalculator.DefaultSettings() with
+        {
+            Parts = new PartsPricingDto("FlatPercent", 40m, 0m, 0m),
+            Labour = PricingCalculator.DefaultSettings().Labour with { DefaultLabourFee = 75m, DifficultyPricingEnabled = false },
+            Rounding = new RoundingPricingDto("None", null),
+            Tax = new TaxPricingDto(true, 0.10m, true)
+        };
+
+        var preview = PricingCalculator.Calculate(
+            new PricingPreviewRequest(
+            [
+                new QuoteLineCalcInput(
+                    "PART", "Battery", null, "Battery", null, null, null, null, null,
+                    1m, 100m, 0m, 0m, null, null, null, null, 0m, 0m, null)
+            ], null, null, null, null),
+            settings);
+
+        preview.Lines[0].MarkupPercent.Should().Be(40m);
+        preview.Lines[0].PartSell.Should().Be(140m);
+        preview.Lines[0].LabourAmount.Should().Be(75m);
+        preview.PreRoundTotal.Should().Be(215m);
+        preview.Total.Should().Be(215m);
+    }
 }

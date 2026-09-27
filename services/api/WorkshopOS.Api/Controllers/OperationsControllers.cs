@@ -116,12 +116,15 @@ public sealed class PricingController : ControllerBase
 
     [HttpPut("settings")]
     [Authorize]
-    public async Task<ActionResult<PricingSettingsDto>> PutSettings([FromBody] PricingSettingsDto settings, CancellationToken ct)
+    public async Task<ActionResult<PricingSettingsDto>> PutSettings([FromBody] PricingSettingsDto? settings, CancellationToken ct)
     {
+        if (settings is null)
+            return BadRequest(new { title = "Pricing settings body is required." });
         if (!User.HasClaim("is_owner", "true") &&
             !User.HasClaim("permission", "pricing.edit_settings") &&
             !User.HasClaim("permission", "pricing.edit"))
-            return Forbid();
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { title = "Forbidden — need pricing.edit_settings (or owner) to save pricing." });
         return await _pricing.UpdateAsync(settings, UserId(), ct);
     }
 

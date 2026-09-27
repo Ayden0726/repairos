@@ -98,17 +98,17 @@ public sealed partial class SettingsPage : Page
 
     private async void SettingsPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SettingsPivot.SelectedIndex == 1 && !_pricingLoaded)
+        if (SettingsPivot.SelectedIndex == 1)
         {
             _pricingLoaded = true;
             await LoadPricingAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 2 && !_servicesLoaded)
+        else if (SettingsPivot.SelectedIndex == 2)
         {
             _servicesLoaded = true;
             await LoadServicesAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 3 && !_taxLoaded)
+        else if (SettingsPivot.SelectedIndex == 3)
         {
             _taxLoaded = true;
             await LoadTaxAsync();
@@ -128,6 +128,7 @@ public sealed partial class SettingsPage : Page
     private async Task LoadPricingAsync()
     {
         PricingErrorText.Text = string.Empty;
+        PricingStatusText.Text = "Loading pricing settings…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
@@ -135,107 +136,160 @@ public sealed partial class SettingsPage : Page
             DefaultLabourBox.Value = (double)_pricing.Labour.DefaultLabourFee;
             MinLabourBox.Value = (double)_pricing.Labour.MinimumLabourFee;
             DifficultyPricingCheck.IsChecked = _pricing.Labour.DifficultyPricingEnabled;
-            MarkupMethodCombo.SelectedItem = _pricing.Parts.MarkupMethod;
+            SelectComboString(MarkupMethodCombo, _pricing.Parts.MarkupMethod);
             DefaultMarkupBox.Value = (double)_pricing.Parts.DefaultMarkupPercent;
             FixedMarkupBox.Value = (double)_pricing.Parts.FixedMarkupAmount;
             MinPartProfitBox.Value = (double)_pricing.Parts.MinimumPartProfit;
             MinMarginBox.Value = (double)_pricing.Profitability.MinimumGrossMarginPercent;
             WarnMarginBox.Value = (double)_pricing.Profitability.WarnBelowMarginPercent;
             ApprovalRequiredCheck.IsChecked = _pricing.Profitability.ManagerApprovalRequired;
-            RoundingCombo.SelectedItem = _pricing.Rounding.Method;
+            SelectComboString(RoundingCombo, _pricing.Rounding.Method);
             MaxTechDiscountBox.Value = (double)_pricing.Discounts.MaxTechDiscountPercent;
             ValidityDaysBox.Value = _pricing.Quote.DefaultValidityDays;
             AutoExpireCheck.IsChecked = _pricing.Quote.AutoExpire;
             var tiers = await api.GetAsync<MarkupTierDto[]>("api/pricing/tiers");
             TiersList.ItemsSource = tiers.Select(t => $"{t.MinCost:0.##}–{t.MaxCost?.ToString("0.##") ?? "∞"} @ {t.MarkupPercent:0.##}%").ToList();
-            PricingStatusText.Text = "Pricing settings loaded.";
+            PricingStatusText.Text =
+                $"Loaded from server — markup {_pricing.Parts.DefaultMarkupPercent:0.##}% · labour ${_pricing.Labour.DefaultLabourFee:0.##} · {_pricing.Parts.MarkupMethod} · round {_pricing.Rounding.Method}.";
         }
         catch (Exception ex)
         {
+            PricingStatusText.Text = string.Empty;
             PricingErrorText.Text = ex.Message;
         }
+    }
+
+    private static void SelectComboString(ComboBox combo, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            combo.SelectedIndex = -1;
+            return;
+        }
+        foreach (var item in combo.Items)
+        {
+            var text = item as string ?? (item as ComboBoxItem)?.Content as string;
+            if (text is not null && text.Equals(value, StringComparison.OrdinalIgnoreCase))
+            {
+                combo.SelectedItem = item;
+                return;
+            }
+        }
+        combo.SelectedItem = value;
+    }
+
+    private static decimal ReadMoney(NumberBox box, decimal fallback)
+    {
+        var v = box.Value;
+        if (double.IsNaN(v) || double.IsInfinity(v)) return fallback;
+        return (decimal)v;
+    }
+
+    private static int ReadInt(NumberBox box, int fallback)
+    {
+        var v = box.Value;
+        if (double.IsNaN(v) || double.IsInfinity(v)) return fallback;
+        return (int)Math.Round(v, MidpointRounding.AwayFromZero);
     }
 
     private async void SavePricing_Click(object sender, RoutedEventArgs e)
     {
         PricingErrorText.Text = string.Empty;
+        PricingStatusText.Text = "Saving pricing settings…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
-            _pricing ??= await api.GetAsync<PricingSettingsDto>("api/pricing/settings");
-            var updated = _pricing with
+            // Always re-fetch so DifficultyLevels / Tax survive and we don't PUT a stale partial DTO.
+            var current = await api.GetAsync<PricingSettingsDto>("api/pricing/settings");
+            var updated = current with
             {
-                Labour = _pricing.Labour with
+                Labour = current.Labour with
                 {
-                    DefaultLabourFee = (decimal)DefaultLabourBox.Value,
-                    MinimumLabourFee = (decimal)MinLabourBox.Value,
+                    DefaultLabourFee = ReadMoney(DefaultLabourBox, current.Labour.DefaultLabourFee),
+                    MinimumLabourFee = ReadMoney(MinLabourBox, current.Labour.MinimumLabourFee),
                     DifficultyPricingEnabled = DifficultyPricingCheck.IsChecked == true
                 },
-                Parts = _pricing.Parts with
+                Parts = current.Parts with
                 {
-                    MarkupMethod = MarkupMethodCombo.SelectedItem as string ?? "FlatPercent",
-                    DefaultMarkupPercent = (decimal)DefaultMarkupBox.Value,
-                    FixedMarkupAmount = (decimal)FixedMarkupBox.Value,
-                    MinimumPartProfit = (decimal)MinPartProfitBox.Value
+                    MarkupMethod = ReadComboString(MarkupMethodCombo) ?? current.Parts.MarkupMethod ?? "FlatPercent",
+                    DefaultMarkupPercent = ReadMoney(DefaultMarkupBox, current.Parts.DefaultMarkupPercent),
+                    FixedMarkupAmount = ReadMoney(FixedMarkupBox, current.Parts.FixedMarkupAmount),
+                    MinimumPartProfit = ReadMoney(MinPartProfitBox, current.Parts.MinimumPartProfit)
                 },
-                Profitability = _pricing.Profitability with
+                Profitability = current.Profitability with
                 {
-                    MinimumGrossMarginPercent = (decimal)MinMarginBox.Value,
-                    WarnBelowMarginPercent = (decimal)WarnMarginBox.Value,
+                    MinimumGrossMarginPercent = ReadMoney(MinMarginBox, current.Profitability.MinimumGrossMarginPercent),
+                    WarnBelowMarginPercent = ReadMoney(WarnMarginBox, current.Profitability.WarnBelowMarginPercent),
                     ManagerApprovalRequired = ApprovalRequiredCheck.IsChecked == true
                 },
-                Rounding = _pricing.Rounding with
+                Rounding = current.Rounding with
                 {
-                    Method = RoundingCombo.SelectedItem as string ?? "End9"
+                    Method = ReadComboString(RoundingCombo) ?? current.Rounding.Method ?? "End9"
                 },
-                Discounts = _pricing.Discounts with
+                Discounts = current.Discounts with
                 {
-                    MaxTechDiscountPercent = (decimal)MaxTechDiscountBox.Value
+                    MaxTechDiscountPercent = ReadMoney(MaxTechDiscountBox, current.Discounts.MaxTechDiscountPercent)
                 },
-                Quote = _pricing.Quote with
+                Quote = current.Quote with
                 {
-                    DefaultValidityDays = (int)ValidityDaysBox.Value,
+                    DefaultValidityDays = ReadInt(ValidityDaysBox, current.Quote.DefaultValidityDays > 0 ? current.Quote.DefaultValidityDays : 14),
                     AutoExpire = AutoExpireCheck.IsChecked == true
                 }
             };
             _pricing = await api.PutAsync<PricingSettingsDto, PricingSettingsDto>("api/pricing/settings", updated);
-            PricingStatusText.Text = "Pricing settings saved.";
+            // Prove persistence: reload from GET and reflect server values in the UI.
+            await LoadPricingAsync();
+            PricingStatusText.Text =
+                $"Saved and verified — markup {_pricing!.Parts.DefaultMarkupPercent:0.##}% · labour ${_pricing.Labour.DefaultLabourFee:0.##} · {_pricing.Parts.MarkupMethod}.";
+            PricingErrorText.Text = string.Empty;
         }
         catch (Exception ex)
         {
-            PricingErrorText.Text = ex.Message;
+            PricingStatusText.Text = string.Empty;
+            PricingErrorText.Text = $"Save failed: {ex.Message}";
         }
     }
+
+    private static string? ReadComboString(ComboBox combo) =>
+        combo.SelectedItem as string
+        ?? (combo.SelectedItem as ComboBoxItem)?.Content as string
+        ?? combo.SelectedItem?.ToString();
 
     private async void AddTier_Click(object sender, RoutedEventArgs e)
     {
         PricingErrorText.Text = string.Empty;
+        PricingStatusText.Text = "Adding markup tier…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
-            decimal? max = TierMaxBox.Value > 0 ? (decimal)TierMaxBox.Value : null;
+            var maxVal = TierMaxBox.Value;
+            decimal? max = !double.IsNaN(maxVal) && maxVal > 0 ? (decimal)maxVal : null;
             await api.PostAsync<UpsertMarkupTierRequest, MarkupTierDto>("api/pricing/tiers",
-                new UpsertMarkupTierRequest(null, (decimal)TierMinBox.Value, max, (decimal)TierPctBox.Value, 0));
+                new UpsertMarkupTierRequest(null, ReadMoney(TierMinBox, 0m), max, ReadMoney(TierPctBox, 0m), 0));
             await LoadPricingAsync();
+            PricingStatusText.Text = "Markup tier saved.";
         }
         catch (Exception ex)
         {
-            PricingErrorText.Text = ex.Message;
+            PricingStatusText.Text = string.Empty;
+            PricingErrorText.Text = $"Tier save failed: {ex.Message}";
         }
     }
 
     private async Task LoadServicesAsync()
     {
         ServicesErrorText.Text = string.Empty;
+        ServicesStatusText.Text = "Loading services…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
             var list = await api.GetAsync<ServicePricingDto[]>("api/pricing/services");
             ServicesList.ItemsSource = list.Select(s => $"{s.Name} · labour {s.DefaultLabourFee:0.##} · markup {s.DefaultPartMarkupPercent?.ToString("0.##") ?? "—"}%").ToList();
-            ServicesStatusText.Text = list.Length == 0 ? "No services yet." : $"{list.Length} service(s)";
+            ServicesStatusText.Text = list.Length == 0 ? "No services yet." : $"{list.Length} service(s) loaded from server.";
         }
         catch (Exception ex)
         {
+            ServicesStatusText.Text = string.Empty;
             ServicesErrorText.Text = ex.Message;
         }
     }
@@ -243,25 +297,37 @@ public sealed partial class SettingsPage : Page
     private async void SaveService_Click(object sender, RoutedEventArgs e)
     {
         ServicesErrorText.Text = string.Empty;
+        ServicesStatusText.Text = "Saving service…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
-            await api.PostAsync<UpsertServicePricingRequest, ServicePricingDto>("api/pricing/services",
-                new UpsertServicePricingRequest(null, ServiceNameBox.Text ?? "", ServiceCategoryBox.Text,
-                    null, (decimal)ServiceLabourBox.Value,
-                    ServiceMarkupBox.Value > 0 ? (decimal)ServiceMarkupBox.Value : null, true, 0));
+            var name = (ServiceNameBox.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                throw new InvalidOperationException("Service name is required.");
+            var markupVal = ServiceMarkupBox.Value;
+            decimal? markup = !double.IsNaN(markupVal) && markupVal > 0 ? (decimal)markupVal : null;
+            var saved = await api.PostAsync<UpsertServicePricingRequest, ServicePricingDto>("api/pricing/services",
+                new UpsertServicePricingRequest(null, name, ServiceCategoryBox.Text,
+                    null, ReadMoney(ServiceLabourBox, 0m), markup, true, 0));
             ServiceNameBox.Text = string.Empty;
+            ServiceCategoryBox.Text = string.Empty;
+            ServiceLabourBox.Value = double.NaN;
+            ServiceMarkupBox.Value = double.NaN;
             await LoadServicesAsync();
+            ServicesStatusText.Text = $"Saved “{saved.Name}” (labour {saved.DefaultLabourFee:0.##}) and reloaded list.";
+            ServicesErrorText.Text = string.Empty;
         }
         catch (Exception ex)
         {
-            ServicesErrorText.Text = ex.Message;
+            ServicesStatusText.Text = string.Empty;
+            ServicesErrorText.Text = $"Save failed: {ex.Message}";
         }
     }
 
     private async Task LoadTaxAsync()
     {
         TaxErrorText.Text = string.Empty;
+        TaxStatusText.Text = "Loading tax settings…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
@@ -270,10 +336,12 @@ public sealed partial class SettingsPage : Page
             TaxRateBox.Value = (double)_business.GstRate;
             TaxInclusiveCheck.IsChecked = _business.GstInclusive;
             CurrencyBox.Text = _business.Currency;
-            TaxStatusText.Text = "Tax settings loaded from business profile.";
+            TaxStatusText.Text =
+                $"Loaded from server — tax {(_business.GstRegistered ? "on" : "off")} at {_business.GstRate:P0} · {(_business.GstInclusive ? "inclusive" : "exclusive")} · {_business.Currency}.";
         }
         catch (Exception ex)
         {
+            TaxStatusText.Text = string.Empty;
             TaxErrorText.Text = ex.Message;
         }
     }
@@ -281,34 +349,47 @@ public sealed partial class SettingsPage : Page
     private async void SaveTax_Click(object sender, RoutedEventArgs e)
     {
         TaxErrorText.Text = string.Empty;
+        TaxStatusText.Text = "Saving tax settings…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
-            _business ??= await api.GetAsync<BusinessProfileDto>("api/settings/business");
-            var updated = _business with
+            var current = await api.GetAsync<BusinessProfileDto>("api/settings/business");
+            var updated = current with
             {
                 GstRegistered = TaxEnabledCheck.IsChecked == true,
-                GstRate = (decimal)TaxRateBox.Value,
+                GstRate = ReadMoney(TaxRateBox, current.GstRate),
                 GstInclusive = TaxInclusiveCheck.IsChecked == true,
-                Currency = string.IsNullOrWhiteSpace(CurrencyBox.Text) ? _business.Currency : CurrencyBox.Text.Trim()
+                Currency = string.IsNullOrWhiteSpace(CurrencyBox.Text) ? current.Currency : CurrencyBox.Text.Trim()
             };
             _business = await api.PutAsync<BusinessProfileDto, BusinessProfileDto>("api/settings/business", updated);
-            // Keep pricing tax mirror in sync when user can edit pricing settings.
+            await LoadTaxAsync();
+            // Confirm pricing mirror picked up the same tax (server UpdateBusiness syncs pricing.settings).
             try
             {
                 var pricing = await api.GetAsync<PricingSettingsDto>("api/pricing/settings");
-                var mirrored = pricing with
+                if (pricing.Tax is { } tax &&
+                    (tax.Enabled != _business!.GstRegistered || tax.Rate != _business.GstRate || tax.Inclusive != _business.GstInclusive))
                 {
-                    Tax = new TaxPricingDto(updated.GstRegistered, updated.GstRate, updated.GstInclusive)
-                };
-                await api.PutAsync<PricingSettingsDto, PricingSettingsDto>("api/pricing/settings", mirrored);
+                    TaxStatusText.Text =
+                        $"Tax saved on business profile, but pricing mirror differs (pricing tax {(tax.Enabled ? "on" : "off")} @ {tax.Rate:P0}).";
+                }
+                else
+                {
+                    TaxStatusText.Text =
+                        $"Saved and verified — tax {(_business!.GstRegistered ? "on" : "off")} at {_business.GstRate:P0} · pricing mirror OK.";
+                }
             }
-            catch { /* pricing.edit_settings may be denied — business profile still saved */ }
-            TaxStatusText.Text = "Tax settings saved.";
+            catch
+            {
+                TaxStatusText.Text =
+                    $"Saved business tax {(_business!.GstRegistered ? "on" : "off")} at {_business.GstRate:P0} (could not verify pricing mirror).";
+            }
+            TaxErrorText.Text = string.Empty;
         }
         catch (Exception ex)
         {
-            TaxErrorText.Text = ex.Message;
+            TaxStatusText.Text = string.Empty;
+            TaxErrorText.Text = $"Save failed: {ex.Message}";
         }
     }
 

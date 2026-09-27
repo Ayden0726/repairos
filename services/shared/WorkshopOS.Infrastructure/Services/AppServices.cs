@@ -269,7 +269,21 @@ public sealed class SettingsService : ISettingsService
     public async Task<BusinessProfileDto> UpdateBusinessAsync(BusinessProfileDto profile, Guid actorId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(profile.Name)) throw new ValidationAppException("Business name is required.");
+        var gstRate = profile.GstRate <= 0 ? 0.10m : profile.GstRate;
+        profile = profile with { GstRate = gstRate };
         await DbSeed.SetSettingAsync(_db, SettingKeys.BusinessProfile, profile, actorId, ct);
+        await DbSeed.SetSettingAsync(_db, SettingKeys.Gst,
+            new { registered = profile.GstRegistered, rate = profile.GstRate, inclusive = profile.GstInclusive }, actorId, ct);
+
+        // Keep pricing.settings Tax mirror in sync so quotes/preview always see the same GST.
+        var pricing = await DbSeed.GetSettingAsync<PricingSettingsDto?>(_db, SettingKeys.PricingSettings, null, ct)
+            ?? PricingCalculator.DefaultSettings();
+        pricing = pricing with
+        {
+            Tax = new TaxPricingDto(profile.GstRegistered, profile.GstRate, profile.GstInclusive)
+        };
+        await DbSeed.SetSettingAsync(_db, SettingKeys.PricingSettings, pricing, actorId, ct);
+
         await _audit.WriteAsync(actorId, "settings.business.update", "Setting", SettingKeys.BusinessProfile, newValue: profile, ct: ct);
         return profile;
     }

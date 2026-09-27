@@ -665,12 +665,30 @@ public static class DbSeed
     {
         var row = await db.Settings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == key, ct);
         if (row is null) return fallback;
-        return JsonSerializer.Deserialize<T>(row.JsonValue) ?? fallback;
+        if (string.IsNullOrWhiteSpace(row.JsonValue)) return fallback;
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var parsed = JsonSerializer.Deserialize<T>(row.JsonValue, options);
+            return parsed ?? fallback;
+        }
+        catch (JsonException)
+        {
+            // Corrupt / unexpected jsonb — do not silently pretend defaults are "saved".
+            throw new InvalidOperationException(
+                $"Setting '{key}' has invalid JSON and cannot be loaded. Re-save from Settings to repair it.");
+        }
     }
 
     public static async Task SetSettingAsync(WorkshopDbContext db, string key, object value, Guid? userId, CancellationToken ct = default)
     {
-        var json = JsonSerializer.Serialize(value);
+        // Persist as camelCase JSON (same shape the API returns) so PUT/GET stay consistent.
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        };
+        var json = JsonSerializer.Serialize(value, options);
         var row = await db.Settings.FirstOrDefaultAsync(s => s.Key == key, ct);
         if (row is null)
             db.Settings.Add(new BusinessSetting { Key = key, JsonValue = json, UpdatedById = userId, UpdatedAt = DateTimeOffset.UtcNow });

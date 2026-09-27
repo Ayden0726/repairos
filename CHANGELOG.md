@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.10 — 2026-09-26
+
+### Fixed
+
+- **Settings persistence**: Pricing / Tax / Services save now PUT then reload from GET; clear success/error feedback; NaN-safe NumberBox reads
+- Business tax update syncs `pricing.settings` Tax + `gst` setting so quotes see the same GST
+- Settings storage writes camelCase JSON; corrupt setting JSON no longer silently falls back without error
+- ApiClient sends camelCase JSON; clearer 403 messages when save is forbidden
+
+### Tests
+
+- PUT `/api/pricing/settings` then GET returns the same values (including raw `settings` jsonb)
+- PUT `/api/settings/business` tax then pricing mirror matches
+
+## 1.2.9 — 2026-09-26
+
+### Fixed
+
+- **Quote Builder customers**: load/search existing customers from `GET /api/customers` (same pattern as New Ticket), show name · phone · email · id, keep create-new path
+- **Quote pricing settings**: open Quote Builder loads `GET /api/pricing/settings`, applies markup/labour defaults to new lines, shows active settings summary; preview/create send null overrides so **server saved settings** apply (not sticky hardcoded 20%/50)
+- Settings → Pricing ComboBox load/save more reliable for markup method and rounding
+
+### Tests
+
+- Preview uses saved pricing settings after PUT `/api/pricing/settings`
+- Calculator applies custom defaults when overrides are null
+
 ## 1.2.8 — 2026-09-26
 
 ### Fixed

@@ -255,7 +255,12 @@ public sealed class ApiClient
 {
     private readonly IAppSettingsStore _settings;
     private readonly AuthSession _session;
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
 
     /// <summary>Default per-request budget for API calls (avoids multi-minute hangs).</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
@@ -383,14 +388,21 @@ public sealed class ApiClient
     {
         if (response.IsSuccessStatusCode) return;
         var body = await response.Content.ReadAsStringAsync();
-        string message = body;
+        string message = string.IsNullOrWhiteSpace(body)
+            ? $"{(int)response.StatusCode} {response.ReasonPhrase}"
+            : body;
         try
         {
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("title", out var title))
-                message = title.GetString() ?? body;
+                message = title.GetString() ?? message;
+            else if (doc.RootElement.TryGetProperty("detail", out var detail))
+                message = detail.GetString() ?? message;
         }
         catch { /* raw */ }
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden &&
+            (string.IsNullOrWhiteSpace(message) || message == body || message.StartsWith("{")))
+            message = "Forbidden — your account cannot save these settings.";
         throw new InvalidOperationException(message);
     }
 }

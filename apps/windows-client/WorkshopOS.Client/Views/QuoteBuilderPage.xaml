@@ -42,13 +42,26 @@
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBox Header="Search customers" Text="{x:Bind ViewModel.CustomerQuery, Mode=TwoWay}" />
+                <TextBox Header="Search customers"
+                         PlaceholderText="Name, phone, or email"
+                         Text="{x:Bind ViewModel.CustomerQuery, Mode=TwoWay}"
+                         KeyDown="CustomerSearch_KeyDown" />
                 <Button Grid.Column="1" Content="Search" VerticalAlignment="Bottom"
-                        Command="{x:Bind ViewModel.SearchCustomersCommand}" />
+                        Command="{x:Bind ViewModel.SearchCustomersCommand}"
+                        IsEnabled="{x:Bind ViewModel.IsCustomersIdle, Mode=OneWay}" />
               </Grid>
-              <ComboBox Header="Customer" ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
+              <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
+                            IsActive="{x:Bind ViewModel.IsLoadingCustomers, Mode=OneWay}" />
+              <TextBlock Text="{x:Bind ViewModel.CustomersStatus, Mode=OneWay}"
+                         Foreground="{ThemeResource WorkshopTextSecondaryBrush}"
+                         TextWrapping="Wrap"
+                         Visibility="{x:Bind ViewModel.HasCustomersStatus, Mode=OneWay}" />
+              <ComboBox Header="Customer (name · phone · email · id)"
+                        ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
                         SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
-                        DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" />
+                        DisplayMemberPath="ComboLabel"
+                        HorizontalAlignment="Stretch"
+                        IsEnabled="{x:Bind ViewModel.HasCustomers, Mode=OneWay}" />
             </StackPanel>
             <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowNewCustomerFields, Mode=OneWay}">
               <Grid ColumnSpacing="8">
@@ -91,6 +104,9 @@
                 <Button Content="Recalculate" Command="{x:Bind ViewModel.RecalcCommand}" />
               </StackPanel>
             </Grid>
+            <TextBlock Text="{x:Bind ViewModel.PricingDefaultsSummary, Mode=OneWay}"
+                       Foreground="{ThemeResource WorkshopTextSecondaryBrush}"
+                       TextWrapping="Wrap" FontSize="12" />
             <ItemsControl ItemsSource="{x:Bind ViewModel.Lines, Mode=OneWay}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="local:QuoteLineDraft">
