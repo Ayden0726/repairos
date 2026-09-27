@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.14 — 2026-09-27
+
+### Fixed
+
+- **First-run / pre-shell contrast**: Setup, Login, ServerConnect, Bootstrap now use solid Workshop page brushes + explicit text foregrounds (no more light-on-light)
+- **ThemeService**: solid background colors applied from preference (no longer pulls light `Default` ThemeDictionary while `RequestedTheme` is Dark)
+
+### Changed
+
+- **Default theme = Dark** when unset in `client-settings.json`
+- Compact **Light / Dark** toggle on Setup, Login, ServerConnect, Bootstrap headers and Shell pane footer (next to sign-out)
+- Client / product version `1.2.14`
+
 ## 1.2.13 — 2026-09-27
 
 ### Docs / setup

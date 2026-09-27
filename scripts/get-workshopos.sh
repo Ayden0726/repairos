@@ -21,7 +21,7 @@ API_PORT="${API_PORT:-5088}"
 BRANCH="${WORKSHOPOS_BRANCH:-main}"
 SKIP_DEPS=0
 DO_UPDATE=0
-PRODUCT_VERSION="1.2.13+"
+PRODUCT_VERSION="1.2.14+"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

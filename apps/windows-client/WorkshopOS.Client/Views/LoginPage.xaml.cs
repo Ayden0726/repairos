@@ -15,6 +15,7 @@ public sealed partial class LoginPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.OnLoggedIn = () => Frame.Navigate(typeof(ShellPage));
+        Loaded += (_, _) => SyncThemeToggle();
     }
 
     private void Password_PasswordChanged(object sender, RoutedEventArgs e)
@@ -33,5 +34,24 @@ public sealed partial class LoginPage : Page
         }
 
         Frame.Navigate(typeof(ServerConnectPage), "Choose a different WorkshopOS server.");
+    }
+
+    private void ThemeLight_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.SetLightOrDark(false);
+        SyncThemeToggle();
+    }
+
+    private void ThemeDark_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.SetLightOrDark(true);
+        SyncThemeToggle();
+    }
+
+    private void SyncThemeToggle()
+    {
+        var dark = ThemeService.IsDarkPreference(App.Services.GetRequiredService<IAppSettingsStore>().Theme);
+        ThemeDarkBtn.Style = dark ? (Style)Application.Current.Resources["AccentButtonStyle"] : null;
+        ThemeLightBtn.Style = dark ? null : (Style)Application.Current.Resources["AccentButtonStyle"];
     }
 }

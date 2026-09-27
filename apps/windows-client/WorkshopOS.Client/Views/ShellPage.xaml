@@ -28,6 +28,11 @@
                    Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
         <TextBlock Text="{x:Bind ViewModel.UserRole, Mode=OneWay}" FontSize="11" TextWrapping="Wrap"
                    Foreground="{ThemeResource WorkshopTextSecondaryBrush}" />
+        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,6,0,0">
+          <Button x:Name="ThemeLightBtn" Content="Light" Click="ThemeLight_Click" Padding="8,4" MinWidth="52" FontSize="12" />
+          <Button x:Name="ThemeDarkBtn" Content="Dark" Click="ThemeDark_Click" Padding="8,4" MinWidth="52" FontSize="12"
+                  Style="{StaticResource AccentButtonStyle}" />
+        </StackPanel>
         <Button Content="Sign out" Command="{x:Bind ViewModel.LogoutCommand}" HorizontalAlignment="Stretch" Margin="0,4,0,0" />
       </StackPanel>
     </NavigationView.PaneFooter>

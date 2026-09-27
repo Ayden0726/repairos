@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using WorkshopOS.Client.Services;
@@ -15,6 +16,7 @@ public sealed partial class ServerConnectPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.Navigate = route => Frame.Navigate(route == "setup" ? typeof(SetupPage) : typeof(LoginPage));
+        Loaded += (_, _) => SyncThemeToggle();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -33,7 +35,7 @@ public sealed partial class ServerConnectPage : Page
         }
     }
 
-    private void ClearSaved_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void ClearSaved_Click(object sender, RoutedEventArgs e)
     {
         var settings = App.Services.GetRequiredService<IAppSettingsStore>();
         settings.ClearConnection();
@@ -41,5 +43,24 @@ public sealed partial class ServerConnectPage : Page
         ViewModel.PairingCode = string.Empty;
         ViewModel.Error = null;
         ViewModel.StatusText = "Cleared all saved server data. Enter a pairing code or URL.";
+    }
+
+    private void ThemeLight_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.SetLightOrDark(false);
+        SyncThemeToggle();
+    }
+
+    private void ThemeDark_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.SetLightOrDark(true);
+        SyncThemeToggle();
+    }
+
+    private void SyncThemeToggle()
+    {
+        var dark = ThemeService.IsDarkPreference(App.Services.GetRequiredService<IAppSettingsStore>().Theme);
+        ThemeDarkBtn.Style = dark ? (Style)Application.Current.Resources["AccentButtonStyle"] : null;
+        ThemeLightBtn.Style = dark ? null : (Style)Application.Current.Resources["AccentButtonStyle"];
     }
 }

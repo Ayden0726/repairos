@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using WorkshopOS.Client.Services;
 
 namespace WorkshopOS.Client.Views;
 
@@ -17,8 +18,11 @@ public sealed partial class BootstrapPage : Page
         Loaded += OnLoaded;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e) =>
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        SyncThemeToggle();
         GoConnect("Enter a pairing code from http://<server>:5088/connect, or paste the server URL.");
+    }
 
     private void EnterServer_Click(object sender, RoutedEventArgs e) =>
         GoConnect("Enter the pairing code from http://<server>:5088/connect, or paste the server URL.");
@@ -35,5 +39,24 @@ public sealed partial class BootstrapPage : Page
         {
             /* frame may already be navigating */
         }
+    }
+
+    private void ThemeLight_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.SetLightOrDark(false);
+        SyncThemeToggle();
+    }
+
+    private void ThemeDark_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeService.SetLightOrDark(true);
+        SyncThemeToggle();
+    }
+
+    private void SyncThemeToggle()
+    {
+        var dark = ThemeService.IsDarkPreference(App.Services.GetRequiredService<IAppSettingsStore>().Theme);
+        ThemeDarkBtn.Style = dark ? (Style)Application.Current.Resources["AccentButtonStyle"] : null;
+        ThemeLightBtn.Style = dark ? null : (Style)Application.Current.Resources["AccentButtonStyle"];
     }
 }

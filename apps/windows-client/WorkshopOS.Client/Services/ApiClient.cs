@@ -8,7 +8,7 @@ public interface IAppSettingsStore
     string? ServerUrl { get; set; }
     string? AccessToken { get; set; }
     string? RefreshToken { get; set; }
-    /// <summary>App appearance: System, Light, or Dark. Survives ClearConnection.</summary>
+    /// <summary>App appearance: Dark (default), Light, or System. Survives ClearConnection.</summary>
     string Theme { get; set; }
     bool HasServerUrl { get; }
     void ClearTokens();
@@ -43,7 +43,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
         public string? ServerUrl { get; set; }
         public string? AccessToken { get; set; }
         public string? RefreshToken { get; set; }
-        public string Theme { get; set; } = "System";
+        public string Theme { get; set; } = "Dark";
     }
 
     public static string SettingsDirectory =>
@@ -87,15 +87,16 @@ public sealed class AppSettingsStore : IAppSettingsStore
             lock (Gate)
             {
                 var t = _data.Theme;
-                return string.IsNullOrWhiteSpace(t) ? "System" : t;
+                // Unset / blank → Dark (readable default; avoids light-on-light first run).
+                return string.IsNullOrWhiteSpace(t) ? "Dark" : t;
             }
         }
         set
         {
             lock (Gate)
             {
-                var v = string.IsNullOrWhiteSpace(value) ? "System" : value.Trim();
-                if (v is not ("System" or "Light" or "Dark")) v = "System";
+                var v = string.IsNullOrWhiteSpace(value) ? "Dark" : value.Trim();
+                if (v is not ("System" or "Light" or "Dark")) v = "Dark";
                 _data.Theme = v;
                 Save();
             }
@@ -122,7 +123,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
     {
         lock (Gate)
         {
-            var keepTheme = string.IsNullOrWhiteSpace(_data.Theme) ? "System" : _data.Theme;
+            var keepTheme = string.IsNullOrWhiteSpace(_data.Theme) ? "Dark" : _data.Theme;
             _data = new SettingsDto { Theme = keepTheme };
             try
             {

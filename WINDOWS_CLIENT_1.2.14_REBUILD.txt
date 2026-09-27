@@ -1,0 +1,18 @@
+WorkshopOS Windows client 1.2.14 - rebuild on Windows
+
+Banner must show: Client 1.2.14
+
+1.2.14 adds:
+  - Default theme Dark; solid Workshop brushes on Setup/Login/Connect
+  - Compact Light/Dark toggle on pre-shell pages + Shell footer
+  - Fixes light-on-light first-run contrast
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.14
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.14 -SkipInstaller
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.14.zip
+  packaging\dist\WorkshopOS-Setup-1.2.14.exe  (if Inno Setup 6 installed)

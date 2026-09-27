@@ -20,12 +20,12 @@
             <TextBlock Text="Appearance" FontWeight="SemiBold" FontSize="16" />
             <TextBlock Text="Choose how WorkshopOS looks on this PC. Saved in client-settings.json." Opacity="0.7" TextWrapping="Wrap" />
             <ComboBox x:Name="ThemeCombo" Header="Theme" Width="220" SelectionChanged="ThemeCombo_SelectionChanged">
-              <ComboBoxItem Content="System" Tag="System" />
-              <ComboBoxItem Content="Light" Tag="Light" />
               <ComboBoxItem Content="Dark" Tag="Dark" />
+              <ComboBoxItem Content="Light" Tag="Light" />
+              <ComboBoxItem Content="System" Tag="System" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.13" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.14" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
 
             <TextBlock Text="Your password" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
             <TextBlock Text="Change the password for the account you are signed in as. Requires your current password."

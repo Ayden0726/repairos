@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.2.13</Version>
-    <InformationalVersion>1.2.13</InformationalVersion>
+    <Version>1.2.14</Version>
+    <InformationalVersion>1.2.14</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
