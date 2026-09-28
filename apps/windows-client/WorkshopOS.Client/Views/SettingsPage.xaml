@@ -25,7 +25,7 @@
               <ComboBoxItem Content="System" Tag="System" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.19" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.20" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
 
             <TextBlock Text="Your password" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
             <TextBlock Text="Change the password for the account you are signed in as. Requires your current password."
@@ -104,6 +104,7 @@
             <TextBox x:Name="CatalogueSearchBox" Header="Filter" PlaceholderText="Search name or code"
                      TextChanged="CatalogueSearch_TextChanged" />
             <ListView x:Name="CatalogueServicesList" MinHeight="160" MaxHeight="280"
+                      DisplayMemberPath="Label"
                       SelectionChanged="CatalogueServicesList_SelectionChanged" />
             <TextBlock Text="Edit / add service" FontWeight="SemiBold" />
             <Grid ColumnSpacing="8" RowSpacing="8">

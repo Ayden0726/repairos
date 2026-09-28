@@ -11,7 +11,7 @@ param(
     [string]$Configuration = "Release",
     [switch]$SkipInstaller,
     [string]$ApiDefaultUrl = "http://127.0.0.1:5088",
-    [string]$Version = "1.2.16"
+    [string]$Version = "1.2.20"
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,6 +77,9 @@ function Write-XamlCompilerDiagnostics {
     }
 
     Write-Host "Full log: $PublishLog" -ForegroundColor Cyan
+    Write-Host "If publish fails, also run:" -ForegroundColor Cyan
+    Write-Host "  Get-Content packaging\out\logs\publish-last.log -Tail 80" -ForegroundColor White
+    Write-Host "  and look for lines with 'error', 'XamlCompiler', 'WMC', or 'CS'." -ForegroundColor White
     Write-Host "===== end diagnostics =====" -ForegroundColor Yellow
     Write-Host ""
 }

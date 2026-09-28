@@ -20,7 +20,7 @@
         </StackPanel>
       </Grid>
       <Border Background="{ThemeResource WorkshopAccentSoftBrush}" Padding="10,6" CornerRadius="4" HorizontalAlignment="Left">
-        <TextBlock Text="Client 1.2.19" FontSize="14" FontWeight="SemiBold"
+        <TextBlock Text="Client 1.2.20" FontSize="14" FontWeight="SemiBold"
                    Foreground="{ThemeResource WorkshopAccentBrush}" />
       </Border>
       <TextBlock Text="Connect to your shop server on this Wi‑Fi / LAN."

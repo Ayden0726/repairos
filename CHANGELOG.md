@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.20 — 2026-09-28
+
+### Fixed
+- **XamlCompiler / `dotnet publish` exit 1**: rewrite `ServicePickerControl` without `DataTemplate`, `x:Bind`, or `NumberBox` (DisplayMemberPath + TextBox workflow). Previous string-row `x:Bind` fix was not enough on Windows publish.
+- Rebuild script dumps `packaging\out\logs\publish-last.log` tail on failure (`Get-Content … -Tail 80`).
+
+### Changed
+- API / product version `1.2.20` (ClientMinVersion `1.2.20`)
+
 ## 1.2.19 — 2026-09-28
 
 ### Added

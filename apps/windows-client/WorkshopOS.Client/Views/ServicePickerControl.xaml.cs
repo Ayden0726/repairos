@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -9,9 +10,8 @@ using WorkshopOS.Contracts.Operations;
 namespace WorkshopOS.Client.Views;
 
 /// <summary>
-/// WinUI-safe display wrapper: only non-null strings are x:Bound in DataTemplates.
-/// Binding decimal / int? directly to Run.Text / Text breaks XamlCompiler (MSB3073),
-/// same family of failures as NumberBox.Value (double) TwoWay to decimal.
+/// WinUI-safe display wrapper: only string fields for DisplayMemberPath.
+/// Avoids x:Bind / DataTemplate / NumberBox paths that crash XamlCompiler.
 /// </summary>
 public sealed class CatalogueServiceRow
 {
@@ -22,9 +22,9 @@ public sealed class CatalogueServiceRow
     public string Name => Service.Name ?? string.Empty;
     public string Code => Service.Code ?? string.Empty;
     public string Subcategory => Service.Subcategory ?? string.Empty;
-    public string FeeText => Service.DefaultLabourFee.ToString("0.##");
-    public string MinutesText => Service.EstimatedMinutes is int m ? m.ToString() : "—";
-    public string TitleLine => $"{Name} · ${FeeText}";
+    public string FeeText => Service.DefaultLabourFee.ToString("0.##", CultureInfo.InvariantCulture);
+    public string MinutesText => Service.EstimatedMinutes is int m ? m.ToString(CultureInfo.InvariantCulture) : "-";
+    public string TitleLine => $"{Name} · ${FeeText} · ~{MinutesText} min";
     public string FeeLine => $"${FeeText}";
     public string DetailLine => $"{Code} · {Subcategory} · ~{MinutesText} min";
 }
@@ -33,6 +33,7 @@ public sealed partial class ServicePickerControl : UserControl
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private bool _updatingQuick;
     private CancellationTokenSource? _searchCts;
 
     public ObservableCollection<CatalogueCategoryDto> Categories { get; } = new();
@@ -41,6 +42,7 @@ public sealed partial class ServicePickerControl : UserControl
     public ObservableCollection<CatalogueServiceRow> Services { get; } = new();
     public ObservableCollection<CatalogueServiceRow> Favourites { get; } = new();
     public ObservableCollection<CatalogueServiceRow> Recent { get; } = new();
+    public ObservableCollection<CatalogueServiceRow> QuickItems { get; } = new();
     public ObservableCollection<CatalogueServiceDto> SelectedServices { get; } = new();
     public ObservableCollection<CatalogueServiceRow> SelectedRows { get; } = new();
     public ObservableCollection<string> DeviceTypes { get; } = new();
@@ -117,14 +119,36 @@ public sealed partial class ServicePickerControl : UserControl
             var fav = await _api.GetAsync<CatalogueServiceDto[]>("api/catalogue/favourites");
             Favourites.Clear();
             foreach (var s in fav) Favourites.Add(new CatalogueServiceRow(s));
-            FavList.ItemsSource = Favourites;
 
             var recent = await _api.GetAsync<CatalogueServiceDto[]>("api/catalogue/recent?take=12");
             Recent.Clear();
             foreach (var s in recent) Recent.Add(new CatalogueServiceRow(s));
-            RecentList.ItemsSource = Recent;
+
+            RebuildQuickItems();
         }
         catch { /* optional */ }
+    }
+
+    private void RebuildQuickItems()
+    {
+        _updatingQuick = true;
+        try
+        {
+            QuickItems.Clear();
+            var seen = new HashSet<Guid>();
+            foreach (var row in Favourites.Concat(Recent))
+            {
+                if (!seen.Add(row.Id)) continue;
+                QuickItems.Add(row);
+            }
+            QuickBox.ItemsSource = null;
+            QuickBox.ItemsSource = QuickItems;
+            QuickBox.SelectedItem = null;
+        }
+        finally
+        {
+            _updatingQuick = false;
+        }
     }
 
     private async void CategoryBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -217,6 +241,7 @@ public sealed partial class ServicePickerControl : UserControl
             var list = await _api.GetAsync<CatalogueServiceDto[]>("api/catalogue/services?" + string.Join('&', parts));
             Services.Clear();
             foreach (var s in list) Services.Add(new CatalogueServiceRow(s));
+            ServicesList.ItemsSource = null;
             ServicesList.ItemsSource = Services;
             StatusText.Text = $"{list.Length} service(s)";
         }
@@ -226,16 +251,19 @@ public sealed partial class ServicePickerControl : UserControl
         }
     }
 
-    private async void ServicesList_ItemClick(object sender, ItemClickEventArgs e)
+    private async void QuickBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.ClickedItem is CatalogueServiceRow row)
+        if (_updatingQuick) return;
+        if (QuickBox.SelectedItem is CatalogueServiceRow row)
             await ToggleSelectAsync(row.Service);
     }
 
-    private async void Quick_ItemClick(object sender, ItemClickEventArgs e)
+    private async void AddSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ClickedItem is CatalogueServiceRow row)
+        if (ServicesList.SelectedItem is CatalogueServiceRow row)
             await ToggleSelectAsync(row.Service);
+        else
+            ErrorText.Text = "Select a service in the list, then click Add.";
     }
 
     private async Task ToggleSelectAsync(CatalogueServiceDto svc)
@@ -264,25 +292,16 @@ public sealed partial class ServicePickerControl : UserControl
 
     private void RemoveSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: CatalogueServiceRow row })
-        {
-            var match = SelectedServices.FirstOrDefault(s => s.Id == row.Id);
-            if (match is not null)
-                SelectedServices.Remove(match);
-            RefreshSelectedList();
-            SelectionChanged?.Invoke(this, EventArgs.Empty);
-        }
-    }
+        CatalogueServiceRow? row = SelectedList.SelectedItem as CatalogueServiceRow;
+        if (row is null && SelectedRows.Count > 0)
+            row = SelectedRows[^1];
+        if (row is null) return;
 
-    private async void Favourite_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: CatalogueServiceRow row }) return;
-        try
-        {
-            await _api.PostAsync($"api/catalogue/favourites/{row.Id}");
-            await LoadFavouritesAndRecentAsync();
-        }
-        catch (Exception ex) { ErrorText.Text = ex.Message; }
+        var match = SelectedServices.FirstOrDefault(s => s.Id == row.Id);
+        if (match is not null)
+            SelectedServices.Remove(match);
+        RefreshSelectedList();
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private async void CustomSave_Click(object sender, RoutedEventArgs e)
@@ -295,11 +314,16 @@ public sealed partial class ServicePickerControl : UserControl
                 ErrorText.Text = "Custom service name is required.";
                 return;
             }
-            // NumberBox.Value is double — cast to decimal only in code-behind (never via x:Bind).
-            var labour = CustomLabourBox.Value;
-            var fee = double.IsNaN(labour) ? 50m : (decimal)labour;
-            var mins = CustomMinutesBox.Value;
-            int? estimated = double.IsNaN(mins) ? null : (int)mins;
+
+            if (!decimal.TryParse(CustomLabourBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var fee) &&
+                !decimal.TryParse(CustomLabourBox.Text, NumberStyles.Number, CultureInfo.CurrentCulture, out fee))
+                fee = 50m;
+
+            int? estimated = null;
+            if (int.TryParse(CustomMinutesBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mins) ||
+                int.TryParse(CustomMinutesBox.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out mins))
+                estimated = mins;
+
             var created = await _api.PostAsync<UpsertCatalogueServiceRequest, CatalogueServiceDto>(
                 "api/catalogue/services",
                 new UpsertCatalogueServiceRequest(
@@ -312,6 +336,7 @@ public sealed partial class ServicePickerControl : UserControl
             CustomDescBox.Text = string.Empty;
             SelectionChanged?.Invoke(this, EventArgs.Empty);
             await SearchServicesAsync();
+            await LoadFavouritesAndRecentAsync();
         }
         catch (Exception ex) { ErrorText.Text = ex.Message; }
     }

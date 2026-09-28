@@ -1,0 +1,33 @@
+WorkshopOS Windows client 1.2.20 - rebuild on Windows
+
+Banner must show: Client 1.2.20
+
+1.2.20 fixes XamlCompiler / dotnet publish exit 1:
+  - ServicePicker rewritten: NO DataTemplate, NO x:Bind, NO NumberBox
+  - Workflow: category/device/brand/model filters → services ListView → Add → selected
+  - Custom labour/minutes are TextBox (parsed in code-behind)
+  - DisplayMemberPath + ItemsSource only (WinUI-safe)
+  - Same public API for New Ticket + Quote Builder
+
+If publish fails:
+  Get-Content packaging\out\logs\publish-last.log -Tail 80
+  Look for error / XamlCompiler / WMC / CS lines.
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.20
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.20 -SkipInstaller
+
+Or one-shot wipe + overlay + build + launch:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.20.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.20.zip
+  packaging\dist\WorkshopOS-Setup-1.2.20.exe  (if Inno Setup 6 installed)
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update
+
+Agent overlay (if GitHub lags):
+  http://127.0.0.1:28765/repairos-github-sync.zip
