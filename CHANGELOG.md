@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.21 — 2026-09-28
+
+### Fixed
+- **XamlCompiler / `dotnet publish` exit 1 (nuclear)**: removed `ServicePickerControl` UserControl entirely. New Ticket + Quote Builder use inline TextBox/Button/ComboBox (`DisplayMemberPath` only — no DataTemplate, no x:Bind on picker, no NumberBox, no UserControl).
+- Quote Builder money fields: all `NumberBox` → `TextBox` (`JobLabourFeeText`, line `QuantityText` / `PartCostText` / …) to avoid DataTemplate + NumberBox + x:Bind compiler failures.
+- Added `packaging/dump-xaml-errors.ps1` to print real WMC/CS/XamlCompiler lines from `publish-last.log`.
+
+### Changed
+- API / product version `1.2.21` (ClientMinVersion `1.2.21`)
+- Catalogue API unchanged; picker UI is intentionally simpler
+
 ## 1.2.20 — 2026-09-28
 
 ### Fixed

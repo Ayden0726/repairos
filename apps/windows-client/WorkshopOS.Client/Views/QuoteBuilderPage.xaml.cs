@@ -10,6 +10,7 @@ namespace WorkshopOS.Client.Views;
 public sealed partial class QuoteBuilderPage : Page
 {
     public QuoteBuilderViewModel ViewModel { get; }
+    private readonly ServiceCataloguePickerSession _picker;
     private QuoteBuilderArgs? _args;
     private bool _loaded;
 
@@ -18,19 +19,35 @@ public sealed partial class QuoteBuilderPage : Page
         ViewModel = new QuoteBuilderViewModel(
             App.Services.GetRequiredService<ApiClient>(),
             App.Services.GetRequiredService<AuthSession>());
+        _picker = new ServiceCataloguePickerSession(App.Services.GetRequiredService<ApiClient>());
         InitializeComponent();
         DataContext = ViewModel;
+        _picker.Changed += (_, _) => SyncPickerUi();
         Loaded += async (_, _) =>
         {
             if (_loaded) return;
             _loaded = true;
             await ViewModel.InitAsync(_args);
+            await _picker.RefreshAsync();
+            SyncPickerUi();
         };
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         _args = e.Parameter as QuoteBuilderArgs ?? new QuoteBuilderArgs();
+    }
+
+    private void SyncPickerUi()
+    {
+        QuoteSvcCategoryBox.ItemsSource = null;
+        QuoteSvcCategoryBox.ItemsSource = _picker.Categories;
+        QuoteSvcServicesBox.ItemsSource = null;
+        QuoteSvcServicesBox.ItemsSource = _picker.Services;
+        QuoteSvcSelectedBox.ItemsSource = null;
+        QuoteSvcSelectedBox.ItemsSource = _picker.SelectedRows;
+        QuoteSvcStatusText.Text = _picker.Status ?? string.Empty;
+        QuoteSvcErrorText.Text = _picker.Error ?? string.Empty;
     }
 
     private void CustomerSearch_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -73,17 +90,13 @@ public sealed partial class QuoteBuilderPage : Page
     private void PartCombo_GotFocus(object sender, RoutedEventArgs e)
     {
         if (sender is ComboBox combo)
-        {
             combo.ItemsSource ??= ViewModel.InventoryParts;
-        }
     }
 
     private void ServiceCombo_GotFocus(object sender, RoutedEventArgs e)
     {
         if (sender is ComboBox combo)
-        {
             combo.ItemsSource ??= ViewModel.Services;
-        }
     }
 
     private void PartCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -102,13 +115,21 @@ public sealed partial class QuoteBuilderPage : Page
         }
     }
 
+    private async void QuoteSvcSearchBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        await _picker.SearchDebouncedAsync(QuoteSvcSearchBox.Text);
+
+    private void QuoteSvcCategoryBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        _picker.SetCategory(QuoteSvcCategoryBox.SelectedItem as CatalogueCategoryDto);
+
+    private async void QuoteSvcAdd_Click(object sender, RoutedEventArgs e) =>
+        await _picker.AddAsync(QuoteSvcServicesBox.SelectedItem as CatalogueServiceRow);
+
+    private void QuoteSvcRemove_Click(object sender, RoutedEventArgs e) =>
+        _picker.Remove(QuoteSvcSelectedBox.SelectedItem as CatalogueServiceRow);
+
     private async void AddCatalogueServices_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(QuoteServicePicker.SelectedBrandName))
-            ViewModel.DeviceBrand = QuoteServicePicker.SelectedBrandName!;
-        if (!string.IsNullOrWhiteSpace(QuoteServicePicker.SelectedModelName))
-            ViewModel.DeviceModel = QuoteServicePicker.SelectedModelName!;
-        var selected = QuoteServicePicker.SelectedServices.ToList();
+        var selected = _picker.SelectedServices.ToList();
         if (selected.Count == 0) return;
         ViewModel.AddCatalogueServices(selected);
         await ViewModel.RecalcCommand.ExecuteAsync(null);

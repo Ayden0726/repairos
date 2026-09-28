@@ -2,8 +2,6 @@
     x:Class="WorkshopOS.Client.Views.NewRepairPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:WorkshopOS.Client.Views"
-    xmlns:w="using:WorkshopOS.Contracts.Workshop"
     Background="{ThemeResource WorkshopPageBackgroundBrush}">
   <ScrollViewer Padding="24">
     <StackPanel MaxWidth="560" Spacing="12">
@@ -92,7 +90,30 @@
             <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" PlaceholderText="iPhone 13" />
           </Grid>
           <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
-          <local:ServicePickerControl x:Name="ServicePicker" />
+
+          <!-- Inline service catalogue (no UserControl / DataTemplate / NumberBox / x:Bind) -->
+          <TextBlock Text="Service catalogue" FontWeight="SemiBold" FontSize="16"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+          <TextBox x:Name="SvcSearchBox" Header="Search services"
+                   PlaceholderText="Type screen, SSD, battery…"
+                   TextChanged="SvcSearchBox_TextChanged" />
+          <ComboBox x:Name="SvcCategoryBox" Header="Category" DisplayMemberPath="Name"
+                    HorizontalAlignment="Stretch" SelectionChanged="SvcCategoryBox_SelectionChanged" />
+          <ComboBox x:Name="SvcServicesBox" Header="Services" DisplayMemberPath="TitleLine"
+                    HorizontalAlignment="Stretch" />
+          <Button Content="Add selected service" Click="SvcAdd_Click"
+                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+          <ComboBox x:Name="SvcSelectedBox" Header="Selected services" DisplayMemberPath="TitleLine"
+                    HorizontalAlignment="Stretch" />
+          <Button Content="Remove selected" Click="SvcRemove_Click" HorizontalAlignment="Left" />
+          <TextBox x:Name="SvcPartsBox" Header="Parts required (optional notes)"
+                   PlaceholderText="Screen assembly, adhesive…" />
+          <TextBox x:Name="SvcNotesBox" Header="Technician notes" AcceptsReturn="True"
+                   Height="56" TextWrapping="Wrap" />
+          <TextBlock x:Name="SvcStatusText" Opacity="0.7" TextWrapping="Wrap" />
+          <TextBlock x:Name="SvcErrorText" Foreground="{ThemeResource WorkshopDangerBrush}"
+                     TextWrapping="Wrap" />
+
           <TextBox Header="Reported fault" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
                    AcceptsReturn="True" Height="110" TextWrapping="Wrap"
                    PlaceholderText="What is wrong? When did it start? (auto-filled from services if empty)" />

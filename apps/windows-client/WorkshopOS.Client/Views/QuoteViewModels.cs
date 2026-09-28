@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
@@ -80,11 +81,11 @@ public partial class QuoteLineDraft : ObservableObject
     [ObservableProperty] private Guid? _inventoryItemId;
     [ObservableProperty] private Guid? _servicePricingId;
     [ObservableProperty] private string? _difficultyLevelKey;
-    // NumberBox.Value is double — decimal TwoWay x:Bind fails XamlCompiler (MSB3073).
-    [ObservableProperty] private double _quantity = 1d;
-    [ObservableProperty] private double _partCost;
-    [ObservableProperty] private double _shippingCost;
-    [ObservableProperty] private double _otherCost;
+    // TextBox-only money fields (1.2.21): avoid NumberBox + x:Bind in DataTemplate (XamlCompiler).
+    [ObservableProperty] private string _quantityText = "1";
+    [ObservableProperty] private string _partCostText = "0";
+    [ObservableProperty] private string _shippingCostText = "0";
+    [ObservableProperty] private string _otherCostText = "0";
     [ObservableProperty] private double _additionalAmount;
     [ObservableProperty] private double _discountAmount;
     [ObservableProperty] private double _landedCost;
@@ -95,17 +96,39 @@ public partial class QuoteLineDraft : ObservableObject
     /// <summary>Shared with QuoteBuilderViewModel — business currency symbol, default $.</summary>
     public static string CurrencySymbol { get; set; } = "$";
 
+    public double Quantity => ParseMoney(QuantityText, 1d);
+    public double PartCost => ParseMoney(PartCostText, 0d);
+    public double ShippingCost => ParseMoney(ShippingCostText, 0d);
+    public double OtherCost => ParseMoney(OtherCostText, 0d);
+
     public string LandedCostText => MoneyDisplay.FormatWithSymbol(LandedCost, CurrencySymbol);
     public string LineCostText => MoneyDisplay.FormatWithSymbol(LineCost, CurrencySymbol);
 
     partial void OnLandedCostChanged(double value) => OnPropertyChanged(nameof(LandedCostText));
     partial void OnLineCostChanged(double value) => OnPropertyChanged(nameof(LineCostText));
 
+    public void SetQuantity(double value) => QuantityText = FormatMoney(value);
+    public void SetPartCost(double value) => PartCostText = FormatMoney(value);
+    public void SetShippingCost(double value) => ShippingCostText = FormatMoney(value);
+    public void SetOtherCost(double value) => OtherCostText = FormatMoney(value);
+
     public void RefreshMoneyText()
     {
         OnPropertyChanged(nameof(LandedCostText));
         OnPropertyChanged(nameof(LineCostText));
     }
+
+    internal static double ParseMoney(string? text, double fallback)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return fallback;
+        if (double.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ||
+            double.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out v))
+            return v;
+        return fallback;
+    }
+
+    internal static string FormatMoney(double value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
 }
 
 public partial class QuoteBuilderViewModel : ObservableObject
@@ -141,9 +164,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _customerNotes = string.Empty;
     [ObservableProperty] private string _internalNotes = string.Empty;
 
-    // Job-level labour + markup (NumberBox binds double).
-    [ObservableProperty] private double _jobLabourFee = 50d;
-    [ObservableProperty] private double _jobMarkupPercent = 20d;
+    // Job-level labour + markup as TextBox strings (XamlCompiler-safe; no NumberBox).
+    [ObservableProperty] private string _jobLabourFeeText = "50";
+    [ObservableProperty] private string _jobMarkupPercentText = "20";
     [ObservableProperty] private bool _labourOverridden;
     [ObservableProperty] private bool _markupOverridden;
 
@@ -191,7 +214,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
     public string ProfitTotalText => Money(ProfitTotal);
     public string MarginPercentText => MarginPercent.ToString("0.0");
     public string MarginWarningText => MarginWarning ?? string.Empty;
-    public string JobMarkupPercentText => JobMarkupPercent.ToString("0.##");
+
+    public double JobLabourFee => QuoteLineDraft.ParseMoney(JobLabourFeeText, 50d);
+    public double JobMarkupPercent => QuoteLineDraft.ParseMoney(JobMarkupPercentText, 20d);
 
     public bool ShowNewCustomerFields => !UseExistingCustomer;
     public bool HasCustomers => Customers.Count > 0;
@@ -214,15 +239,14 @@ public partial class QuoteBuilderViewModel : ObservableObject
     partial void OnIsLoadingCustomersChanged(bool value) => OnPropertyChanged(nameof(IsCustomersIdle));
     partial void OnCustomersStatusChanged(string? value) => OnPropertyChanged(nameof(HasCustomersStatus));
 
-    partial void OnJobLabourFeeChanged(double value)
+    partial void OnJobLabourFeeTextChanged(string value)
     {
         if (!_applyingJobDefaults) LabourOverridden = true;
     }
 
-    partial void OnJobMarkupPercentChanged(double value)
+    partial void OnJobMarkupPercentTextChanged(string value)
     {
         if (!_applyingJobDefaults) MarkupOverridden = true;
-        OnPropertyChanged(nameof(JobMarkupPercentText));
     }
 
     private void UpdatePermissionFlags()
@@ -332,8 +356,8 @@ public partial class QuoteBuilderViewModel : ObservableObject
     private void SeedJobDefaultsFromSettings()
     {
         _applyingJobDefaults = true;
-        JobMarkupPercent = (double)(_pricing?.Parts.DefaultMarkupPercent ?? 20m);
-        JobLabourFee = (double)(_pricing?.Labour.DefaultLabourFee ?? 50m);
+        JobMarkupPercentText = QuoteLineDraft.FormatMoney((double)(_pricing?.Parts.DefaultMarkupPercent ?? 20m));
+        JobLabourFeeText = QuoteLineDraft.FormatMoney((double)(_pricing?.Labour.DefaultLabourFee ?? 50m));
         MarkupOverridden = false;
         LabourOverridden = false;
         _applyingJobDefaults = false;
@@ -342,7 +366,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
     private void SetJobLabourFromSettings(double value)
     {
         _applyingJobDefaults = true;
-        JobLabourFee = value;
+        JobLabourFeeText = QuoteLineDraft.FormatMoney(value);
         LabourOverridden = false;
         _applyingJobDefaults = false;
     }
@@ -350,7 +374,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
     private void SetJobMarkupFromSettings(double value)
     {
         _applyingJobDefaults = true;
-        JobMarkupPercent = value;
+        JobMarkupPercentText = QuoteLineDraft.FormatMoney(value);
         MarkupOverridden = false;
         _applyingJobDefaults = false;
     }
@@ -399,10 +423,10 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 InventoryItemId = l.InventoryItemId,
                 ServicePricingId = l.ServicePricingId,
                 DifficultyLevelKey = l.DifficultyLevelKey,
-                Quantity = (double)l.Quantity,
-                PartCost = (double)l.PartCost,
-                ShippingCost = (double)l.ShippingCost,
-                OtherCost = (double)l.OtherCost,
+                QuantityText = QuoteLineDraft.FormatMoney((double)l.Quantity),
+                PartCostText = QuoteLineDraft.FormatMoney((double)l.PartCost),
+                ShippingCostText = QuoteLineDraft.FormatMoney((double)l.ShippingCost),
+                OtherCostText = QuoteLineDraft.FormatMoney((double)l.OtherCost),
                 AdditionalAmount = (double)l.AdditionalAmount,
                 DiscountAmount = (double)l.DiscountAmount,
                 LandedCost = (double)l.LandedCost,
@@ -414,10 +438,10 @@ public partial class QuoteBuilderViewModel : ObservableObject
         }
 
         _applyingJobDefaults = true;
-        JobLabourFee = (double)(q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal);
-        JobMarkupPercent = (double)(q.MarkupPercent != 0m
+        JobLabourFeeText = QuoteLineDraft.FormatMoney((double)(q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal));
+        JobMarkupPercentText = QuoteLineDraft.FormatMoney((double)(q.MarkupPercent != 0m
             ? q.MarkupPercent
-            : (_pricing?.Parts.DefaultMarkupPercent ?? 20m));
+            : (_pricing?.Parts.DefaultMarkupPercent ?? 20m)));
         LabourOverridden = false;
         MarkupOverridden = false;
         _applyingJobDefaults = false;
@@ -507,7 +531,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
         line.Sku = item.Sku ?? string.Empty;
         line.PartName = item.Name;
         line.Description = string.IsNullOrWhiteSpace(line.Description) ? item.Name : line.Description;
-        line.PartCost = CanViewCost ? (double)item.Cost : line.PartCost;
+        line.PartCostText = CanViewCost
+            ? QuoteLineDraft.FormatMoney((double)item.Cost)
+            : line.PartCostText;
         line.SupplierName = item.SupplierName;
         line.Type = "PART";
         _ = RecalcAsync();
@@ -579,8 +605,8 @@ public partial class QuoteBuilderViewModel : ObservableObject
             }
 
             _applyingJobDefaults = true;
-            JobLabourFee = (double)preview.LabourFee;
-            JobMarkupPercent = (double)preview.MarkupPercent;
+            JobLabourFeeText = QuoteLineDraft.FormatMoney((double)preview.LabourFee);
+            JobMarkupPercentText = QuoteLineDraft.FormatMoney((double)preview.MarkupPercent);
             _applyingJobDefaults = false;
 
             ApplyPreviewTotals(

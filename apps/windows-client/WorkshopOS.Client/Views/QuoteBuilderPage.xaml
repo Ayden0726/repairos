@@ -98,7 +98,22 @@
           <StackPanel Spacing="10">
             <TextBlock Text="Catalogue services" FontWeight="SemiBold"
                        Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-            <local:ServicePickerControl x:Name="QuoteServicePicker" />
+            <!-- Inline (no UserControl / DataTemplate / NumberBox / x:Bind on picker) -->
+            <TextBox x:Name="QuoteSvcSearchBox" Header="Search services"
+                     PlaceholderText="Type screen, SSD, battery…"
+                     TextChanged="QuoteSvcSearchBox_TextChanged" />
+            <ComboBox x:Name="QuoteSvcCategoryBox" Header="Category" DisplayMemberPath="Name"
+                      HorizontalAlignment="Stretch" SelectionChanged="QuoteSvcCategoryBox_SelectionChanged" />
+            <ComboBox x:Name="QuoteSvcServicesBox" Header="Services" DisplayMemberPath="TitleLine"
+                      HorizontalAlignment="Stretch" />
+            <Button Content="Add selected service" Click="QuoteSvcAdd_Click"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+            <ComboBox x:Name="QuoteSvcSelectedBox" Header="Selected services" DisplayMemberPath="TitleLine"
+                      HorizontalAlignment="Stretch" />
+            <Button Content="Remove selected" Click="QuoteSvcRemove_Click" HorizontalAlignment="Left" />
+            <TextBlock x:Name="QuoteSvcStatusText" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="QuoteSvcErrorText" Foreground="{ThemeResource WorkshopDangerBrush}"
+                       TextWrapping="Wrap" />
             <Button Content="Add selected services as lines" Click="AddCatalogueServices_Click"
                     Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
           </StackPanel>
@@ -123,16 +138,14 @@
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
-              <NumberBox Header="Job labour fee"
-                         Value="{x:Bind ViewModel.JobLabourFee, Mode=TwoWay}"
-                         SpinButtonPlacementMode="Compact"
-                         IsEnabled="{x:Bind ViewModel.CanOverrideLabour, Mode=OneWay}"
-                         LostFocus="LineField_LostFocus" />
-              <NumberBox Grid.Column="1" Header="Job markup %"
-                         Value="{x:Bind ViewModel.JobMarkupPercent, Mode=TwoWay}"
-                         SpinButtonPlacementMode="Compact"
-                         IsEnabled="{x:Bind ViewModel.CanChangeMarkup, Mode=OneWay}"
-                         LostFocus="LineField_LostFocus" />
+              <TextBox Header="Job labour fee"
+                       Text="{x:Bind ViewModel.JobLabourFeeText, Mode=TwoWay}"
+                       IsEnabled="{x:Bind ViewModel.CanOverrideLabour, Mode=OneWay}"
+                       LostFocus="LineField_LostFocus" />
+              <TextBox Grid.Column="1" Header="Job markup %"
+                       Text="{x:Bind ViewModel.JobMarkupPercentText, Mode=TwoWay}"
+                       IsEnabled="{x:Bind ViewModel.CanChangeMarkup, Mode=OneWay}"
+                       LostFocus="LineField_LostFocus" />
             </Grid>
             <ItemsControl ItemsSource="{x:Bind ViewModel.Lines, Mode=OneWay}">
               <ItemsControl.ItemTemplate>
@@ -156,14 +169,14 @@
                           <ColumnDefinition Width="100" />
                         </Grid.ColumnDefinitions>
                         <TextBox Header="SKU / part" Text="{x:Bind Sku, Mode=TwoWay}" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="1" Header="Qty" Value="{x:Bind Quantity, Mode=TwoWay}"
-                                   SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="2" Header="Part cost" Value="{x:Bind PartCost, Mode=TwoWay}"
-                                   SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="3" Header="Shipping" Value="{x:Bind ShippingCost, Mode=TwoWay}"
-                                   SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="4" Header="Other cost" Value="{x:Bind OtherCost, Mode=TwoWay}"
-                                   SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
+                        <TextBox Grid.Column="1" Header="Qty" Text="{x:Bind QuantityText, Mode=TwoWay}"
+                                 LostFocus="LineField_LostFocus" />
+                        <TextBox Grid.Column="2" Header="Part cost" Text="{x:Bind PartCostText, Mode=TwoWay}"
+                                 LostFocus="LineField_LostFocus" />
+                        <TextBox Grid.Column="3" Header="Shipping" Text="{x:Bind ShippingCostText, Mode=TwoWay}"
+                                 LostFocus="LineField_LostFocus" />
+                        <TextBox Grid.Column="4" Header="Other cost" Text="{x:Bind OtherCostText, Mode=TwoWay}"
+                                 LostFocus="LineField_LostFocus" />
                       </Grid>
                       <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
