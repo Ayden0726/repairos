@@ -99,7 +99,11 @@ public sealed class PricingSettingsService : IPricingSettingsService
         await _db.ServicePricings.AsNoTracking()
             .Where(s => s.ArchivedAt == null)
             .OrderBy(s => s.SortOrder).ThenBy(s => s.Name)
-            .Select(s => new ServicePricingDto(s.Id, s.Name, s.Category, s.Description, s.DefaultLabourFee, s.DefaultPartMarkupPercent, s.IsActive, s.SortOrder))
+            .Select(s => new ServicePricingDto(
+                s.Id, s.Name, s.Category, s.Description, s.DefaultLabourFee, s.DefaultPartMarkupPercent,
+                s.IsActive, s.SortOrder, s.Code, s.Subcategory, s.DeviceType, s.ServiceFee, s.EstimatedMinutes,
+                s.MinCharge, s.DiagnosticFee, s.PartsRequired, s.SerialRequired, s.WarrantyDays, s.TechNotes,
+                s.CustomerDescription, s.IsSystem, s.CategoryId, null, null))
             .ToListAsync(ct);
 
     public async Task<ServicePricingDto> UpsertServiceAsync(UpsertServicePricingRequest request, Guid actorId, CancellationToken ct = default)
@@ -125,10 +129,27 @@ public sealed class PricingSettingsService : IPricingSettingsService
             ? null : PricingCalculator.RoundMoney(request.DefaultPartMarkupPercent.Value);
         svc.IsActive = request.IsActive;
         svc.SortOrder = request.SortOrder;
+        if (!string.IsNullOrWhiteSpace(request.Code)) svc.Code = request.Code.Trim().ToUpperInvariant();
+        svc.Subcategory = string.IsNullOrWhiteSpace(request.Subcategory) ? svc.Subcategory : request.Subcategory.Trim();
+        svc.DeviceType = string.IsNullOrWhiteSpace(request.DeviceType) ? svc.DeviceType : request.DeviceType.Trim();
+        svc.ServiceFee = PricingCalculator.RoundMoney(request.ServiceFee);
+        if (request.EstimatedMinutes is not null) svc.EstimatedMinutes = request.EstimatedMinutes;
+        if (request.MinCharge is not null) svc.MinCharge = PricingCalculator.RoundMoney(request.MinCharge.Value);
+        if (request.DiagnosticFee is not null) svc.DiagnosticFee = PricingCalculator.RoundMoney(request.DiagnosticFee.Value);
+        svc.PartsRequired = request.PartsRequired;
+        svc.SerialRequired = request.SerialRequired;
+        if (request.WarrantyDays is not null) svc.WarrantyDays = request.WarrantyDays;
+        if (request.TechNotes is not null) svc.TechNotes = request.TechNotes.Trim();
+        if (request.CustomerDescription is not null) svc.CustomerDescription = request.CustomerDescription.Trim();
+        if (request.CategoryId is not null) svc.CategoryId = request.CategoryId;
+        if (request.CompatibleBrands is not null)
+            svc.CompatibleBrandsJson = System.Text.Json.JsonSerializer.Serialize(request.CompatibleBrands);
+        if (request.CompatibleModels is not null)
+            svc.CompatibleModelsJson = System.Text.Json.JsonSerializer.Serialize(request.CompatibleModels);
         svc.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "pricing.service.upsert", "ServicePricing", svc.Id.ToString(), ct: ct);
-        return new ServicePricingDto(svc.Id, svc.Name, svc.Category, svc.Description, svc.DefaultLabourFee, svc.DefaultPartMarkupPercent, svc.IsActive, svc.SortOrder);
+        return ServiceCatalogueService.MapThin(svc);
     }
 
     public async Task DeleteServiceAsync(Guid id, Guid actorId, CancellationToken ct = default)
@@ -453,24 +474,28 @@ public sealed class QuoteService : IQuoteService
         var business = await DbSeed.GetSettingAsync<BusinessProfileDto?>(_db, SettingKeys.BusinessProfile, null, ct);
         static string Esc(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
         var biz = business?.Name ?? "Workshop";
-        // Never use culture ToString("C") — that yields ¤ when culture has no currency region.
-        var currencyCode = business?.Currency;
-        string Money(decimal amount) => Esc(MoneyDisplay.Format(amount, currencyCode));
+
+        // HARDCODED `$` + 2 decimals for customer print. Do NOT use CultureInfo / ToString("C")
+        // (InvariantCulture yields ¤) and do NOT rely on MoneyDisplay here — print must never fail.
+        // AUD/USD/CAD/NZD all use `$` for this workshop product; map via literal only.
+        static string Money(decimal amount) =>
+            "$" + amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
         var partsSell = q.PartsSellTotal != 0m ? q.PartsSellTotal : q.PartsSubtotal;
+        // Job-level labour only (never sum of per-line LabourAmount — that double-counts legacy quotes).
         var labour = q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal;
 
         var device = string.Join(" ", new[] { q.DeviceBrand, q.DeviceModel }.Where(x => !string.IsNullOrWhiteSpace(x)));
         if (string.IsNullOrWhiteSpace(device)) device = "—";
 
-        // Customer lines: parts only (sell after job markup allocation), never per-line labour.
+        // Customer lines: parts at sell only (job markup already in PartSell/UnitPrice). Never bake labour into a line.
         // Legacy quotes may still store LabourAmount on each line — strip it from the amount shown.
         static decimal CustomerPartAmount(QuoteLine l)
         {
             if (l.PartSell > 0m)
                 return PricingCalculator.RoundMoney(l.PartSell * l.Quantity + l.AdditionalAmount - l.DiscountAmount);
             // UnitPrice is the customer unit when PartSell was not populated; exclude LabourAmount.
-            if (l.UnitPrice > 0m && l.LabourAmount > 0m)
+            if (l.UnitPrice > 0m)
                 return PricingCalculator.RoundMoney(l.UnitPrice * l.Quantity + l.AdditionalAmount - l.DiscountAmount);
             return PricingCalculator.RoundMoney(Math.Max(0m, l.LineTotal - l.LabourAmount));
         }
@@ -480,7 +505,7 @@ public sealed class QuoteService : IQuoteService
         {
             var amount = CustomerPartAmount(l);
             lineHtml.Append("<tr><td>").Append(Esc(l.Description)).Append("</td>")
-                .Append("<td class=\"num\">").Append(Esc(l.Quantity.ToString("0.##"))).Append("</td>")
+                .Append("<td class=\"num\">").Append(Esc(l.Quantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))).Append("</td>")
                 .Append("<td class=\"num\">").Append(Money(amount)).Append("</td></tr>");
         }
         if (labour > 0m)
@@ -492,6 +517,8 @@ public sealed class QuoteService : IQuoteService
         var sb = new System.Text.StringBuilder();
         sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>")
           .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>")
+          // Deploy fingerprint: grep print HTML for workshopos-currency:$ — proves new API binary.
+          .Append("<!-- workshopos-currency:$ -->")
           .Append("<title>").Append(Esc(q.Number)).Append("</title><style>")
           // A4 customer quote — WinUI print opens this HTML in the browser
           .Append("@page{size:A4;margin:12mm}")
@@ -522,7 +549,7 @@ public sealed class QuoteService : IQuoteService
           .Append(".sheet{max-width:190mm}")
           .Append("a{color:inherit;text-decoration:none}")
           .Append("}")
-          .Append("</style></head><body><div class=\"sheet\">")
+          .Append("</style></head><body data-currency=\"$\"><div class=\"sheet\">")
           .Append("<button type=\"button\" onclick=\"window.print()\">Print</button>")
           .Append("<h1>").Append(Esc(biz)).Append("</h1>")
           .Append("<div class=\"meta\">Quote ").Append(Esc(q.Number)).Append(" · ").Append(Esc(q.Status))
@@ -536,6 +563,7 @@ public sealed class QuoteService : IQuoteService
         if (!string.IsNullOrWhiteSpace(q.Issue))
             sb.Append("<div class=\"box\"><div class=\"label\">Issue</div><pre style=\"white-space:pre-wrap;font-family:inherit;margin:0\">")
               .Append(Esc(q.Issue)).Append("</pre></div>");
+        // Job-level layout: Description / Qty / Amount — NOT Price+Total (that baked labour into line totals).
         sb.Append("<table><thead><tr><th>Description</th><th class=\"num\">Qty</th><th class=\"num\">Amount</th></tr></thead><tbody>")
           .Append(lineHtml).Append("</tbody></table>")
           .Append("<div class=\"totals\">")
@@ -547,6 +575,24 @@ public sealed class QuoteService : IQuoteService
           .Append("<div><span>Tax</span><span>").Append(Money(q.GstAmount)).Append("</span></div>")
           .Append("<div class=\"grand\"><span>Total</span><span>").Append(Money(q.Total)).Append("</span></div>")
           .Append("</div>");
+
+        var warrantyHtml = new System.Text.StringBuilder();
+        var svcIds = q.Lines.Where(l => l.ServicePricingId != null).Select(l => l.ServicePricingId!.Value).Distinct().ToList();
+        if (svcIds.Count > 0)
+        {
+            var warranties = await _db.ServicePricings.AsNoTracking()
+                .Where(s => svcIds.Contains(s.Id) && s.WarrantyDays != null && s.WarrantyDays > 0)
+                .Select(s => new { s.Name, s.WarrantyDays })
+                .ToListAsync(ct);
+            foreach (var w in warranties)
+                warrantyHtml.Append("<li>").Append(Esc(w.Name)).Append(": ").Append(w.WarrantyDays).Append(" days</li>");
+        }
+        if (warrantyHtml.Length > 0)
+        {
+            sb.Append("<div class=\"box\"><div class=\"label\">Warranty</div><ul style=\"margin:0;padding-left:18px\">")
+              .Append(warrantyHtml).Append("</ul></div>");
+        }
+
         if (!string.IsNullOrWhiteSpace(q.CustomerNotes))
             sb.Append("<div class=\"box\"><div class=\"label\">Notes</div>").Append(Esc(q.CustomerNotes)).Append("</div>");
         sb.Append("</div><script>window.onload=function(){setTimeout(function(){window.print()},300);}</script>")

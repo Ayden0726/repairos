@@ -34,6 +34,14 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<QuoteAuditEntry> QuoteAuditEntries => Set<QuoteAuditEntry>();
     public DbSet<MarkupTier> MarkupTiers => Set<MarkupTier>();
     public DbSet<ServicePricing> ServicePricings => Set<ServicePricing>();
+    public DbSet<ServiceCategory> ServiceCategories => Set<ServiceCategory>();
+    public DbSet<ServiceBundle> ServiceBundles => Set<ServiceBundle>();
+    public DbSet<ServiceBundleItem> ServiceBundleItems => Set<ServiceBundleItem>();
+    public DbSet<ServiceFavourite> ServiceFavourites => Set<ServiceFavourite>();
+    public DbSet<ServiceRecentSelection> ServiceRecentSelections => Set<ServiceRecentSelection>();
+    public DbSet<DeviceBrand> DeviceBrands => Set<DeviceBrand>();
+    public DbSet<DeviceModel> DeviceModels => Set<DeviceModel>();
+    public DbSet<RepairServiceLine> RepairServiceLines => Set<RepairServiceLine>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -321,8 +329,117 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Description).HasMaxLength(1000);
             e.Property(x => x.DefaultLabourFee).HasPrecision(12, 2);
             e.Property(x => x.DefaultPartMarkupPercent).HasPrecision(12, 2);
+            e.Property(x => x.Code).HasMaxLength(64);
+            e.Property(x => x.Subcategory).HasMaxLength(120);
+            e.Property(x => x.DeviceType).HasMaxLength(64);
+            e.Property(x => x.CompatibleBrandsJson).HasColumnType("jsonb");
+            e.Property(x => x.CompatibleModelsJson).HasColumnType("jsonb");
+            e.Property(x => x.ServiceFee).HasPrecision(12, 2);
+            e.Property(x => x.MinCharge).HasPrecision(12, 2);
+            e.Property(x => x.DiagnosticFee).HasPrecision(12, 2);
+            e.Property(x => x.TechNotes).HasMaxLength(2000);
+            e.Property(x => x.CustomerDescription).HasMaxLength(2000);
             e.HasIndex(x => x.Name);
             e.HasIndex(x => x.SortOrder);
+            e.HasIndex(x => x.Code);
+            e.HasIndex(x => x.DeviceType);
+            e.HasOne(x => x.ServiceCategory).WithMany(c => c.Services).HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ServiceCategory>(e =>
+        {
+            e.ToTable("service_categories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Key).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.DeviceType).HasMaxLength(64);
+            e.Property(x => x.Icon).HasMaxLength(64);
+            e.HasIndex(x => x.Key).IsUnique();
+            e.HasIndex(x => x.SortOrder);
+            e.HasOne(x => x.Parent).WithMany(x => x.Children).HasForeignKey(x => x.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceBundle>(e =>
+        {
+            e.ToTable("service_bundles");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Code).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.BundlePrice).HasPrecision(12, 2);
+            e.HasIndex(x => x.Code).IsUnique();
+            e.HasIndex(x => x.SortOrder);
+        });
+
+        modelBuilder.Entity<ServiceBundleItem>(e =>
+        {
+            e.ToTable("service_bundle_items");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.BundleId, x.ServicePricingId }).IsUnique();
+            e.HasOne(x => x.Bundle).WithMany(b => b.Items).HasForeignKey(x => x.BundleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ServicePricing).WithMany().HasForeignKey(x => x.ServicePricingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceFavourite>(e =>
+        {
+            e.ToTable("service_favourites");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.UserId, x.ServicePricingId }).IsUnique();
+            e.HasOne(x => x.ServicePricing).WithMany().HasForeignKey(x => x.ServicePricingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceRecentSelection>(e =>
+        {
+            e.ToTable("service_recent_selections");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.UserId, x.SelectedAt });
+            e.HasIndex(x => new { x.UserId, x.ServicePricingId });
+            e.HasOne(x => x.ServicePricing).WithMany().HasForeignKey(x => x.ServicePricingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeviceBrand>(e =>
+        {
+            e.ToTable("device_brands");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.DeviceTypes).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => x.Name).IsUnique();
+            e.HasIndex(x => x.SortOrder);
+        });
+
+        modelBuilder.Entity<DeviceModel>(e =>
+        {
+            e.ToTable("device_models");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            e.Property(x => x.DeviceType).HasMaxLength(64);
+            e.HasIndex(x => new { x.BrandId, x.Name }).IsUnique();
+            e.HasIndex(x => x.SortOrder);
+            e.HasOne(x => x.Brand).WithMany(b => b.Models).HasForeignKey(x => x.BrandId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RepairServiceLine>(e =>
+        {
+            e.ToTable("repair_service_lines");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ServiceName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Code).HasMaxLength(64);
+            e.Property(x => x.LabourFee).HasPrecision(12, 2);
+            e.Property(x => x.ServiceFee).HasPrecision(12, 2);
+            e.Property(x => x.Notes).HasMaxLength(1000);
+            e.Property(x => x.PartsJson).HasColumnType("jsonb");
+            e.HasIndex(x => x.RepairTicketId);
+            e.HasOne(x => x.RepairTicket).WithMany(t => t.ServiceLines).HasForeignKey(x => x.RepairTicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ServicePricing).WithMany().HasForeignKey(x => x.ServicePricingId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Invoice>(e =>
@@ -552,6 +669,7 @@ public static class SettingKeys
     public const string ModuleVisibility = "modules.visibility";
     public const string PairingCode = "setup.pairing_code";
     public const string PricingSettings = "pricing.settings";
+    public const string ServiceCatalogueVersion = "seed.service_catalogue_version";
 }
 
 public static class DbSeed

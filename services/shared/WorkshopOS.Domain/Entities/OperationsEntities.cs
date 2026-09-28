@@ -107,6 +107,24 @@ public class ServicePricing : SoftDeleteEntity
     public decimal? DefaultPartMarkupPercent { get; set; }
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+
+    public string? Code { get; set; }
+    public string? Subcategory { get; set; }
+    public string? DeviceType { get; set; }
+    public string? CompatibleBrandsJson { get; set; }
+    public string? CompatibleModelsJson { get; set; }
+    public decimal ServiceFee { get; set; }
+    public int? EstimatedMinutes { get; set; }
+    public decimal? MinCharge { get; set; }
+    public decimal? DiagnosticFee { get; set; }
+    public bool PartsRequired { get; set; }
+    public bool SerialRequired { get; set; }
+    public int? WarrantyDays { get; set; }
+    public string? TechNotes { get; set; }
+    public string? CustomerDescription { get; set; }
+    public bool IsSystem { get; set; }
+    public Guid? CategoryId { get; set; }
+    public ServiceCategory? ServiceCategory { get; set; }
 }
 
 public class QuoteRevision

@@ -64,8 +64,8 @@ public partial class DashboardViewModel : ObservableObject
             Cards.Add(new("Waiting for Parts", d.Cards.WaitingForParts.ToString(), "waiting_parts"));
             Cards.Add(new("Ready for Pickup", d.Cards.ReadyForPickup.ToString(), "ready_pickup"));
             Cards.Add(new("Overdue", d.Cards.Overdue.ToString(), "overdue"));
-            Cards.Add(new("Revenue 30d", d.Cards.Revenue30Days.ToString("C"), null));
-            Cards.Add(new("Gross Profit 30d", d.Cards.GrossProfit30Days.ToString("C"), null));
+            Cards.Add(new("Revenue 30d", MoneyDisplay.Format(d.Cards.Revenue30Days), null));
+            Cards.Add(new("Gross Profit 30d", MoneyDisplay.Format(d.Cards.GrossProfit30Days), null));
             Pipeline.Clear(); foreach (var p in d.Pipeline) Pipeline.Add(p);
             Urgent.Clear(); foreach (var u in d.UrgentJobs) Urgent.Add(u);
             Workload.Clear(); foreach (var w in d.Workload) Workload.Add(w);

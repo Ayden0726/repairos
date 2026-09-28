@@ -41,6 +41,23 @@ OpenAPI: `/swagger` (Development only by default)
 | --- | --- | --- | --- |
 | GET | `/api/search?q=` | Authenticated | Grouped results (empty groups until Phase 2+) |
 
+## Service catalogue
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/api/catalogue/categories` | `pricing.view` | Category tree |
+| GET | `/api/catalogue/services?q=&category=&deviceType=&brand=&model=&activeOnly=` | `pricing.view` | Fuzzy search |
+| POST/DELETE | `/api/catalogue/services[/{id}]` | `pricing.edit_settings` | Upsert / disable |
+| POST | `/api/catalogue/import?force=` | `pricing.edit_settings` | Idempotent JSON seed |
+| GET/POST/DELETE | `/api/catalogue/favourites[/{id}]` | `pricing.view` | Per-user favourites |
+| GET/POST | `/api/catalogue/recent[/{id}]` | `pricing.view` | Recent selections |
+| GET/POST/DELETE | `/api/catalogue/bundles[/{id}]` | view / edit_settings | Bundles + expand |
+| GET | `/api/catalogue/brands` · `/api/catalogue/models` | `pricing.view` | Device filters |
+| POST | `/api/repairs` (+ `servicePricingIds`) | `tickets.create` | Attach service lines |
+| POST | `/api/repairs/{id}/service-lines/{lineId}/complete` | `tickets.status` | Per-service complete |
+
+Seed gated by setting `seed.service_catalogue_version` (embedded `service-catalogue.v1.json`).
+
 ## Conventions
 
 - JSON camelCase

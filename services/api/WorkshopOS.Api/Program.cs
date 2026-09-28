@@ -84,6 +84,17 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
     await DbSeed.EnsureFoundationAsync(db);
 
+    // Seed service catalogue once after migrate (idempotent via seed.service_catalogue_version).
+    try
+    {
+        var catalogue = scope.ServiceProvider.GetRequiredService<WorkshopOS.Application.Abstractions.IServiceCatalogueService>();
+        await catalogue.EnsureSeededAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Service catalogue seed skipped/failed: " + ex.Message);
+    }
+
     // Ensure a stable LAN pairing code exists for /connect and Windows auto-discover.
     var pairing = await DbSeed.GetSettingAsync(db, SettingKeys.PairingCode, "", CancellationToken.None);
     if (string.IsNullOrWhiteSpace(pairing))

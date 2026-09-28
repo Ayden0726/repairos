@@ -1,8 +1,11 @@
+using System.Globalization;
+
 namespace WorkshopOS.Contracts.Common;
 
 /// <summary>
-/// Display money with a currency symbol. Uses business profile currency code when available;
-/// defaults to <c>$</c> (AUD/USD/NZD/CAD and unknown codes).
+/// Display money with an explicit currency symbol. Never uses CultureInfo currency formatting
+/// (InvariantCulture <c>ToString("C")</c> yields the generic <c>¤</c> glyph).
+/// AUD/USD/NZD/CAD and unknown codes → <c>$</c>.
 /// </summary>
 public static class MoneyDisplay
 {
@@ -20,19 +23,26 @@ public static class MoneyDisplay
             "KRW" => "₩",
             "CHF" => "CHF ",
             // AUD, USD, NZD, CAD, SGD, HKD, MXN, etc. — dollar sign
+            "AUD" or "USD" or "NZD" or "CAD" or "SGD" or "HKD" or "MXN" => "$",
             _ => "$"
         };
     }
 
     public static string Format(decimal amount, string? currencyCode = null) =>
-        $"{SymbolFromCurrencyCode(currencyCode)}{amount:0.00}";
+        SymbolFromCurrencyCode(currencyCode) + amount.ToString("0.00", CultureInfo.InvariantCulture);
 
     public static string Format(double amount, string? currencyCode = null) =>
-        $"{SymbolFromCurrencyCode(currencyCode)}{amount:0.00}";
+        SymbolFromCurrencyCode(currencyCode) + amount.ToString("0.00", CultureInfo.InvariantCulture);
 
-    public static string FormatWithSymbol(decimal amount, string? symbol) =>
-        $"{(string.IsNullOrEmpty(symbol) ? "$" : symbol)}{amount:0.00}";
+    public static string FormatWithSymbol(decimal amount, string? symbol)
+    {
+        var s = string.IsNullOrWhiteSpace(symbol) || symbol == "¤" ? "$" : symbol;
+        return s + amount.ToString("0.00", CultureInfo.InvariantCulture);
+    }
 
-    public static string FormatWithSymbol(double amount, string? symbol) =>
-        $"{(string.IsNullOrEmpty(symbol) ? "$" : symbol)}{amount:0.00}";
+    public static string FormatWithSymbol(double amount, string? symbol)
+    {
+        var s = string.IsNullOrWhiteSpace(symbol) || symbol == "¤" ? "$" : symbol;
+        return s + amount.ToString("0.00", CultureInfo.InvariantCulture);
+    }
 }

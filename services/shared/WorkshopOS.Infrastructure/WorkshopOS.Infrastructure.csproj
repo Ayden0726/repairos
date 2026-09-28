@@ -28,4 +28,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Data\service-catalogue.v1.json" LogicalName="WorkshopOS.Infrastructure.Data.service-catalogue.v1.json" />
+  </ItemGroup>
 </Project>

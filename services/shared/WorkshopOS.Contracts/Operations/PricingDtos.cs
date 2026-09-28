@@ -50,10 +50,41 @@ public sealed record UpsertMarkupTierRequest(Guid? Id, decimal MinCost, decimal?
 
 public sealed record ServicePricingDto(
     Guid Id, string Name, string? Category, string? Description,
-    decimal DefaultLabourFee, decimal? DefaultPartMarkupPercent, bool IsActive, int SortOrder);
+    decimal DefaultLabourFee, decimal? DefaultPartMarkupPercent, bool IsActive, int SortOrder,
+    string? Code = null,
+    string? Subcategory = null,
+    string? DeviceType = null,
+    decimal ServiceFee = 0m,
+    int? EstimatedMinutes = null,
+    decimal? MinCharge = null,
+    decimal? DiagnosticFee = null,
+    bool PartsRequired = false,
+    bool SerialRequired = false,
+    int? WarrantyDays = null,
+    string? TechNotes = null,
+    string? CustomerDescription = null,
+    bool IsSystem = false,
+    Guid? CategoryId = null,
+    IReadOnlyList<string>? CompatibleBrands = null,
+    IReadOnlyList<string>? CompatibleModels = null);
 public sealed record UpsertServicePricingRequest(
     Guid? Id, string Name, string? Category, string? Description,
-    decimal DefaultLabourFee, decimal? DefaultPartMarkupPercent, bool IsActive, int SortOrder);
+    decimal DefaultLabourFee, decimal? DefaultPartMarkupPercent, bool IsActive, int SortOrder,
+    string? Code = null,
+    string? Subcategory = null,
+    string? DeviceType = null,
+    decimal ServiceFee = 0m,
+    int? EstimatedMinutes = null,
+    decimal? MinCharge = null,
+    decimal? DiagnosticFee = null,
+    bool PartsRequired = false,
+    bool SerialRequired = false,
+    int? WarrantyDays = null,
+    string? TechNotes = null,
+    string? CustomerDescription = null,
+    Guid? CategoryId = null,
+    IReadOnlyList<string>? CompatibleBrands = null,
+    IReadOnlyList<string>? CompatibleModels = null);
 
 /// <summary>
 /// Line input for quote pricing. Lines carry part costs only; job labour + markup

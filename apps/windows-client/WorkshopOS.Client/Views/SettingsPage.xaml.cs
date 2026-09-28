@@ -300,22 +300,116 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private Guid? _editingServiceId;
+    private List<CatalogueServiceDto> _catalogueServicesCache = new();
+
     private async Task LoadServicesAsync()
     {
         ServicesErrorText.Text = string.Empty;
-        ServicesStatusText.Text = "Loading services…";
+        ServicesStatusText.Text = "Loading catalogue…";
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();
-            var list = await api.GetAsync<ServicePricingDto[]>("api/pricing/services");
-            ServicesList.ItemsSource = list.Select(s => $"{s.Name} · labour {s.DefaultLabourFee:0.##} · markup {s.DefaultPartMarkupPercent?.ToString("0.##") ?? "—"}%").ToList();
-            ServicesStatusText.Text = list.Length == 0 ? "No services yet." : $"{list.Length} service(s) loaded from server.";
+            var cats = await api.GetAsync<CatalogueCategoryDto[]>("api/catalogue/categories");
+            CatalogueCategoriesList.ItemsSource = cats
+                .Select(c => $"{c.SortOrder}. {c.Name} ({c.Key}) · {c.ServiceCount} services · {c.DeviceType}")
+                .ToList();
+            _catalogueServicesCache = (await api.GetAsync<CatalogueServiceDto[]>("api/catalogue/services?activeOnly=false")).ToList();
+            ApplyCatalogueFilter();
+            var bundles = await api.GetAsync<CatalogueBundleDto[]>("api/catalogue/bundles?expand=true");
+            CatalogueBundlesList.ItemsSource = bundles
+                .Select(b => $"{b.Name} ({b.Code}) · ${b.BundlePrice?.ToString("0.##") ?? "—"} · {b.ServicePricingIds.Count} services")
+                .ToList();
+            ServicesStatusText.Text = $"{cats.Length} categories · {_catalogueServicesCache.Count} services · {bundles.Length} bundles";
         }
         catch (Exception ex)
         {
             ServicesStatusText.Text = string.Empty;
             ServicesErrorText.Text = FormatPricingError(ex.Message);
         }
+    }
+
+    private void ApplyCatalogueFilter()
+    {
+        var q = (CatalogueSearchBox.Text ?? string.Empty).Trim();
+        IEnumerable<CatalogueServiceDto> rows = _catalogueServicesCache;
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            rows = rows.Where(s =>
+                (s.Name?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (s.Code?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (s.Subcategory?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+        CatalogueServicesList.ItemsSource = rows
+            .OrderBy(s => s.SortOrder).ThenBy(s => s.Name)
+            .Select(s => new CatalogueServiceListItem(s,
+                $"{(s.IsActive ? "" : "[off] ")}{s.Code} · {s.Name} · ${s.DefaultLabourFee:0.##} · {s.EstimatedMinutes}m · warranty {s.WarrantyDays ?? 0}d"))
+            .ToList();
+    }
+
+    private void CatalogueSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyCatalogueFilter();
+
+    private async void ServicesRefresh_Click(object sender, RoutedEventArgs e) => await LoadServicesAsync();
+
+    private async void ServicesImport_Click(object sender, RoutedEventArgs e)
+    {
+        ServicesErrorText.Text = string.Empty;
+        ServicesStatusText.Text = "Importing seed catalogue…";
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var result = await api.PostAsync<CatalogueImportResultDto>("api/catalogue/import?force=true");
+            ServicesStatusText.Text = result.AlreadyCurrent
+                ? $"Catalogue already at {result.Version}."
+                : $"Imported {result.Version}: {result.ServicesUpserted} services, {result.CategoriesUpserted} categories.";
+            await LoadServicesAsync();
+        }
+        catch (Exception ex)
+        {
+            ServicesStatusText.Text = string.Empty;
+            ServicesErrorText.Text = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private void CatalogueServicesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CatalogueServicesList.SelectedItem is not CatalogueServiceListItem item) return;
+        var s = item.Service;
+        _editingServiceId = s.Id;
+        ServiceNameBox.Text = s.Name;
+        ServiceCodeBox.Text = s.Code ?? string.Empty;
+        ServiceCategoryBox.Text = s.Category ?? s.CategoryName ?? string.Empty;
+        ServiceSubcategoryBox.Text = s.Subcategory ?? string.Empty;
+        ServiceLabourBox.Value = (double)s.DefaultLabourFee;
+        ServiceFeeBox.Value = (double)s.ServiceFee;
+        ServiceMinutesBox.Value = s.EstimatedMinutes ?? double.NaN;
+        ServiceWarrantyBox.Value = s.WarrantyDays ?? double.NaN;
+        ServiceCustomerDescBox.Text = s.CustomerDescription ?? string.Empty;
+        ServiceTechNotesBox.Text = s.TechNotes ?? string.Empty;
+        ServiceMarkupBox.Value = s.DefaultPartMarkupPercent is decimal m ? (double)m : double.NaN;
+        ServiceActiveCheck.IsChecked = s.IsActive;
+        ServicePartsRequiredCheck.IsChecked = s.PartsRequired;
+        ServiceSerialRequiredCheck.IsChecked = s.SerialRequired;
+    }
+
+    private void ClearServiceForm_Click(object sender, RoutedEventArgs e)
+    {
+        _editingServiceId = null;
+        CatalogueServicesList.SelectedItem = null;
+        ServiceNameBox.Text = string.Empty;
+        ServiceCodeBox.Text = string.Empty;
+        ServiceCategoryBox.Text = string.Empty;
+        ServiceSubcategoryBox.Text = string.Empty;
+        ServiceLabourBox.Value = 50;
+        ServiceFeeBox.Value = 0;
+        ServiceMinutesBox.Value = 40;
+        ServiceWarrantyBox.Value = 90;
+        ServiceCustomerDescBox.Text = string.Empty;
+        ServiceTechNotesBox.Text = string.Empty;
+        ServiceMarkupBox.Value = double.NaN;
+        ServiceActiveCheck.IsChecked = true;
+        ServicePartsRequiredCheck.IsChecked = false;
+        ServiceSerialRequiredCheck.IsChecked = false;
     }
 
     private async void SaveService_Click(object sender, RoutedEventArgs e)
@@ -330,22 +424,53 @@ public sealed partial class SettingsPage : Page
                 throw new InvalidOperationException("Service name is required.");
             var markupVal = ServiceMarkupBox.Value;
             decimal? markup = !double.IsNaN(markupVal) && markupVal > 0 ? (decimal)markupVal : null;
-            var saved = await api.PostAsync<UpsertServicePricingRequest, ServicePricingDto>("api/pricing/services",
-                new UpsertServicePricingRequest(null, name, ServiceCategoryBox.Text,
-                    null, ReadMoney(ServiceLabourBox, 0m), markup, true, 0));
-            ServiceNameBox.Text = string.Empty;
-            ServiceCategoryBox.Text = string.Empty;
-            ServiceLabourBox.Value = double.NaN;
-            ServiceMarkupBox.Value = double.NaN;
+            int? minutes = !double.IsNaN(ServiceMinutesBox.Value) ? (int)ServiceMinutesBox.Value : null;
+            int? warranty = !double.IsNaN(ServiceWarrantyBox.Value) ? (int)ServiceWarrantyBox.Value : null;
+            var saved = await api.PostAsync<UpsertCatalogueServiceRequest, CatalogueServiceDto>(
+                "api/catalogue/services",
+                new UpsertCatalogueServiceRequest(
+                    _editingServiceId, name, ServiceCategoryBox.Text, ServiceCustomerDescBox.Text,
+                    ReadMoney(ServiceLabourBox, 0m), markup, ServiceActiveCheck.IsChecked != false, 0,
+                    string.IsNullOrWhiteSpace(ServiceCodeBox.Text) ? null : ServiceCodeBox.Text.Trim(),
+                    ServiceSubcategoryBox.Text, null, null, null,
+                    ReadMoney(ServiceFeeBox, 0m), minutes, null, null,
+                    ServicePartsRequiredCheck.IsChecked == true,
+                    ServiceSerialRequiredCheck.IsChecked == true,
+                    warranty, ServiceTechNotesBox.Text, ServiceCustomerDescBox.Text));
+            ServicesStatusText.Text = $"Saved “{saved.Name}” ({saved.Code}).";
             await LoadServicesAsync();
-            ServicesStatusText.Text = $"Saved “{saved.Name}” (labour {saved.DefaultLabourFee:0.##}) and reloaded list.";
-            ServicesErrorText.Text = string.Empty;
         }
         catch (Exception ex)
         {
             ServicesStatusText.Text = string.Empty;
             ServicesErrorText.Text = $"Save failed: {ex.Message}";
         }
+    }
+
+    private async void DeleteService_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editingServiceId is not Guid id)
+        {
+            ServicesErrorText.Text = "Select a service first.";
+            return;
+        }
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            await api.DeleteAsync($"api/catalogue/services/{id}");
+            ClearServiceForm_Click(sender, e);
+            await LoadServicesAsync();
+            ServicesStatusText.Text = "Service disabled/deleted.";
+        }
+        catch (Exception ex)
+        {
+            ServicesErrorText.Text = $"Delete failed: {ex.Message}";
+        }
+    }
+
+    private sealed record CatalogueServiceListItem(CatalogueServiceDto Service, string Label)
+    {
+        public override string ToString() => Label;
     }
 
     private async Task LoadTaxAsync()

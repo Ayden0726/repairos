@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.19 — 2026-09-28
+
+### Added
+- **Service Catalogue**: seeded Phone / Tablet / Laptop & Mac / PC Repair / PC Upgrades / Custom PCs with codes (e.g. `PHONE-SCREEN-REPLACE`, `PC-SSD-UPGRADE`)
+- Tables: `service_categories`, `service_bundles`, `service_favourites`, `service_recent_selections`, `device_brands`, `device_models`, `repair_service_lines`; extended `service_pricing`
+- API `/api/catalogue/*` — categories, fuzzy service search, CRUD, favourites/recent, bundles, brands/models, idempotent import (`seed.service_catalogue_version`)
+- WinUI **ServicePicker** on New Ticket + Quote Builder; Settings → Services full admin
+- Multi-service repair lines + per-line complete; warranty days on ticket/quote print
+- Permission `pricing.manage_catalogue` (writes also accept `pricing.edit_settings`)
+
+### Server / Client
+- API / product version `1.2.19` (ClientMinVersion `1.2.19`)
+
+## 1.2.18 — 2026-09-28
+
+### Fixed
+- **Customer quote print** hardcodes literal `$` + 2 decimals in the HTML template itself (never `ToString("C")` / CultureInfo — that produced `¤` under invariant culture on the server). Deploy fingerprint: `<!-- workshopos-currency:$ -->`
+- Print layout is job-level only: Description / Qty / **Amount** (parts at sell, labour stripped from lines) + one **Labour / service** row — never Price/Total with labour baked into line totals
+- Dashboard revenue cards no longer use culture `ToString("C")`
+
+### Server
+- API / product version `1.2.18` on health (ClientMinVersion remains `1.2.16`)
+
 ## 1.2.16 — 2026-09-28
 
 ### Fixed

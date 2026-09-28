@@ -81,6 +81,7 @@ public interface IRepairService
     Task<RepairDetailDto> AssignAsync(Guid id, Guid? assignedToId, Guid actorId, CancellationToken ct = default);
     Task<RepairNoteDto> AddNoteAsync(Guid id, AddNoteRequest request, Guid actorId, bool canInternal, CancellationToken ct = default);
     Task<RepairDetailDto> UpdateDiagnosisAsync(Guid id, UpdateDiagnosisRequest request, Guid actorId, CancellationToken ct = default);
+    Task<RepairDetailDto> CompleteServiceLineAsync(Guid repairId, Guid lineId, bool isCompleted, Guid actorId, CancellationToken ct = default);
     Task<RepairLookupsDto> GetLookupsAsync(CancellationToken ct = default);
     Task<string> BuildPrintHtmlAsync(Guid id, CancellationToken ct = default);
 }
@@ -113,6 +114,30 @@ public interface IPricingSettingsService
     Task<ServicePricingDto> UpsertServiceAsync(UpsertServicePricingRequest request, Guid actorId, CancellationToken ct = default);
     Task DeleteServiceAsync(Guid id, Guid actorId, CancellationToken ct = default);
     Task<PricingPreviewResponse> PreviewAsync(PricingPreviewRequest request, CancellationToken ct = default);
+}
+
+public interface IServiceCatalogueService
+{
+    Task EnsureSeededAsync(CancellationToken ct = default);
+    Task<CatalogueImportResultDto> ImportAsync(bool force, Guid? actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<CatalogueCategoryDto>> ListCategoriesAsync(CancellationToken ct = default);
+    Task<CatalogueCategoryDto> UpsertCategoryAsync(UpsertCatalogueCategoryRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteCategoryAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task ReorderCategoriesAsync(ReorderCatalogueRequest request, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<CatalogueServiceDto>> SearchServicesAsync(string? q, string? category, string? deviceType, string? brand, string? model, bool activeOnly = true, CancellationToken ct = default);
+    Task<CatalogueServiceDto> UpsertServiceAsync(UpsertCatalogueServiceRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteServiceAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<CatalogueServiceDto>> ListFavouritesAsync(Guid userId, CancellationToken ct = default);
+    Task FavouriteAsync(Guid userId, Guid serviceId, CancellationToken ct = default);
+    Task UnfavouriteAsync(Guid userId, Guid serviceId, CancellationToken ct = default);
+    Task<IReadOnlyList<CatalogueServiceDto>> ListRecentAsync(Guid userId, int take = 12, CancellationToken ct = default);
+    Task RecordRecentAsync(Guid userId, Guid serviceId, CancellationToken ct = default);
+    Task RecordRecentManyAsync(Guid userId, IEnumerable<Guid> serviceIds, CancellationToken ct = default);
+    Task<IReadOnlyList<CatalogueBundleDto>> ListBundlesAsync(bool expand = false, CancellationToken ct = default);
+    Task<CatalogueBundleDto> UpsertBundleAsync(UpsertCatalogueBundleRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteBundleAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<DeviceBrandDto>> ListBrandsAsync(string? deviceType = null, CancellationToken ct = default);
+    Task<IReadOnlyList<DeviceModelDto>> ListModelsAsync(Guid? brandId = null, string? deviceType = null, string? brandName = null, CancellationToken ct = default);
 }
 
 public interface IInvoiceService

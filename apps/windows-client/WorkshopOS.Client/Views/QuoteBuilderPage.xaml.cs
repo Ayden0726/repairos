@@ -101,4 +101,16 @@ public sealed partial class QuoteBuilderPage : Page
                 ViewModel.ApplyService(line, svc);
         }
     }
+
+    private async void AddCatalogueServices_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(QuoteServicePicker.SelectedBrandName))
+            ViewModel.DeviceBrand = QuoteServicePicker.SelectedBrandName!;
+        if (!string.IsNullOrWhiteSpace(QuoteServicePicker.SelectedModelName))
+            ViewModel.DeviceModel = QuoteServicePicker.SelectedModelName!;
+        var selected = QuoteServicePicker.SelectedServices.ToList();
+        if (selected.Count == 0) return;
+        ViewModel.AddCatalogueServices(selected);
+        await ViewModel.RecalcCommand.ExecuteAsync(null);
+    }
 }

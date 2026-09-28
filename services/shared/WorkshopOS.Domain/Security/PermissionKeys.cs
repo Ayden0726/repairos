@@ -36,6 +36,7 @@ public static class PermissionKeys
         ("pricing.override_price", "Finance", "Override recommended price"),
         ("pricing.approve_low_margin", "Finance", "Approve below-minimum margin quotes"),
         ("pricing.edit_settings", "Finance", "Edit pricing settings"),
+        ("pricing.manage_catalogue", "Finance", "Manage service catalogue"),
         ("reports.view", "Reports", "View reports"),
         ("reports.financial", "Reports", "View financial reports"),
         ("builds.view", "PC Builds", "View PC builds"),

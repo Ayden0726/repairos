@@ -133,6 +133,8 @@ public sealed class WorkshopApiFactory : WebApplicationFactory<Program>, IAsyncL
         await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
         await DbSeed.EnsureFoundationAsync(db);
+        var catalogue = scope.ServiceProvider.GetRequiredService<WorkshopOS.Application.Abstractions.IServiceCatalogueService>();
+        await catalogue.EnsureSeededAsync();
     }
 
     private static async Task EnsureDatabaseExistsAsync()

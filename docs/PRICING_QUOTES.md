@@ -17,7 +17,8 @@ Lines store part cost/qty/description only (no per-line labour or markup %). Sum
 | --- | --- | --- |
 | Labour / parts markup / profitability / rounding / discounts / quote defaults | Settings → Pricing | `business_settings` key `pricing.settings` |
 | Markup tiers (Option B) | Settings → Pricing | table `markup_tiers` |
-| Service catalogue | Settings → Services | table `service_pricing` |
+| Service catalogue | Settings → Services + ServicePicker | `service_pricing` + `service_categories` / bundles / favourites |
+| Device brands/models | Catalogue picker filters | `device_brands` / `device_models` |
 | Tax (enabled, rate, inclusive) | Settings → Tax | business profile GST fields |
 
 Seed defaults (not permanent hardcodes): labour fee **$50**, flat markup **20%**, rounding **End9**, validity **14 days**. These seed the job labour NumberBox and job markup % on new quotes.
@@ -30,7 +31,7 @@ Accepted quotes are **frozen** (financial snapshot preserved). Settings changes 
 
 ## Customer print
 
-`GET /api/quotes/{id}/print` — A4 HTML (`@page { size: A4; margin: 12mm }`, ~190mm sheet) opened by WinUI Print. Money uses the business currency symbol (AUD → `$`; never culture `¤`). Lists part descriptions with customer sell amounts (job markup allocated; **no** per-line labour), one **Labour / service** line, then Parts / Labour / Tax / Total. **No** cost, markup %, or profit fields.
+`GET /api/quotes/{id}/print` — A4 HTML (`@page { size: A4; margin: 12mm }`, ~190mm sheet) opened by WinUI Print. Money is **hardcoded** as literal `$` + 2 decimals in the template (`<!-- workshopos-currency:$ -->`); never culture `¤`. Lists part descriptions with customer sell amounts (job markup allocated; **no** per-line labour), one **Labour / service** line, then Parts / Labour / Tax / Total. **No** cost, markup %, or profit fields.
 
 ## Permissions
 

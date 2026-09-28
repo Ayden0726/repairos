@@ -128,5 +128,10 @@ public sealed class RepairsController : ControllerBase
     public Task<RepairDetailDto> Diagnosis(Guid id, [FromBody] UpdateDiagnosisRequest request, CancellationToken ct) =>
         _repairs.UpdateDiagnosisAsync(id, request, UserId(), ct);
 
+    [HttpPost("{id:guid}/service-lines/{lineId:guid}/complete")]
+    [Authorize(Policy = "perm:tickets.status")]
+    public Task<RepairDetailDto> CompleteServiceLine(Guid id, Guid lineId, [FromBody] CompleteRepairServiceLineRequest? request, CancellationToken ct) =>
+        _repairs.CompleteServiceLineAsync(id, lineId, request?.IsCompleted ?? true, UserId(), ct);
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

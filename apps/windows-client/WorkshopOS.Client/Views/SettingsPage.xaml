@@ -25,7 +25,7 @@
               <ComboBoxItem Content="System" Tag="System" />
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
-            <TextBlock Text="Client 1.2.16" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.19" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
 
             <TextBlock Text="Your password" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
             <TextBlock Text="Change the password for the account you are signed in as. Requires your current password."
@@ -88,16 +88,54 @@
       </PivotItem>
       <PivotItem Header="Services" Tag="services">
         <ScrollViewer Padding="0,16,0,0">
-          <StackPanel Spacing="12" MaxWidth="640">
-            <TextBlock Text="Service pricing catalogue" FontWeight="SemiBold" FontSize="16" />
-            <TextBlock x:Name="ServicesStatusText" Opacity="0.7" />
+          <StackPanel Spacing="12" MaxWidth="720">
+            <TextBlock Text="Service catalogue admin" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="Categories, labour, time, warranty, bundles. Prices are editable seeds — not hard-coded."
+                       Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="ServicesStatusText" Opacity="0.7" TextWrapping="Wrap" />
             <TextBlock x:Name="ServicesErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
-            <ListView x:Name="ServicesList" MinHeight="120" />
-            <TextBox x:Name="ServiceNameBox" Header="Name" />
-            <TextBox x:Name="ServiceCategoryBox" Header="Category" />
-            <NumberBox x:Name="ServiceLabourBox" Header="Default labour fee" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Refresh" Click="ServicesRefresh_Click" />
+              <Button Content="Re-import seed catalogue" Click="ServicesImport_Click" />
+            </StackPanel>
+            <TextBlock Text="Categories" FontWeight="SemiBold" />
+            <ListView x:Name="CatalogueCategoriesList" MinHeight="80" MaxHeight="160" />
+            <TextBlock Text="Services" FontWeight="SemiBold" />
+            <TextBox x:Name="CatalogueSearchBox" Header="Filter" PlaceholderText="Search name or code"
+                     TextChanged="CatalogueSearch_TextChanged" />
+            <ListView x:Name="CatalogueServicesList" MinHeight="160" MaxHeight="280"
+                      SelectionChanged="CatalogueServicesList_SelectionChanged" />
+            <TextBlock Text="Edit / add service" FontWeight="SemiBold" />
+            <Grid ColumnSpacing="8" RowSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <TextBox x:Name="ServiceNameBox" Header="Name" />
+              <TextBox x:Name="ServiceCodeBox" Grid.Column="1" Header="Code / SKU" />
+              <TextBox x:Name="ServiceCategoryBox" Grid.Row="1" Header="Category" />
+              <TextBox x:Name="ServiceSubcategoryBox" Grid.Row="1" Grid.Column="1" Header="Subcategory" />
+              <NumberBox x:Name="ServiceLabourBox" Grid.Row="2" Header="Default labour fee" />
+              <NumberBox x:Name="ServiceFeeBox" Grid.Row="2" Grid.Column="1" Header="Service fee" />
+              <NumberBox x:Name="ServiceMinutesBox" Grid.Row="3" Header="Estimated minutes" />
+              <NumberBox x:Name="ServiceWarrantyBox" Grid.Row="3" Grid.Column="1" Header="Warranty days" />
+            </Grid>
+            <TextBox x:Name="ServiceCustomerDescBox" Header="Customer description" />
+            <TextBox x:Name="ServiceTechNotesBox" Header="Technician notes" />
             <NumberBox x:Name="ServiceMarkupBox" Header="Default part markup %" />
-            <Button Content="Add / update service" Click="SaveService_Click" Style="{StaticResource AccentButtonStyle}" />
+            <CheckBox x:Name="ServiceActiveCheck" Content="Active" IsChecked="True" />
+            <CheckBox x:Name="ServicePartsRequiredCheck" Content="Parts required" />
+            <CheckBox x:Name="ServiceSerialRequiredCheck" Content="Serial / IMEI required" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Save service" Click="SaveService_Click" Style="{StaticResource AccentButtonStyle}" />
+              <Button Content="Disable / delete" Click="DeleteService_Click" />
+              <Button Content="New (clear form)" Click="ClearServiceForm_Click" />
+            </StackPanel>
+            <TextBlock Text="Bundles" FontWeight="SemiBold" Margin="0,12,0,0" />
+            <ListView x:Name="CatalogueBundlesList" MinHeight="80" MaxHeight="160" />
           </StackPanel>
         </ScrollViewer>
       </PivotItem>

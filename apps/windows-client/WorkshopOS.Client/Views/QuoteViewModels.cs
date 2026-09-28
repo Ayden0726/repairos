@@ -525,6 +525,37 @@ public partial class QuoteBuilderViewModel : ObservableObject
         _ = RecalcAsync();
     }
 
+    public void AddCatalogueServices(IReadOnlyList<CatalogueServiceDto> services)
+    {
+        if (services.Count == 0) return;
+        // Drop a single blank placeholder line so multi-select replaces it
+        if (Lines.Count == 1 && string.IsNullOrWhiteSpace(Lines[0].Description) && Lines[0].PartCost <= 0
+            && Lines[0].ServicePricingId is null)
+            Lines.Clear();
+
+        decimal labour = 0m;
+        CatalogueServiceDto? first = null;
+        foreach (var svc in services)
+        {
+            first ??= svc;
+            labour += svc.DefaultLabourFee + svc.ServiceFee;
+            var line = new QuoteLineDraft
+            {
+                Type = "SERVICE",
+                Description = svc.Name,
+                ServiceName = svc.Name,
+                ServicePricingId = svc.Id
+            };
+            Lines.Add(line);
+        }
+        if (first is not null && !LabourOverridden)
+            SetJobLabourFromSettings((double)labour);
+        if (first?.DefaultPartMarkupPercent is decimal m && !MarkupOverridden)
+            SetJobMarkupFromSettings((double)m);
+        if (string.IsNullOrWhiteSpace(Issue))
+            Issue = string.Join(", ", services.Select(s => s.Name));
+    }
+
     [RelayCommand]
     private async Task RecalcAsync()
     {

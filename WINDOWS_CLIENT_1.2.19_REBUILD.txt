@@ -1,0 +1,26 @@
+WorkshopOS Windows client 1.2.19 - rebuild on Windows
+
+Banner must show: Client 1.2.19
+
+1.2.19 adds:
+  - Full Service Catalogue (Phone/Tablet/Laptop/PC/Upgrades/Custom PCs)
+  - ServicePicker on New Ticket + Quote Builder (category → brand → model → multi-select)
+  - Settings → Services admin (categories, fields, bundles, re-import)
+  - Favourites / recent, brands & models, repair_service_lines + warranty on print
+  - API /api/catalogue/* + seed.service_catalogue_version import
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.19
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.19 -SkipInstaller
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.19.zip
+  packaging\dist\WorkshopOS-Setup-1.2.19.exe  (if Inno Setup 6 installed)
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update
+
+Optional agent overlay if GitHub lags:
+  http://127.0.0.1:28765/repairos-github-sync.zip

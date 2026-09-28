@@ -236,6 +236,9 @@ public partial class NewRepairViewModel : ObservableObject
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isSaving;
     public Action<Guid>? Created { get; set; }
+    public List<Guid> SelectedServiceIds { get; set; } = new();
+    public string? ServiceNotes { get; set; }
+    public string? ServicePartsNotes { get; set; }
 
     public bool ShowNewCustomerFields => !UseExistingCustomer;
     public bool HasCustomers => Customers.Count > 0;
@@ -401,7 +404,10 @@ public partial class NewRepairViewModel : ObservableObject
                 string.IsNullOrWhiteSpace(Brand) ? "Unknown" : Brand.Trim(),
                 string.IsNullOrWhiteSpace(Model) ? "Device" : Model.Trim(),
                 string.IsNullOrWhiteSpace(Serial) ? null : Serial.Trim(),
-                null));
+                null,
+                SelectedServiceIds.Count == 0 ? null : SelectedServiceIds,
+                SelectedServiceIds.Count == 0 ? null : SelectedServiceIds.Select(id =>
+                    new RepairServiceSelectionDto(id, ServiceNotes, string.IsNullOrWhiteSpace(ServicePartsNotes) ? null : ServicePartsNotes)).ToList()));
             Created?.Invoke(repair.Id);
         }
         catch (Exception ex) { Error = ex.Message; }

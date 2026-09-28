@@ -96,6 +96,18 @@
                 Background="{ThemeResource WorkshopSurfaceBrush}"
                 BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
           <StackPanel Spacing="10">
+            <TextBlock Text="Catalogue services" FontWeight="SemiBold"
+                       Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+            <local:ServicePickerControl x:Name="QuoteServicePicker" />
+            <Button Content="Add selected services as lines" Click="AddCatalogueServices_Click"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8"
+                Background="{ThemeResource WorkshopSurfaceBrush}"
+                BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+          <StackPanel Spacing="10">
             <Grid>
               <TextBlock Text="Parts (costs)" FontWeight="SemiBold" VerticalAlignment="Center"
                          Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />

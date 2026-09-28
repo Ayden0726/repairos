@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
@@ -38,5 +39,21 @@ public sealed partial class NewRepairPage : Page
             ViewModel.SearchCustomersCommand.Execute(null);
             e.Handled = true;
         }
+    }
+
+    private async void CreateTicket_Click(object sender, RoutedEventArgs e)
+    {
+        // Sync device fields from picker when set
+        if (!string.IsNullOrWhiteSpace(ServicePicker.SelectedBrandName))
+            ViewModel.Brand = ServicePicker.SelectedBrandName!;
+        if (!string.IsNullOrWhiteSpace(ServicePicker.SelectedModelName))
+            ViewModel.Model = ServicePicker.SelectedModelName!;
+        if (ServicePicker.SelectedServices.Count > 0 && string.IsNullOrWhiteSpace(ViewModel.Issue))
+            ViewModel.Issue = string.Join(", ", ServicePicker.SelectedServices.Select(s => s.Name));
+        ViewModel.SelectedServiceIds = ServicePicker.SelectedServiceIds.ToList();
+        ViewModel.ServiceNotes = ServicePicker.Notes;
+        ViewModel.ServicePartsNotes = ServicePicker.PartsNotes;
+        if (ViewModel.CreateCommand.CanExecute(null))
+            await ViewModel.CreateCommand.ExecuteAsync(null);
     }
 }

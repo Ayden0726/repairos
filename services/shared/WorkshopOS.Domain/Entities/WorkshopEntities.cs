@@ -124,6 +124,7 @@ public class RepairTicket : SoftDeleteEntity
     public DateTimeOffset? CollectedAt { get; set; }
     public ICollection<RepairEvent> Events { get; set; } = new List<RepairEvent>();
     public ICollection<RepairNote> Notes { get; set; } = new List<RepairNote>();
+    public ICollection<RepairServiceLine> ServiceLines { get; set; } = new List<RepairServiceLine>();
 }
 
 public class RepairEvent

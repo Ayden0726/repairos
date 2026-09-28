@@ -126,10 +126,32 @@ public sealed record RepairDetailDto(
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
     IReadOnlyList<RepairEventDto> Timeline,
-    IReadOnlyList<RepairNoteDto> Notes);
+    IReadOnlyList<RepairNoteDto> Notes,
+    IReadOnlyList<RepairServiceLineDto>? ServiceLines = null);
 
 public sealed record RepairEventDto(Guid Id, string EventType, string Summary, string? OldValue, string? NewValue, DateTimeOffset CreatedAt, Guid? ActorUserId);
 public sealed record RepairNoteDto(Guid Id, string Body, bool IsInternal, string AuthorName, DateTimeOffset CreatedAt);
+
+public sealed record RepairServiceLineDto(
+    Guid Id,
+    Guid? ServicePricingId,
+    string ServiceName,
+    string? Code,
+    decimal LabourFee,
+    decimal ServiceFee,
+    int? EstimatedMinutes,
+    int? WarrantyDays,
+    string? Notes,
+    string? PartsJson,
+    bool IsCompleted,
+    DateTimeOffset? CompletedAt,
+    int SortOrder);
+
+public sealed record RepairServiceSelectionDto(
+    Guid ServicePricingId,
+    string? Notes = null,
+    string? PartsJson = null,
+    decimal? LabourOverride = null);
 
 public sealed record CreateRepairRequest(
     Guid CustomerId,
@@ -156,7 +178,11 @@ public sealed record CreateRepairRequest(
     string? NewDeviceBrand,
     string? NewDeviceModel,
     string? NewDeviceSerial,
-    string? NewDeviceImei);
+    string? NewDeviceImei,
+    IReadOnlyList<Guid>? ServicePricingIds = null,
+    IReadOnlyList<RepairServiceSelectionDto>? SelectedServices = null);
+
+public sealed record CompleteRepairServiceLineRequest(bool IsCompleted = true);
 
 public sealed record ChangeStatusRequest(Guid StatusId);
 public sealed record ChangePriorityRequest(Guid PriorityId);

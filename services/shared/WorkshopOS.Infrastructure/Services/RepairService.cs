@@ -142,12 +142,67 @@ public sealed class RepairService : IRepairService
 
         _db.RepairTickets.Add(ticket);
         customer.LastVisitAt = DateTimeOffset.UtcNow;
+
+        var selections = BuildServiceSelections(request);
+        if (selections.Count > 0)
+        {
+            var ids = selections.Select(s => s.ServicePricingId).Distinct().ToList();
+            var services = await _db.ServicePricings.Where(s => ids.Contains(s.Id) && s.ArchivedAt == null)
+                .ToDictionaryAsync(s => s.Id, ct);
+            var order = 0;
+            decimal labourSum = 0m;
+            var names = new List<string>();
+            foreach (var sel in selections)
+            {
+                if (!services.TryGetValue(sel.ServicePricingId, out var svc)) continue;
+                order += 10;
+                var labour = sel.LabourOverride ?? svc.DefaultLabourFee + svc.ServiceFee;
+                labourSum += labour;
+                names.Add(svc.Name);
+                _db.RepairServiceLines.Add(new RepairServiceLine
+                {
+                    RepairTicketId = ticket.Id,
+                    ServicePricingId = svc.Id,
+                    ServiceName = svc.Name,
+                    Code = svc.Code,
+                    LabourFee = labour,
+                    ServiceFee = svc.ServiceFee,
+                    EstimatedMinutes = svc.EstimatedMinutes,
+                    WarrantyDays = svc.WarrantyDays,
+                    Notes = sel.Notes,
+                    PartsJson = sel.PartsJson,
+                    SortOrder = order
+                });
+            }
+            if (ticket.EstimatedPrice is null && labourSum > 0m)
+                ticket.EstimatedPrice = labourSum;
+            if (names.Count > 0 && string.IsNullOrWhiteSpace(ticket.RecommendedRepair))
+                ticket.RecommendedRepair = string.Join(", ", names);
+        }
+
         await _db.SaveChangesAsync(ct);
         await AddEventAsync(ticket.Id, actorId, "repair.created", $"Repair {ticket.TicketNumber} created", null, ticket.StatusId.ToString(), ct);
         if (request.AssignedToId is Guid assign)
             await AddEventAsync(ticket.Id, actorId, "repair.assigned", "Technician assigned", null, assign.ToString(), ct);
         await _audit.WriteAsync(actorId, "repair.create", "RepairTicket", ticket.Id.ToString(), newValue: new { ticket.TicketNumber }, ct: ct);
         return await GetAsync(ticket.Id, true, ct);
+    }
+
+    private static List<RepairServiceSelectionDto> BuildServiceSelections(CreateRepairRequest request)
+    {
+        var list = new List<RepairServiceSelectionDto>();
+        if (request.SelectedServices is { Count: > 0 })
+            list.AddRange(request.SelectedServices);
+        if (request.ServicePricingIds is { Count: > 0 })
+        {
+            var existing = list.Select(s => s.ServicePricingId).ToHashSet();
+            foreach (var id in request.ServicePricingIds)
+            {
+                if (existing.Add(id))
+                    list.Add(new RepairServiceSelectionDto(id));
+            }
+        }
+        return list;
     }
 
     public async Task<RepairDetailDto> ChangeStatusAsync(Guid id, Guid statusId, Guid actorId, CancellationToken ct = default)
@@ -226,8 +281,21 @@ public sealed class RepairService : IRepairService
           .Append(Esc(r.ReportedIssue)).Append("</pre></div>")
           .Append("<div class=\"box\"><div class=\"label\">Diagnosis / recommended</div><div>")
           .Append(Esc(r.Diagnosis ?? "—")).Append("</div><div>")
-          .Append(Esc(r.RecommendedRepair ?? "")).Append("</div></div>")
-          .Append("<div class=\"box\"><div class=\"label\">Assigned / due</div>Tech: ")
+          .Append(Esc(r.RecommendedRepair ?? "")).Append("</div></div>");
+        if (r.ServiceLines.Count > 0)
+        {
+            sb.Append("<div class=\"box\"><div class=\"label\">Services</div><ul>");
+            foreach (var line in r.ServiceLines)
+            {
+                sb.Append("<li>").Append(Esc(line.ServiceName));
+                if (line.WarrantyDays is int w && w > 0)
+                    sb.Append(" — warranty ").Append(w).Append(" days");
+                if (line.IsCompleted) sb.Append(" ✓");
+                sb.Append("</li>");
+            }
+            sb.Append("</ul></div>");
+        }
+        sb.Append("<div class=\"box\"><div class=\"label\">Assigned / due</div>Tech: ")
           .Append(Esc(r.AssignedTo?.DisplayName ?? "Unassigned")).Append("<br/>Due: ")
           .Append(Esc(due)).Append("<br/>Accessories: ").Append(Esc(acc)).Append("</div>")
           .Append("<div class=\"box\"><div class=\"label\">Notes</div><ul>").Append(notesHtml).Append("</ul></div>")
@@ -286,6 +354,22 @@ public sealed class RepairService : IRepairService
         return await GetAsync(id, true, ct);
     }
 
+    public async Task<RepairDetailDto> CompleteServiceLineAsync(Guid repairId, Guid lineId, bool isCompleted, Guid actorId, CancellationToken ct = default)
+    {
+        _ = await _db.RepairTickets.FirstOrDefaultAsync(t => t.Id == repairId && t.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Repair was not found.", 404);
+        var line = await _db.RepairServiceLines.FirstOrDefaultAsync(l => l.Id == lineId && l.RepairTicketId == repairId && l.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Service line was not found.", 404);
+        line.IsCompleted = isCompleted;
+        line.CompletedAt = isCompleted ? DateTimeOffset.UtcNow : null;
+        line.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await AddEventAsync(repairId, actorId, "repair.service_line",
+            isCompleted ? $"Completed service: {line.ServiceName}" : $"Reopened service: {line.ServiceName}",
+            null, line.ServiceName, ct);
+        return await GetAsync(repairId, true, ct);
+    }
+
     public async Task<RepairLookupsDto> GetLookupsAsync(CancellationToken ct = default)
     {
         var statuses = await _db.RepairStatuses.Where(s => s.ArchivedAt == null).OrderBy(s => s.SortOrder)
@@ -342,6 +426,7 @@ public sealed class RepairService : IRepairService
             .Include(r => r.AssignedTo)
             .Include(r => r.Events.OrderByDescending(e => e.CreatedAt))
             .Include(r => r.Notes.OrderByDescending(n => n.CreatedAt)).ThenInclude(n => n.Author)
+            .Include(r => r.ServiceLines.Where(l => l.ArchivedAt == null).OrderBy(l => l.SortOrder))
             .FirstOrDefaultAsync(r => r.Id == id && r.ArchivedAt == null, ct)
         ?? throw new AppException("not_found", "Repair was not found.", 404);
 
@@ -357,5 +442,8 @@ public sealed class RepairService : IRepairService
             canViewCredentials && !string.IsNullOrEmpty(r.PasscodeEnc),
             r.EstimatedPrice, r.DepositAmount, r.CreatedAt, r.DueAt, r.StartedAt, r.CompletedAt,
             r.Events.Select(e => new RepairEventDto(e.Id, e.EventType, e.Summary, e.OldValue, e.NewValue, e.CreatedAt, e.ActorUserId)).ToList(),
-            r.Notes.Select(n => new RepairNoteDto(n.Id, n.Body, n.IsInternal, n.Author.DisplayName, n.CreatedAt)).ToList());
+            r.Notes.Select(n => new RepairNoteDto(n.Id, n.Body, n.IsInternal, n.Author.DisplayName, n.CreatedAt)).ToList(),
+            r.ServiceLines.Select(l => new RepairServiceLineDto(
+                l.Id, l.ServicePricingId, l.ServiceName, l.Code, l.LabourFee, l.ServiceFee,
+                l.EstimatedMinutes, l.WarrantyDays, l.Notes, l.PartsJson, l.IsCompleted, l.CompletedAt, l.SortOrder)).ToList());
 }

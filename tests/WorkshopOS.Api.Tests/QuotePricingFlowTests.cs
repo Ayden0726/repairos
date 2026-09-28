@@ -95,18 +95,25 @@ public sealed class QuotePricingFlowTests
         html.Should().Contain("OLED assembly");
         html.Should().Contain("@page{size:A4;margin:12mm}");
         html.Should().Contain("max-width:190mm");
+        html.Should().Contain("<!-- workshopos-currency:$ -->");
+        html.Should().Contain("data-currency=\"$\"");
         html.Should().Contain("$");
         html.Should().NotContain("¤");
         html.Should().Contain("Labour / service");
         html.Should().Contain("$50.00");
+        html.Should().Contain("$187.20"); // parts sell as Amount, not Price+labour Total
         html.Should().Contain("<span>Parts</span>");
         html.Should().Contain("<span>Labour</span>");
         html.Should().Contain("Amount");
+        html.Should().NotContain(">Price</th>");
+        html.Should().NotContain(">Total</th>"); // line table uses Amount; grand total is a span
         html.Should().NotContain("Landed");
         html.Should().NotContain("Markup");
         html.Should().NotContain("Profit");
         // Single labour row — not duplicated across part lines
         (html.Split("Labour / service", StringSplitOptions.None).Length - 1).Should().Be(1);
+        // No culture currency glyph anywhere (including encoded forms)
+        html.IndexOf('\u00A4').Should().Be(-1);
 
         var dash = await _client.GetFromJsonAsync<DashboardDto>("/api/dashboard");
         dash!.QuoteAnalytics.Should().NotBeNull();

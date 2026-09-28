@@ -2,6 +2,7 @@
     x:Class="WorkshopOS.Client.Views.NewRepairPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WorkshopOS.Client.Views"
     xmlns:w="using:WorkshopOS.Contracts.Workshop"
     Background="{ThemeResource WorkshopPageBackgroundBrush}">
   <ScrollViewer Padding="24">
@@ -91,14 +92,15 @@
             <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" PlaceholderText="iPhone 13" />
           </Grid>
           <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
+          <local:ServicePickerControl x:Name="ServicePicker" />
           <TextBox Header="Reported fault" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
                    AcceptsReturn="True" Height="110" TextWrapping="Wrap"
-                   PlaceholderText="What is wrong? When did it start?" />
+                   PlaceholderText="What is wrong? When did it start? (auto-filled from services if empty)" />
           <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
                      Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
           <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
                         IsActive="{x:Bind ViewModel.IsSaving, Mode=OneWay}" />
-          <Button Content="Create ticket" Command="{x:Bind ViewModel.CreateCommand}"
+          <Button Content="Create ticket" Click="CreateTicket_Click"
                   Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"
                   IsEnabled="{x:Bind ViewModel.CanSubmit, Mode=OneWay}" />
         </StackPanel>
