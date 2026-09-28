@@ -68,8 +68,6 @@ public partial class QuotesListViewModel : ObservableObject
 
 public partial class QuoteLineDraft : ObservableObject
 {
-    private bool _applyingDefaults;
-
     [ObservableProperty] private string _type = "PART";
     [ObservableProperty] private string _description = string.Empty;
     [ObservableProperty] private string? _serviceName;
@@ -85,47 +83,18 @@ public partial class QuoteLineDraft : ObservableObject
     [ObservableProperty] private double _partCost;
     [ObservableProperty] private double _shippingCost;
     [ObservableProperty] private double _otherCost;
-    [ObservableProperty] private double _markupPercent;
-    [ObservableProperty] private double _labourAmount;
     [ObservableProperty] private double _additionalAmount;
     [ObservableProperty] private double _discountAmount;
+    [ObservableProperty] private double _landedCost;
+    [ObservableProperty] private double _lineCost;
     [ObservableProperty] private double _partSell;
     [ObservableProperty] private double _lineTotal;
-    [ObservableProperty] private double _lineProfit;
-    [ObservableProperty] private bool _markupOverridden;
-    [ObservableProperty] private bool _labourOverridden;
 
-    public string PartSellText => PartSell.ToString("0.00");
-    public string LineTotalText => LineTotal.ToString("0.00");
+    public string LandedCostText => LandedCost.ToString("0.00");
+    public string LineCostText => LineCost.ToString("0.00");
 
-    public void SetMarkupFromSettings(double value)
-    {
-        _applyingDefaults = true;
-        MarkupPercent = value;
-        MarkupOverridden = false;
-        _applyingDefaults = false;
-    }
-
-    public void SetLabourFromSettings(double value)
-    {
-        _applyingDefaults = true;
-        LabourAmount = value;
-        LabourOverridden = false;
-        _applyingDefaults = false;
-    }
-
-    partial void OnMarkupPercentChanged(double value)
-    {
-        if (!_applyingDefaults) MarkupOverridden = true;
-    }
-
-    partial void OnLabourAmountChanged(double value)
-    {
-        if (!_applyingDefaults) LabourOverridden = true;
-    }
-
-    partial void OnPartSellChanged(double value) => OnPropertyChanged(nameof(PartSellText));
-    partial void OnLineTotalChanged(double value) => OnPropertyChanged(nameof(LineTotalText));
+    partial void OnLandedCostChanged(double value) => OnPropertyChanged(nameof(LandedCostText));
+    partial void OnLineCostChanged(double value) => OnPropertyChanged(nameof(LineCostText));
 }
 
 public partial class QuoteBuilderViewModel : ObservableObject
@@ -134,6 +103,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
     private readonly AuthSession _session;
     private Guid? _preferCustomerId;
     private PricingSettingsDto? _pricing;
+    private bool _applyingJobDefaults;
 
     public ObservableCollection<QuoteLineDraft> Lines { get; } = new();
     public ObservableCollection<QuoteCustomerOption> Customers { get; } = new();
@@ -159,10 +129,21 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _issue = string.Empty;
     [ObservableProperty] private string _customerNotes = string.Empty;
     [ObservableProperty] private string _internalNotes = string.Empty;
+
+    // Job-level labour + markup (NumberBox binds double).
+    [ObservableProperty] private double _jobLabourFee = 50d;
+    [ObservableProperty] private double _jobMarkupPercent = 20d;
+    [ObservableProperty] private bool _labourOverridden;
+    [ObservableProperty] private bool _markupOverridden;
+
     // Summary totals stay decimal for API math; XAML binds to *Text helpers (string).
+    [ObservableProperty] private decimal _partsCostTotal;
+    [ObservableProperty] private decimal _markupAmount;
+    [ObservableProperty] private decimal _partsSellTotal;
     [ObservableProperty] private decimal _partsSubtotal;
     [ObservableProperty] private decimal _labourSubtotal;
     [ObservableProperty] private decimal _discountTotal;
+    [ObservableProperty] private decimal _additionalTotal;
     [ObservableProperty] private decimal _subtotal;
     [ObservableProperty] private decimal _gstAmount;
     [ObservableProperty] private decimal _total;
@@ -182,9 +163,13 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _pricingDefaultsSummary = "Loading pricing settings…";
     [ObservableProperty] private int _defaultValidityDays = 14;
 
-    public string PartsSubtotalText => PartsSubtotal.ToString("0.00");
+    public string PartsCostTotalText => PartsCostTotal.ToString("0.00");
+    public string MarkupAmountText => MarkupAmount.ToString("0.00");
+    public string PartsSellTotalText => PartsSellTotal.ToString("0.00");
+    public string PartsSubtotalText => PartsSellTotal.ToString("0.00");
     public string LabourSubtotalText => LabourSubtotal.ToString("0.00");
     public string DiscountTotalText => DiscountTotal.ToString("0.00");
+    public string AdditionalTotalText => AdditionalTotal.ToString("0.00");
     public string SubtotalText => Subtotal.ToString("0.00");
     public string GstAmountText => GstAmount.ToString("0.00");
     public string TotalText => Total.ToString("0.00");
@@ -192,6 +177,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
     public string ProfitTotalText => ProfitTotal.ToString("0.00");
     public string MarginPercentText => MarginPercent.ToString("0.0");
     public string MarginWarningText => MarginWarning ?? string.Empty;
+    public string JobMarkupPercentText => JobMarkupPercent.ToString("0.##");
 
     public bool ShowNewCustomerFields => !UseExistingCustomer;
     public bool HasCustomers => Customers.Count > 0;
@@ -214,6 +200,17 @@ public partial class QuoteBuilderViewModel : ObservableObject
     partial void OnIsLoadingCustomersChanged(bool value) => OnPropertyChanged(nameof(IsCustomersIdle));
     partial void OnCustomersStatusChanged(string? value) => OnPropertyChanged(nameof(HasCustomersStatus));
 
+    partial void OnJobLabourFeeChanged(double value)
+    {
+        if (!_applyingJobDefaults) LabourOverridden = true;
+    }
+
+    partial void OnJobMarkupPercentChanged(double value)
+    {
+        if (!_applyingJobDefaults) MarkupOverridden = true;
+        OnPropertyChanged(nameof(JobMarkupPercentText));
+    }
+
     private void UpdatePermissionFlags()
     {
         var perms = _session.User?.Permissions ?? Array.Empty<string>();
@@ -221,8 +218,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
         CanViewCost = owner || perms.Contains("pricing.view_cost") || perms.Contains("pricing.view");
         CanViewProfit = owner || perms.Contains("pricing.view_profit") || perms.Contains("pricing.view");
         CanChangeMarkup = owner || perms.Contains("pricing.change_markup") || perms.Contains("pricing.edit")
-            || perms.Contains("pricing.edit_settings");
-        CanOverrideLabour = owner || perms.Contains("pricing.override_labour") || perms.Contains("pricing.edit_settings");
+            || perms.Contains("pricing.edit_settings") || perms.Contains("quotes.manage");
+        CanOverrideLabour = owner || perms.Contains("pricing.override_labour") || perms.Contains("pricing.edit_settings")
+            || perms.Contains("quotes.manage");
     }
 
     public async Task InitAsync(QuoteBuilderArgs? args)
@@ -250,7 +248,8 @@ public partial class QuoteBuilderViewModel : ObservableObject
             }
 
             Lines.Clear();
-            AddLineWithDefaults();
+            SeedJobDefaultsFromSettings();
+            Lines.Add(new QuoteLineDraft());
 
             if (args?.RepairTicketId is Guid rid)
             {
@@ -286,7 +285,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 ? "tax off"
                 : $"{(tax.Inclusive ? "inc" : "ex")} GST {(tax.Rate * 100m):0.##}%";
             PricingDefaultsSummary =
-                $"Settings → Pricing: {_pricing.Parts.MarkupMethod} markup {_pricing.Parts.DefaultMarkupPercent:0.##}% · " +
+                $"Job labour + markup on Σ part costs · {_pricing.Parts.MarkupMethod} {_pricing.Parts.DefaultMarkupPercent:0.##}% · " +
                 $"labour ${_pricing.Labour.DefaultLabourFee:0.##} · round {_pricing.Rounding.Method} · " +
                 $"min margin {_pricing.Profitability.MinimumGrossMarginPercent:0.##}% · {taxText}";
         }
@@ -297,19 +296,30 @@ public partial class QuoteBuilderViewModel : ObservableObject
         }
     }
 
-    private void ApplyDefaultsToLine(QuoteLineDraft line)
+    private void SeedJobDefaultsFromSettings()
     {
-        var markup = (double)(_pricing?.Parts.DefaultMarkupPercent ?? 20m);
-        var labour = (double)(_pricing?.Labour.DefaultLabourFee ?? 50m);
-        line.SetMarkupFromSettings(markup);
-        line.SetLabourFromSettings(labour);
+        _applyingJobDefaults = true;
+        JobMarkupPercent = (double)(_pricing?.Parts.DefaultMarkupPercent ?? 20m);
+        JobLabourFee = (double)(_pricing?.Labour.DefaultLabourFee ?? 50m);
+        MarkupOverridden = false;
+        LabourOverridden = false;
+        _applyingJobDefaults = false;
     }
 
-    private void AddLineWithDefaults()
+    private void SetJobLabourFromSettings(double value)
     {
-        var line = new QuoteLineDraft();
-        ApplyDefaultsToLine(line);
-        Lines.Add(line);
+        _applyingJobDefaults = true;
+        JobLabourFee = value;
+        LabourOverridden = false;
+        _applyingJobDefaults = false;
+    }
+
+    private void SetJobMarkupFromSettings(double value)
+    {
+        _applyingJobDefaults = true;
+        JobMarkupPercent = value;
+        MarkupOverridden = false;
+        _applyingJobDefaults = false;
     }
 
     private static string ExtractBrand(string? label)
@@ -362,16 +372,30 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 OtherCost = (double)l.OtherCost,
                 AdditionalAmount = (double)l.AdditionalAmount,
                 DiscountAmount = (double)l.DiscountAmount,
+                LandedCost = (double)l.LandedCost,
+                LineCost = (double)(l.LandedCost * l.Quantity),
                 PartSell = (double)l.PartSell,
-                LineTotal = (double)l.LineTotal,
-                LineProfit = (double)l.LineProfit
+                LineTotal = (double)l.LineTotal
             };
-            // Preserve saved line economics without treating them as tech overrides on the wire.
-            draft.SetMarkupFromSettings((double)l.MarkupPercent);
-            draft.SetLabourFromSettings((double)l.LabourAmount);
             Lines.Add(draft);
         }
-        ApplyPreviewTotals(q.PartsSubtotal, q.LabourSubtotal, q.DiscountTotal, q.Subtotal, q.GstAmount, q.Total,
+
+        _applyingJobDefaults = true;
+        JobLabourFee = (double)(q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal);
+        JobMarkupPercent = (double)(q.MarkupPercent != 0m
+            ? q.MarkupPercent
+            : (_pricing?.Parts.DefaultMarkupPercent ?? 20m));
+        LabourOverridden = false;
+        MarkupOverridden = false;
+        _applyingJobDefaults = false;
+
+        ApplyPreviewTotals(
+            q.PartsCostTotal != 0m ? q.PartsCostTotal : q.CostTotal,
+            q.MarkupAmount,
+            q.PartsSellTotal != 0m ? q.PartsSellTotal : q.PartsSubtotal,
+            q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal,
+            q.DiscountTotal, q.AdditionalTotal,
+            q.Subtotal, q.GstAmount, q.Total,
             q.CostTotal, q.ProfitTotal, q.MarginPercent, q.RequiresApproval, null);
         await LoadCustomersAsync();
     }
@@ -433,14 +457,14 @@ public partial class QuoteBuilderViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void AddLine() => AddLineWithDefaults();
+    private void AddLine() => Lines.Add(new QuoteLineDraft());
 
     [RelayCommand]
     private void RemoveLine(QuoteLineDraft? line)
     {
         if (line is null) return;
         Lines.Remove(line);
-        if (Lines.Count == 0) AddLineWithDefaults();
+        if (Lines.Count == 0) Lines.Add(new QuoteLineDraft());
         _ = RecalcAsync();
     }
 
@@ -453,8 +477,6 @@ public partial class QuoteBuilderViewModel : ObservableObject
         line.PartCost = CanViewCost ? (double)item.Cost : line.PartCost;
         line.SupplierName = item.SupplierName;
         line.Type = "PART";
-        if (!line.MarkupOverridden)
-            line.SetMarkupFromSettings((double)(_pricing?.Parts.DefaultMarkupPercent ?? 20m));
         _ = RecalcAsync();
     }
 
@@ -462,11 +484,10 @@ public partial class QuoteBuilderViewModel : ObservableObject
     {
         line.ServicePricingId = service.Id;
         line.ServiceName = service.Name;
-        line.SetLabourFromSettings((double)service.DefaultLabourFee);
-        if (service.DefaultPartMarkupPercent is decimal m)
-            line.SetMarkupFromSettings((double)m);
-        else if (!line.MarkupOverridden)
-            line.SetMarkupFromSettings((double)(_pricing?.Parts.DefaultMarkupPercent ?? 20m));
+        if (!LabourOverridden)
+            SetJobLabourFromSettings((double)service.DefaultLabourFee);
+        if (service.DefaultPartMarkupPercent is decimal m && !MarkupOverridden)
+            SetJobMarkupFromSettings((double)m);
         if (string.IsNullOrWhiteSpace(line.Description)) line.Description = service.Name;
         _ = RecalcAsync();
     }
@@ -477,36 +498,50 @@ public partial class QuoteBuilderViewModel : ObservableObject
         try
         {
             var inputs = Lines.Select(ToInput).ToList();
+            var labour = (decimal)JobLabourFee;
+            var markup = (decimal)JobMarkupPercent;
+
             var preview = await _api.PostAsync<PricingPreviewRequest, PricingPreviewResponse>(
-                "api/pricing/preview", new PricingPreviewRequest(inputs, null, null, null, null));
+                "api/pricing/preview",
+                new PricingPreviewRequest(inputs, null, null, null, null, labour, markup, null, null, null));
             for (var i = 0; i < Math.Min(Lines.Count, preview.Lines.Count); i++)
             {
                 var src = preview.Lines[i];
                 var dst = Lines[i];
+                dst.LandedCost = (double)src.LandedCost;
+                dst.LineCost = (double)src.LineCost;
                 dst.PartSell = (double)src.PartSell;
                 dst.LineTotal = (double)src.LineTotal;
-                dst.LineProfit = (double)src.LineProfit;
-                // Reflect server-applied settings without marking as user overrides.
-                if (!dst.MarkupOverridden)
-                    dst.SetMarkupFromSettings((double)src.MarkupPercent);
-                if (!dst.LabourOverridden)
-                    dst.SetLabourFromSettings((double)src.LabourAmount);
             }
-            ApplyPreviewTotals(preview.PartsSubtotal, preview.LabourSubtotal, preview.DiscountTotal,
-                preview.Subtotal, preview.GstAmount, preview.Total, preview.CostTotal, preview.ProfitTotal,
-                preview.MarginPercent, preview.RequiresApproval, preview.Warning);
+
+            _applyingJobDefaults = true;
+            JobLabourFee = (double)preview.LabourFee;
+            JobMarkupPercent = (double)preview.MarkupPercent;
+            _applyingJobDefaults = false;
+
+            ApplyPreviewTotals(
+                preview.PartsCostTotal, preview.MarkupAmount, preview.PartsSellTotal,
+                preview.LabourFee, preview.DiscountTotal, preview.AdditionalTotal,
+                preview.Subtotal, preview.GstAmount, preview.Total, preview.CostTotal,
+                preview.ProfitTotal, preview.MarginPercent, preview.RequiresApproval, preview.Warning);
             Error = null;
         }
         catch (Exception ex) { Error = ex.Message; }
     }
 
     private void ApplyPreviewTotals(
-        decimal parts, decimal labour, decimal discount, decimal sub, decimal gst, decimal total,
+        decimal partsCost, decimal markupAmt, decimal partsSell, decimal labour,
+        decimal discount, decimal additional,
+        decimal sub, decimal gst, decimal total,
         decimal cost, decimal profit, decimal margin, bool requiresApproval, string? warning)
     {
-        PartsSubtotal = parts;
+        PartsCostTotal = partsCost;
+        MarkupAmount = markupAmt;
+        PartsSellTotal = partsSell;
+        PartsSubtotal = partsSell;
         LabourSubtotal = labour;
         DiscountTotal = discount;
+        AdditionalTotal = additional;
         Subtotal = sub;
         GstAmount = gst;
         Total = total;
@@ -520,9 +555,13 @@ public partial class QuoteBuilderViewModel : ObservableObject
 
     private void NotifySummaryText()
     {
+        OnPropertyChanged(nameof(PartsCostTotalText));
+        OnPropertyChanged(nameof(MarkupAmountText));
+        OnPropertyChanged(nameof(PartsSellTotalText));
         OnPropertyChanged(nameof(PartsSubtotalText));
         OnPropertyChanged(nameof(LabourSubtotalText));
         OnPropertyChanged(nameof(DiscountTotalText));
+        OnPropertyChanged(nameof(AdditionalTotalText));
         OnPropertyChanged(nameof(SubtotalText));
         OnPropertyChanged(nameof(GstAmountText));
         OnPropertyChanged(nameof(TotalText));
@@ -530,6 +569,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
         OnPropertyChanged(nameof(ProfitTotalText));
         OnPropertyChanged(nameof(MarginPercentText));
         OnPropertyChanged(nameof(MarginWarningText));
+        OnPropertyChanged(nameof(JobMarkupPercentText));
     }
 
     private QuoteLineCalcInput ToInput(QuoteLineDraft l) => new(
@@ -540,10 +580,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
         l.DifficultyLevelKey,
         (decimal)(l.Quantity <= 0 ? 1 : l.Quantity),
         (decimal)l.PartCost, (decimal)l.ShippingCost, (decimal)l.OtherCost,
-        // Only send overrides when the tech explicitly changed them — otherwise server settings apply.
-        CanChangeMarkup && l.MarkupOverridden ? (decimal)l.MarkupPercent : null,
-        null, null,
-        CanOverrideLabour && l.LabourOverridden ? (decimal)l.LabourAmount : null,
+        null, null, null, null,
         (decimal)l.AdditionalAmount, (decimal)l.DiscountAmount, null);
 
     private async Task<Guid> EnsureCustomerAsync()
@@ -577,9 +614,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
             l.DifficultyLevelKey,
             (decimal)(l.Quantity <= 0 ? 1 : l.Quantity),
             (decimal)l.PartCost, (decimal)l.ShippingCost, (decimal)l.OtherCost,
-            CanChangeMarkup && l.MarkupOverridden ? (decimal)l.MarkupPercent : null,
-            null, null,
-            CanOverrideLabour && l.LabourOverridden ? (decimal)l.LabourAmount : null,
+            null, null, null, null,
             (decimal)l.AdditionalAmount, (decimal)l.DiscountAmount, null)).ToList();
 
     [RelayCommand]
@@ -594,11 +629,13 @@ public partial class QuoteBuilderViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(Error)) return;
             var customerId = await EnsureCustomerAsync();
             var lines = ToLineInputs();
+            var labour = (decimal)JobLabourFee;
+            var markup = (decimal)JobMarkupPercent;
             if (QuoteId is Guid id)
             {
                 var updated = await _api.PutAsync<UpdateQuoteRequest, QuoteDetailDto>($"api/quotes/{id}",
                     new UpdateQuoteRequest(Issue, CustomerNotes, InternalNotes, DeviceBrand, DeviceModel, DeviceSerial,
-                        null, null, lines, "Save"));
+                        null, null, lines, "Save", labour, markup));
                 await LoadQuoteAsync(updated.Id);
                 StatusMessage = "Quote saved.";
             }
@@ -606,7 +643,8 @@ public partial class QuoteBuilderViewModel : ObservableObject
             {
                 var created = await _api.PostAsync<CreateQuoteRequest, QuoteDetailDto>("api/quotes",
                     new CreateQuoteRequest(customerId, RepairTicketId, Issue, CustomerNotes, InternalNotes,
-                        DeviceBrand, DeviceModel, DeviceSerial, null, DefaultValidityDays, lines));
+                        DeviceBrand, DeviceModel, DeviceSerial, null, DefaultValidityDays, lines,
+                        null, labour, markup));
                 await LoadQuoteAsync(created.Id);
                 StatusMessage = $"Created {created.Number}";
             }

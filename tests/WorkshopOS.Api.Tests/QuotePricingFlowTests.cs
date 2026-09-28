@@ -35,12 +35,18 @@ public sealed class QuotePricingFlowTests
 
         var preview = await PostJson<PricingPreviewResponse>("/api/pricing/preview", new PricingPreviewRequest(
         [
-            new QuoteLineCalcInput("PART", "Screen", null, "Screen", null, null, null, null, null,
-                1m, 156m, 0m, 0m, null, null, null, 50m, 0m, 0m, null)
+            new QuoteLineCalcInput("PART", "Panel A", null, "Panel A", null, null, null, null, null,
+                1m, 100m, 0m, 0m, null, null, null, null, 0m, 0m, null),
+            new QuoteLineCalcInput("PART", "Panel B", null, "Panel B", null, null, null, null, null,
+                1m, 56m, 0m, 0m, null, null, null, null, 0m, 0m, null)
         ], null, null, null, null));
+        preview.PartsCostTotal.Should().Be(156m);
+        preview.PartsSellTotal.Should().Be(187.20m);
+        preview.LabourFee.Should().Be(50m);
         preview.Total.Should().Be(239m);
         preview.ProfitTotal.Should().Be(83m);
         preview.MarginPercent.Should().Be(34.73m);
+        preview.Lines.Should().OnlyContain(l => l.LabourAmount == 0m);
 
         var service = await PostJson<ServicePricingDto>("/api/pricing/services", new UpsertServicePricingRequest(
             null, "Screen replacement", "Phone", "Labour + part", 50m, 20m, true, 1));
@@ -57,13 +63,19 @@ public sealed class QuotePricingFlowTests
             customer.Id, null, "Cracked OLED", null, null, "Apple", "iPhone 13", null, "Phone", 14,
             [
                 new QuoteLineInputDto("PART", "OLED assembly", "Screen replacement", "OLED", "Foxconn", "SKU-1",
-                    null, service.Id, null, 1m, 156m, 0m, 0m, null, null, null, 50m, 0m, 0m, null)
-            ]));
+                    null, service.Id, null, 1m, 100m, 0m, 0m, null, null, null, null, 0m, 0m, null),
+                new QuoteLineInputDto("PART", "Adhesive kit", null, "Adhesive", null, "SKU-2",
+                    null, null, null, 1m, 56m, 0m, 0m, null, null, null, null, 0m, 0m, null)
+            ], LabourFee: 50m, MarkupPercent: 20m));
         quote.Number.Should().StartWith("QTE-");
+        quote.PartsCostTotal.Should().Be(156m);
+        quote.PartsSellTotal.Should().Be(187.20m);
+        quote.LabourFee.Should().Be(50m);
         quote.Total.Should().Be(239m);
         quote.Status.Should().Be("Draft");
         quote.IncludeInternalFinancials.Should().BeTrue();
         quote.ProfitTotal.Should().Be(83m);
+        quote.Lines.Should().OnlyContain(l => l.LabourAmount == 0m);
 
         var sent = await _client.PostAsync($"/api/quotes/{quote.Id}/send", null);
         sent.EnsureSuccessStatusCode();
@@ -111,16 +123,17 @@ public sealed class QuotePricingFlowTests
         saved!.Parts.DefaultMarkupPercent.Should().Be(40m);
         saved.Labour.DefaultLabourFee.Should().Be(75m);
 
-        // Null markup/labour overrides → server must apply saved settings (not hardcoded 20/50).
+        // Null job labour/markup → server must apply saved settings (not hardcoded 20/50).
         var preview = await PostJson<PricingPreviewResponse>("/api/pricing/preview", new PricingPreviewRequest(
         [
             new QuoteLineCalcInput("PART", "Battery", null, "Battery", null, null, null, null, null,
                 1m, 100m, 0m, 0m, null, null, null, null, 0m, 0m, null)
         ], null, null, null, null));
 
-        preview.Lines[0].MarkupPercent.Should().Be(40m);
-        preview.Lines[0].PartSell.Should().Be(140m);
-        preview.Lines[0].LabourAmount.Should().Be(75m);
+        preview.MarkupPercent.Should().Be(40m);
+        preview.PartsSellTotal.Should().Be(140m);
+        preview.LabourFee.Should().Be(75m);
+        preview.Lines[0].LabourAmount.Should().Be(0m);
         preview.PreRoundTotal.Should().Be(215m);
         preview.Total.Should().Be(215m);
     }

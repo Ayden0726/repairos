@@ -2,6 +2,15 @@
 
 Server is the source of truth for quote totals via `PricingCalculator` and `POST /api/pricing/preview`.
 
+## Job-level pricing model
+
+1. **Parts** — sum all landed part costs (cost + shipping + other × qty) → `PartsCostTotal`
+2. **Markup once** — apply job markup % (or fixed/hybrid/tiered on the sum) → `PartsSellTotal`
+3. **Labour once** — add a single job labour/service fee → `LabourFee`
+4. Add additional charges, subtract discounts, apply rounding, then tax
+
+Lines store part cost/qty/description only (no per-line labour or markup %). Summary panel shows: Parts cost → Markup → Parts sell → Labour → …
+
 ## Settings
 
 | Area | Where | Storage |
@@ -11,7 +20,7 @@ Server is the source of truth for quote totals via `PricingCalculator` and `POST
 | Service catalogue | Settings → Services | table `service_pricing` |
 | Tax (enabled, rate, inclusive) | Settings → Tax | business profile GST fields |
 
-Seed defaults (not permanent hardcodes): labour fee **$50**, flat markup **20%**, rounding **End9**, validity **14 days**.
+Seed defaults (not permanent hardcodes): labour fee **$50**, flat markup **20%**, rounding **End9**, validity **14 days**. These seed the job labour NumberBox and job markup % on new quotes.
 
 ## Quote lifecycle
 
@@ -21,7 +30,7 @@ Accepted quotes are **frozen** (financial snapshot preserved). Settings changes 
 
 ## Customer print
 
-`GET /api/quotes/{id}/print` — HTML like repair job sheets. **No** cost, markup, or profit fields.
+`GET /api/quotes/{id}/print` — HTML like repair job sheets. **No** cost, markup, or profit fields. Shows parts/labour in the totals block.
 
 ## Permissions
 

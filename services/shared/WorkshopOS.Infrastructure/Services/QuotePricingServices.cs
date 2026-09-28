@@ -241,10 +241,13 @@ public sealed class QuoteService : IQuoteService
         if (lineInputs.Count == 0)
             throw new ValidationAppException("At least one line is required.");
 
-        EnsurePricingPermissions(lineInputs, permissions);
+        EnsurePricingPermissions(lineInputs, request.LabourFee, request.MarkupPercent, request.MarkupAmount, request.DiscountAmount, request.DiscountPercent, permissions);
 
         var settings = await _pricing.GetAsync(ct);
-        var preview = await _pricing.PreviewAsync(new PricingPreviewRequest(lineInputs, null, null, null, null), ct);
+        var preview = await _pricing.PreviewAsync(new PricingPreviewRequest(
+            lineInputs, request.DiscountPercent, request.DiscountAmount, null, null,
+            request.LabourFee, request.MarkupPercent, request.MarkupAmount,
+            request.DifficultyLevelKey, request.ServicePricingId), ct);
         if (preview.RequiresApproval && !Has(permissions, "pricing.approve_low_margin") && !Has(permissions, "pricing.edit_settings"))
             throw new ValidationAppException(preview.Warning ?? "Quote margin requires manager approval.");
 
@@ -297,8 +300,11 @@ public sealed class QuoteService : IQuoteService
             throw new ValidationAppException("Cancelled quotes cannot be edited.");
 
         var calcInputs = ToCalcInputs(request.Lines);
-        EnsurePricingPermissions(calcInputs, permissions);
-        var preview = await _pricing.PreviewAsync(new PricingPreviewRequest(calcInputs, null, null, null, null), ct);
+        EnsurePricingPermissions(calcInputs, request.LabourFee, request.MarkupPercent, request.MarkupAmount, request.DiscountAmount, request.DiscountPercent, permissions);
+        var preview = await _pricing.PreviewAsync(new PricingPreviewRequest(
+            calcInputs, request.DiscountPercent, request.DiscountAmount, null, null,
+            request.LabourFee, request.MarkupPercent, request.MarkupAmount,
+            request.DifficultyLevelKey, request.ServicePricingId), ct);
         if (preview.RequiresApproval && !Has(permissions, "pricing.approve_low_margin") && !Has(permissions, "pricing.edit_settings"))
             throw new ValidationAppException(preview.Warning ?? "Quote margin requires manager approval.");
 
@@ -481,7 +487,11 @@ public sealed class QuoteService : IQuoteService
         sb.Append("<table><thead><tr><th>Description</th><th style=\"text-align:right\">Qty</th><th style=\"text-align:right\">Price</th><th style=\"text-align:right\">Total</th></tr></thead><tbody>")
           .Append(lines).Append("</tbody></table>")
           .Append("<div class=\"totals\">")
-          .Append("<div><span>Subtotal</span><span>").Append(Esc(q.Subtotal.ToString("C"))).Append("</span></div>")
+          .Append("<div><span>Parts</span><span>").Append(Esc((q.PartsSellTotal != 0m ? q.PartsSellTotal : q.PartsSubtotal).ToString("C"))).Append("</span></div>")
+          .Append("<div><span>Labour</span><span>").Append(Esc((q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal).ToString("C"))).Append("</span></div>");
+        if (q.DiscountTotal > 0)
+            sb.Append("<div><span>Discount</span><span>-").Append(Esc(q.DiscountTotal.ToString("C"))).Append("</span></div>");
+        sb.Append("<div><span>Subtotal</span><span>").Append(Esc(q.Subtotal.ToString("C"))).Append("</span></div>")
           .Append("<div><span>Tax</span><span>").Append(Esc(q.GstAmount.ToString("C"))).Append("</span></div>")
           .Append("<div style=\"font-weight:700\"><span>Total</span><span>").Append(Esc(q.Total.ToString("C"))).Append("</span></div>")
           .Append("</div>");
@@ -499,9 +509,10 @@ public sealed class QuoteService : IQuoteService
 
         if (request.SimpleLines is { Count: > 0 })
         {
+            // Legacy simple lines: UnitPrice is treated as part cost; job markup + labour apply once.
             return request.SimpleLines.Select(l => new QuoteLineCalcInput(
                 l.Type, l.Description, null, null, null, null, null, null, null,
-                l.Quantity, 0m, 0m, 0m, null, null, l.UnitPrice, 0m, 0m, 0m, l.UnitPrice)).ToList();
+                l.Quantity, l.UnitPrice, 0m, 0m, null, null, null, null, 0m, 0m, null)).ToList();
         }
         await Task.CompletedTask;
         return new List<QuoteLineCalcInput>();
@@ -511,35 +522,43 @@ public sealed class QuoteService : IQuoteService
         lines.Select(l => new QuoteLineCalcInput(
             l.Type, l.Description, l.ServiceName, l.PartName, l.SupplierName, l.Sku,
             l.InventoryItemId, l.ServicePricingId, l.DifficultyLevelKey, l.Quantity,
-            l.PartCost, l.ShippingCost, l.OtherCost, l.MarkupPercent, l.MarkupAmount,
-            l.PartSell, l.LabourAmount, l.AdditionalAmount, l.DiscountAmount, l.UnitPrice)).ToList();
+            l.PartCost, l.ShippingCost, l.OtherCost,
+            null, null, // per-line markup ignored — job-level only
+            l.PartSell,
+            null, // per-line labour ignored — job-level only
+            l.AdditionalAmount, l.DiscountAmount, l.UnitPrice)).ToList();
 
-    private static void EnsurePricingPermissions(IReadOnlyList<QuoteLineCalcInput> lines, IReadOnlySet<string> permissions)
+    private static void EnsurePricingPermissions(
+        IReadOnlyList<QuoteLineCalcInput> lines,
+        decimal? labourFee,
+        decimal? markupPercent,
+        decimal? markupAmount,
+        decimal? discountAmount,
+        decimal? discountPercent,
+        IReadOnlySet<string> permissions)
     {
+        if (markupPercent is not null || markupAmount is not null)
+        {
+            if (!Has(permissions, "pricing.change_markup") && !Has(permissions, "pricing.edit")
+                && !Has(permissions, "pricing.edit_settings") && !Has(permissions, "quotes.manage"))
+                throw new ValidationAppException("You do not have permission to change markup.");
+        }
+        if (labourFee is not null)
+        {
+            if (!Has(permissions, "pricing.override_labour") && !Has(permissions, "pricing.edit_settings")
+                && !Has(permissions, "quotes.manage"))
+                throw new ValidationAppException("You do not have permission to override labour.");
+        }
+        if (discountAmount is > 0 || discountPercent is > 0 || lines.Any(l => l.DiscountAmount > 0))
+        {
+            if (!Has(permissions, "pricing.apply_discount") && !Has(permissions, "quotes.manage"))
+                throw new ValidationAppException("You do not have permission to apply discounts.");
+        }
         foreach (var line in lines)
         {
-            if (line.MarkupPercentOverride is not null || line.MarkupAmountOverride is not null)
-            {
-                if (!Has(permissions, "pricing.change_markup") && !Has(permissions, "pricing.edit") && !Has(permissions, "pricing.edit_settings"))
-                    throw new ValidationAppException("You do not have permission to change markup.");
-            }
-            if (line.LabourOverride is not null)
-            {
-                if (!Has(permissions, "pricing.override_labour") && !Has(permissions, "pricing.edit_settings"))
-                    throw new ValidationAppException("You do not have permission to override labour.");
-            }
-            if (line.DiscountAmount > 0)
-            {
-                if (!Has(permissions, "pricing.apply_discount") && !Has(permissions, "quotes.manage"))
-                    throw new ValidationAppException("You do not have permission to apply discounts.");
-            }
-            if (line.UnitPriceOverride is not null || line.PartSellOverride is not null)
-            {
-                // UnitPrice used as sell override in simple lines — allow quotes.manage
-                if (line.PartSellOverride is not null &&
-                    !Has(permissions, "pricing.override_price") && !Has(permissions, "pricing.edit_settings") && !Has(permissions, "quotes.manage"))
-                    throw new ValidationAppException("You do not have permission to override recommended price.");
-            }
+            if (line.PartSellOverride is not null &&
+                !Has(permissions, "pricing.override_price") && !Has(permissions, "pricing.edit_settings") && !Has(permissions, "quotes.manage"))
+                throw new ValidationAppException("You do not have permission to override recommended price.");
         }
     }
 
@@ -548,10 +567,17 @@ public sealed class QuoteService : IQuoteService
 
     private static void ApplyPreview(Quote quote, PricingPreviewResponse preview)
     {
-        quote.PartsSubtotal = preview.PartsSubtotal;
-        quote.LabourSubtotal = preview.LabourSubtotal;
+        quote.PartsCostTotal = preview.PartsCostTotal;
+        quote.PartsSellTotal = preview.PartsSellTotal;
+        quote.MarkupPercent = preview.MarkupPercent;
+        quote.MarkupAmount = preview.MarkupAmount;
+        quote.LabourFee = preview.LabourFee;
+        quote.AdditionalTotal = preview.AdditionalTotal;
+        // Legacy aliases kept in sync for older clients / reports.
+        quote.PartsSubtotal = preview.PartsSellTotal;
+        quote.LabourSubtotal = preview.LabourFee;
         quote.DiscountTotal = preview.DiscountTotal;
-        quote.CostTotal = preview.CostTotal;
+        quote.CostTotal = preview.PartsCostTotal;
         quote.ProfitTotal = preview.ProfitTotal;
         quote.MarginPercent = preview.MarginPercent;
         quote.RequiresApproval = preview.RequiresApproval;
@@ -677,20 +703,35 @@ public sealed class QuoteService : IQuoteService
             l.UnitPrice, l.LineSubtotal, l.LineTotal,
             includeInternal ? l.LineProfit : 0m)).ToList();
 
+        // Historical accepted quotes may predate job-level columns — fall back to aliases.
+        var partsCost = q.PartsCostTotal != 0m ? q.PartsCostTotal : q.CostTotal;
+        var partsSell = q.PartsSellTotal != 0m ? q.PartsSellTotal : q.PartsSubtotal;
+        var labourFee = q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal;
+        var markupPercent = q.MarkupPercent;
+        var markupAmount = q.MarkupAmount != 0m
+            ? q.MarkupAmount
+            : (partsCost > 0 && partsSell > partsCost ? partsSell - partsCost : 0m);
+
         return new QuoteDetailDto(
             q.Id, q.Number, q.CustomerId, q.Customer.DisplayName, q.RepairTicketId,
             q.Status, q.Issue, q.CustomerNotes, includeInternal ? q.InternalNotes : null,
             q.DeviceBrand, q.DeviceModel, q.DeviceSerial, q.DeviceCategory,
             q.ValidityDays, q.RevisionNumber, q.ExpiresAt,
             q.AcceptedAt, q.AcceptedById, q.AcceptedTotal, q.AcceptedVersion, q.IsFrozen,
-            q.PartsSubtotal, q.LabourSubtotal, q.DiscountTotal,
-            includeInternal ? q.CostTotal : 0m,
+            partsSell, labourFee, q.DiscountTotal,
+            includeInternal ? partsCost : 0m,
             includeInternal ? q.ProfitTotal : 0m,
             includeInternal ? q.MarginPercent : 0m,
             q.RequiresApproval, q.RoundingMethod, q.PreRoundTotal,
             q.Subtotal, q.GstAmount, q.Total, lines,
             q.Revisions.OrderByDescending(r => r.RevisionNumber)
                 .Select(r => new QuoteRevisionDto(r.Id, r.RevisionNumber, r.CreatedAt, r.Reason)).ToList(),
-            includeInternal);
+            includeInternal,
+            includeInternal ? partsCost : 0m,
+            partsSell,
+            includeInternal ? markupPercent : 0m,
+            includeInternal ? markupAmount : 0m,
+            labourFee,
+            q.AdditionalTotal);
     }
 }

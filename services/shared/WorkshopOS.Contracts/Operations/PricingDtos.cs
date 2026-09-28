@@ -55,6 +55,11 @@ public sealed record UpsertServicePricingRequest(
     Guid? Id, string Name, string? Category, string? Description,
     decimal DefaultLabourFee, decimal? DefaultPartMarkupPercent, bool IsActive, int SortOrder);
 
+/// <summary>
+/// Line input for quote pricing. Lines carry part costs only; job labour + markup
+/// are applied once at the quote level via <see cref="PricingPreviewRequest"/>.
+/// Legacy per-line markup/labour override fields are ignored by the calculator.
+/// </summary>
 public sealed record QuoteLineCalcInput(
     string Type,
     string Description,
@@ -77,6 +82,10 @@ public sealed record QuoteLineCalcInput(
     decimal DiscountAmount,
     decimal? UnitPriceOverride);
 
+/// <summary>
+/// Line result: part costs (and optional cost-share of job parts sell for print).
+/// Labour and job markup live on the preview/quote summary, not per line.
+/// </summary>
 public sealed record QuoteLineCalcResult(
     string Type,
     string Description,
@@ -109,13 +118,24 @@ public sealed record PricingPreviewRequest(
     decimal? DiscountPercent,
     decimal? DiscountAmount,
     bool? OverrideRounding,
-    string? RoundingMethodOverride);
+    string? RoundingMethodOverride,
+    /// <summary>Job-level labour fee override. Null → settings / difficulty / service default.</summary>
+    decimal? LabourFee = null,
+    /// <summary>Job-level markup % override applied once to Σ landed part costs.</summary>
+    decimal? MarkupPercent = null,
+    /// <summary>Job-level fixed markup amount override (instead of %).</summary>
+    decimal? MarkupAmount = null,
+    string? DifficultyLevelKey = null,
+    Guid? ServicePricingId = null);
 
 public sealed record PricingPreviewResponse(
     IReadOnlyList<QuoteLineCalcResult> Lines,
+    /// <summary>Parts sell total after job markup (alias of PartsSellTotal).</summary>
     decimal PartsSubtotal,
+    /// <summary>Job labour fee (alias of LabourFee).</summary>
     decimal LabourSubtotal,
     decimal DiscountTotal,
+    /// <summary>Σ landed part costs (alias of PartsCostTotal).</summary>
     decimal CostTotal,
     decimal PreRoundTotal,
     decimal Total,
@@ -126,4 +146,10 @@ public sealed record PricingPreviewResponse(
     bool BelowMinimumMargin,
     bool RequiresApproval,
     string RoundingMethod,
-    string? Warning);
+    string? Warning,
+    decimal PartsCostTotal = 0m,
+    decimal PartsSellTotal = 0m,
+    decimal MarkupPercent = 0m,
+    decimal MarkupAmount = 0m,
+    decimal LabourFee = 0m,
+    decimal AdditionalTotal = 0m);

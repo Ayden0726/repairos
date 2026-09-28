@@ -57,7 +57,18 @@ public sealed record QuoteDetailDto(
     decimal Subtotal, decimal GstAmount, decimal Total,
     IReadOnlyList<QuoteLineDetailDto> Lines,
     IReadOnlyList<QuoteRevisionDto>? Revisions,
-    bool IncludeInternalFinancials);
+    bool IncludeInternalFinancials,
+    /// <summary>Σ landed part costs before job markup.</summary>
+    decimal PartsCostTotal = 0m,
+    /// <summary>Parts sell after job markup applied once to Σ costs.</summary>
+    decimal PartsSellTotal = 0m,
+    /// <summary>Job-level markup % applied to PartsCostTotal.</summary>
+    decimal MarkupPercent = 0m,
+    /// <summary>Job-level markup $ amount.</summary>
+    decimal MarkupAmount = 0m,
+    /// <summary>Single labour/service fee for the whole job.</summary>
+    decimal LabourFee = 0m,
+    decimal AdditionalTotal = 0m);
 
 public sealed record QuoteRevisionDto(Guid Id, int RevisionNumber, DateTimeOffset CreatedAt, string? Reason);
 public sealed record QuoteAuditDto(Guid Id, string Action, string? Detail, DateTimeOffset CreatedAt, Guid? ActorUserId);
@@ -79,9 +90,12 @@ public sealed record QuoteLineInputDto(
     decimal PartCost,
     decimal ShippingCost,
     decimal OtherCost,
+    /// <summary>Ignored — markup is job-level. Kept for wire compat.</summary>
     decimal? MarkupPercent,
+    /// <summary>Ignored — markup is job-level. Kept for wire compat.</summary>
     decimal? MarkupAmount,
     decimal? PartSell,
+    /// <summary>Ignored — labour is job-level. Kept for wire compat.</summary>
     decimal? LabourAmount,
     decimal AdditionalAmount,
     decimal DiscountAmount,
@@ -100,7 +114,17 @@ public sealed record CreateQuoteRequest(
     int? ValidityDays,
     IReadOnlyList<QuoteLineInputDto>? Lines,
     /// <summary>Legacy simple lines (UnitPrice × Qty). Prefer Lines.</summary>
-    IReadOnlyList<LineInputDto>? SimpleLines = null);
+    IReadOnlyList<LineInputDto>? SimpleLines = null,
+    /// <summary>Job labour fee. Null → pricing settings default.</summary>
+    decimal? LabourFee = null,
+    /// <summary>Job markup % on Σ landed part costs. Null → settings default.</summary>
+    decimal? MarkupPercent = null,
+    /// <summary>Job fixed markup $ (instead of %). Null → use MarkupPercent / settings.</summary>
+    decimal? MarkupAmount = null,
+    string? DifficultyLevelKey = null,
+    Guid? ServicePricingId = null,
+    decimal? DiscountPercent = null,
+    decimal? DiscountAmount = null);
 
 public sealed record UpdateQuoteRequest(
     string? Issue,
@@ -112,7 +136,14 @@ public sealed record UpdateQuoteRequest(
     string? DeviceCategory,
     int? ValidityDays,
     IReadOnlyList<QuoteLineInputDto> Lines,
-    string? ReviseReason);
+    string? ReviseReason,
+    decimal? LabourFee = null,
+    decimal? MarkupPercent = null,
+    decimal? MarkupAmount = null,
+    string? DifficultyLevelKey = null,
+    Guid? ServicePricingId = null,
+    decimal? DiscountPercent = null,
+    decimal? DiscountAmount = null);
 
 public sealed record QuoteStatusRequest(string Status);
 public sealed record QuoteSearchRequest(string? Q, string? Status, Guid? CustomerId, Guid? RepairTicketId, DateTimeOffset? From, DateTimeOffset? To);

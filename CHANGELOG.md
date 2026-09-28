@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.16 — 2026-09-28
+
+### Changed
+- **Quote pricing**: labour is one fee for the whole job; markup applies once to Σ landed part costs (not per line)
+- Quote entity stores job-level `LabourFee`, `MarkupPercent`/`MarkupAmount`, `PartsCostTotal`, `PartsSellTotal`
+- QuoteBuilder: remove per-line labour/markup; job Labour NumberBox + Markup %; summary Parts cost → Markup → Parts sell → Labour
+- Accepted/frozen quotes unchanged (no recalculation of history)
+- Client / API / product version `1.2.16`
+
 ## 1.2.15 — 2026-09-27
 
 ### Added

@@ -1,6 +1,6 @@
 # Install WorkshopOS
 
-**Version 1.2.15+** — two pieces: a **server** (Docker, one command) and a **Windows client** (download `WorkshopOS-Setup-x.y.z.exe` from GitHub Releases).
+**Version 1.2.16+** — two pieces: a **server** (Docker, one command) and a **Windows client** (download `WorkshopOS-Setup-x.y.z.exe` from GitHub Releases).
 
 ```
   Client (Setup.exe)  <-->  API (:5088)  <-->  PostgreSQL
@@ -85,7 +85,7 @@ If clone succeeded but compose failed:
 ## 3. Install the Windows client (Setup.exe)
 
 1. Open **[GitHub Releases](https://github.com/Ayden0726/repairos/releases)**
-2. Download **`WorkshopOS-Setup-x.y.z.exe`** (example: `WorkshopOS-Setup-1.2.15.exe`)
+2. Download **`WorkshopOS-Setup-x.y.z.exe`** (example: `WorkshopOS-Setup-1.2.16.exe`)
 3. Run it on each shop PC (Windows 10/11 x64)
 4. Start the **server first**, then open the client
 
@@ -312,8 +312,8 @@ Prerequisites and commands: [apps/windows-client/README.md](../apps/windows-clie
 Publishing a Release tag (maintainers):
 
 ```bash
-git tag v1.2.15
-git push origin v1.2.15
+git tag v1.2.16
+git push origin v1.2.16
 ```
 
-Upload **`WorkshopOS-Setup-1.2.15.exe`** to the GitHub Release assets (or let CI attach build outputs when configured).
+Upload **`WorkshopOS-Setup-1.2.16.exe`** to the GitHub Release assets (or let CI attach build outputs when configured).

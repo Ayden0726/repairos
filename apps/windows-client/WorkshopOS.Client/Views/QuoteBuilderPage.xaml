@@ -97,16 +97,31 @@
                 BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
           <StackPanel Spacing="10">
             <Grid>
-              <TextBlock Text="Line items" FontWeight="SemiBold" VerticalAlignment="Center"
+              <TextBlock Text="Parts (costs)" FontWeight="SemiBold" VerticalAlignment="Center"
                          Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <Button Content="Add line" Command="{x:Bind ViewModel.AddLineCommand}" />
+                <Button Content="Add part" Command="{x:Bind ViewModel.AddLineCommand}" />
                 <Button Content="Recalculate" Command="{x:Bind ViewModel.RecalcCommand}" />
               </StackPanel>
             </Grid>
             <TextBlock Text="{x:Bind ViewModel.PricingDefaultsSummary, Mode=OneWay}"
                        Foreground="{ThemeResource WorkshopTextSecondaryBrush}"
                        TextWrapping="Wrap" FontSize="12" />
+            <Grid ColumnSpacing="12">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <NumberBox Header="Job labour fee"
+                         Value="{x:Bind ViewModel.JobLabourFee, Mode=TwoWay}"
+                         SpinButtonPlacementMode="Compact"
+                         IsEnabled="{x:Bind ViewModel.CanOverrideLabour, Mode=OneWay}"
+                         LostFocus="LineField_LostFocus" />
+              <NumberBox Grid.Column="1" Header="Job markup %"
+                         Value="{x:Bind ViewModel.JobMarkupPercent, Mode=TwoWay}"
+                         SpinButtonPlacementMode="Compact"
+                         IsEnabled="{x:Bind ViewModel.CanChangeMarkup, Mode=OneWay}"
+                         LostFocus="LineField_LostFocus" />
+            </Grid>
             <ItemsControl ItemsSource="{x:Bind ViewModel.Lines, Mode=OneWay}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="local:QuoteLineDraft">
@@ -125,20 +140,17 @@
                       <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                           <ColumnDefinition Width="*" /><ColumnDefinition Width="90" />
-                          <ColumnDefinition Width="100" /><ColumnDefinition Width="100" />
-                          <ColumnDefinition Width="90" /><ColumnDefinition Width="90" />
+                          <ColumnDefinition Width="110" /><ColumnDefinition Width="100" />
+                          <ColumnDefinition Width="100" />
                         </Grid.ColumnDefinitions>
                         <TextBox Header="SKU / part" Text="{x:Bind Sku, Mode=TwoWay}" LostFocus="LineField_LostFocus" />
-                        <!-- NumberBox.Value is double; QuoteLineDraft numerics must be double for x:Bind -->
                         <NumberBox Grid.Column="1" Header="Qty" Value="{x:Bind Quantity, Mode=TwoWay}"
                                    SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
                         <NumberBox Grid.Column="2" Header="Part cost" Value="{x:Bind PartCost, Mode=TwoWay}"
                                    SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="3" Header="Markup %" Value="{x:Bind MarkupPercent, Mode=TwoWay}"
+                        <NumberBox Grid.Column="3" Header="Shipping" Value="{x:Bind ShippingCost, Mode=TwoWay}"
                                    SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="4" Header="Labour" Value="{x:Bind LabourAmount, Mode=TwoWay}"
-                                   SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
-                        <NumberBox Grid.Column="5" Header="Discount" Value="{x:Bind DiscountAmount, Mode=TwoWay}"
+                        <NumberBox Grid.Column="4" Header="Other cost" Value="{x:Bind OtherCost, Mode=TwoWay}"
                                    SpinButtonPlacementMode="Compact" LostFocus="LineField_LostFocus" />
                       </Grid>
                       <Grid ColumnSpacing="8">
@@ -146,7 +158,6 @@
                           <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                           <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <!-- No x:Name inside DataTemplate (XamlCompiler field generation). -->
                         <ComboBox Header="Inventory part" DisplayMemberPath="Name"
                                   HorizontalAlignment="Stretch" SelectionChanged="PartCombo_SelectionChanged"
                                   GotFocus="PartCombo_GotFocus" Tag="{x:Bind}" />
@@ -158,8 +169,8 @@
                                   GotFocus="ServiceCombo_GotFocus" Tag="{x:Bind}" />
                         <TextBlock Grid.Column="3" VerticalAlignment="Bottom" Margin="0,0,0,8"
                                    Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-                          <Run Text="Sell " /><Run Text="{x:Bind PartSellText, Mode=OneWay}" />
-                          <Run Text=" · Line " /><Run Text="{x:Bind LineTotalText, Mode=OneWay}" />
+                          <Run Text="Landed " /><Run Text="{x:Bind LandedCostText, Mode=OneWay}" />
+                          <Run Text=" · Line cost " /><Run Text="{x:Bind LineCostText, Mode=OneWay}" />
                         </TextBlock>
                       </Grid>
                     </StackPanel>
@@ -193,8 +204,17 @@
       <StackPanel Spacing="10">
         <TextBlock Text="Quote summary" FontSize="18" FontWeight="SemiBold"
                    Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+        <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}"
+                   Visibility="{x:Bind ViewModel.CanViewCost, Mode=OneWay}">
+          <Run Text="Parts cost " /><Run Text="{x:Bind ViewModel.PartsCostTotalText, Mode=OneWay}" />
+        </TextBlock>
+        <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}"
+                   Visibility="{x:Bind ViewModel.CanViewCost, Mode=OneWay}">
+          <Run Text="Markup (" /><Run Text="{x:Bind ViewModel.JobMarkupPercentText, Mode=OneWay}" /><Run Text="%) " />
+          <Run Text="{x:Bind ViewModel.MarkupAmountText, Mode=OneWay}" />
+        </TextBlock>
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
-          <Run Text="Parts " /><Run Text="{x:Bind ViewModel.PartsSubtotalText, Mode=OneWay}" />
+          <Run Text="Parts sell " /><Run Text="{x:Bind ViewModel.PartsSellTotalText, Mode=OneWay}" />
         </TextBlock>
         <TextBlock Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
           <Run Text="Labour " /><Run Text="{x:Bind ViewModel.LabourSubtotalText, Mode=OneWay}" />

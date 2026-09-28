@@ -239,6 +239,12 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.MarginPercent).HasPrecision(12, 2);
             e.Property(x => x.PreRoundTotal).HasPrecision(12, 2);
             e.Property(x => x.AcceptedTotal).HasPrecision(12, 2);
+            e.Property(x => x.PartsCostTotal).HasPrecision(12, 2);
+            e.Property(x => x.PartsSellTotal).HasPrecision(12, 2);
+            e.Property(x => x.MarkupPercent).HasPrecision(12, 2);
+            e.Property(x => x.MarkupAmount).HasPrecision(12, 2);
+            e.Property(x => x.LabourFee).HasPrecision(12, 2);
+            e.Property(x => x.AdditionalTotal).HasPrecision(12, 2);
             e.HasIndex(x => x.CreatedAt);
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.ExpiresAt);

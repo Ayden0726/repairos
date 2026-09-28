@@ -25,9 +25,12 @@ public class Quote : SoftDeleteEntity
     public string? DeviceModel { get; set; }
     public string? DeviceSerial { get; set; }
     public string? DeviceCategory { get; set; }
+    /// <summary>Parts sell after job markup (synced with PartsSellTotal).</summary>
     public decimal PartsSubtotal { get; set; }
+    /// <summary>Job labour fee (synced with LabourFee).</summary>
     public decimal LabourSubtotal { get; set; }
     public decimal DiscountTotal { get; set; }
+    /// <summary>Σ landed part costs (synced with PartsCostTotal).</summary>
     public decimal CostTotal { get; set; }
     public decimal ProfitTotal { get; set; }
     public decimal MarginPercent { get; set; }
@@ -37,6 +40,17 @@ public class Quote : SoftDeleteEntity
     public decimal Subtotal { get; set; }
     public decimal GstAmount { get; set; }
     public decimal Total { get; set; }
+    /// <summary>Σ landed part costs before job markup.</summary>
+    public decimal PartsCostTotal { get; set; }
+    /// <summary>Parts sell after applying job markup once to PartsCostTotal.</summary>
+    public decimal PartsSellTotal { get; set; }
+    /// <summary>Job-level markup percent applied to PartsCostTotal.</summary>
+    public decimal MarkupPercent { get; set; }
+    /// <summary>Job-level markup dollar amount.</summary>
+    public decimal MarkupAmount { get; set; }
+    /// <summary>Single labour/service fee for the whole quote/job.</summary>
+    public decimal LabourFee { get; set; }
+    public decimal AdditionalTotal { get; set; }
     public ICollection<QuoteLine> Lines { get; set; } = new List<QuoteLine>();
     public ICollection<QuoteRevision> Revisions { get; set; } = new List<QuoteRevision>();
     public ICollection<QuoteAuditEntry> AuditEntries { get; set; } = new List<QuoteAuditEntry>();
