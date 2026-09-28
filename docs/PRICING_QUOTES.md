@@ -30,7 +30,7 @@ Accepted quotes are **frozen** (financial snapshot preserved). Settings changes 
 
 ## Customer print
 
-`GET /api/quotes/{id}/print` — HTML like repair job sheets. **No** cost, markup, or profit fields. Shows parts/labour in the totals block.
+`GET /api/quotes/{id}/print` — A4 HTML (`@page { size: A4; margin: 12mm }`, ~190mm sheet) opened by WinUI Print. Money uses the business currency symbol (AUD → `$`; never culture `¤`). Lists part descriptions with customer sell amounts (job markup allocated; **no** per-line labour), one **Labour / service** line, then Parts / Labour / Tax / Total. **No** cost, markup %, or profit fields.
 
 ## Permissions
 

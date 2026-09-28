@@ -93,9 +93,20 @@ public sealed class QuotePricingFlowTests
         var html = await print.Content.ReadAsStringAsync();
         html.Should().Contain(quote.Number);
         html.Should().Contain("OLED assembly");
+        html.Should().Contain("@page{size:A4;margin:12mm}");
+        html.Should().Contain("max-width:190mm");
+        html.Should().Contain("$");
+        html.Should().NotContain("¤");
+        html.Should().Contain("Labour / service");
+        html.Should().Contain("$50.00");
+        html.Should().Contain("<span>Parts</span>");
+        html.Should().Contain("<span>Labour</span>");
+        html.Should().Contain("Amount");
         html.Should().NotContain("Landed");
         html.Should().NotContain("Markup");
         html.Should().NotContain("Profit");
+        // Single labour row — not duplicated across part lines
+        (html.Split("Labour / service", StringSplitOptions.None).Length - 1).Should().Be(1);
 
         var dash = await _client.GetFromJsonAsync<DashboardDto>("/api/dashboard");
         dash!.QuoteAnalytics.Should().NotBeNull();

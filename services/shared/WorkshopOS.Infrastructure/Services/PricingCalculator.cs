@@ -113,9 +113,8 @@ public static class PricingCalculator
         var lineResults = new List<QuoteLineCalcResult>();
         foreach (var p in prepared)
         {
-            // Lines list at cost; job markup/labour live on the summary.
-            // UnitPrice/PartSell = landed so customer print can still show a unit figure;
-            // proportional sell share is applied so line totals sum to PartsSellTotal.
+            // Lines list at customer sell share of job PartsSellTotal (no per-line labour).
+            // UnitPrice/PartSell = allocated unit sell; labour is job-level only.
             decimal unitSell;
             decimal lineSell;
             decimal lineMarkupAmt;

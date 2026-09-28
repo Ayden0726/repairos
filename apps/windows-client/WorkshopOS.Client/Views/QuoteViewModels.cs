@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Auth;
+using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Workshop;
 
@@ -90,11 +92,20 @@ public partial class QuoteLineDraft : ObservableObject
     [ObservableProperty] private double _partSell;
     [ObservableProperty] private double _lineTotal;
 
-    public string LandedCostText => LandedCost.ToString("0.00");
-    public string LineCostText => LineCost.ToString("0.00");
+    /// <summary>Shared with QuoteBuilderViewModel — business currency symbol, default $.</summary>
+    public static string CurrencySymbol { get; set; } = "$";
+
+    public string LandedCostText => MoneyDisplay.FormatWithSymbol(LandedCost, CurrencySymbol);
+    public string LineCostText => MoneyDisplay.FormatWithSymbol(LineCost, CurrencySymbol);
 
     partial void OnLandedCostChanged(double value) => OnPropertyChanged(nameof(LandedCostText));
     partial void OnLineCostChanged(double value) => OnPropertyChanged(nameof(LineCostText));
+
+    public void RefreshMoneyText()
+    {
+        OnPropertyChanged(nameof(LandedCostText));
+        OnPropertyChanged(nameof(LineCostText));
+    }
 }
 
 public partial class QuoteBuilderViewModel : ObservableObject
@@ -162,19 +173,22 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private bool _canOverrideLabour;
     [ObservableProperty] private string _pricingDefaultsSummary = "Loading pricing settings…";
     [ObservableProperty] private int _defaultValidityDays = 14;
+    [ObservableProperty] private string _currencySymbol = "$";
 
-    public string PartsCostTotalText => PartsCostTotal.ToString("0.00");
-    public string MarkupAmountText => MarkupAmount.ToString("0.00");
-    public string PartsSellTotalText => PartsSellTotal.ToString("0.00");
-    public string PartsSubtotalText => PartsSellTotal.ToString("0.00");
-    public string LabourSubtotalText => LabourSubtotal.ToString("0.00");
-    public string DiscountTotalText => DiscountTotal.ToString("0.00");
-    public string AdditionalTotalText => AdditionalTotal.ToString("0.00");
-    public string SubtotalText => Subtotal.ToString("0.00");
-    public string GstAmountText => GstAmount.ToString("0.00");
-    public string TotalText => Total.ToString("0.00");
-    public string CostTotalText => CostTotal.ToString("0.00");
-    public string ProfitTotalText => ProfitTotal.ToString("0.00");
+    private string Money(decimal amount) => MoneyDisplay.FormatWithSymbol(amount, CurrencySymbol);
+
+    public string PartsCostTotalText => Money(PartsCostTotal);
+    public string MarkupAmountText => Money(MarkupAmount);
+    public string PartsSellTotalText => Money(PartsSellTotal);
+    public string PartsSubtotalText => Money(PartsSellTotal);
+    public string LabourSubtotalText => Money(LabourSubtotal);
+    public string DiscountTotalText => Money(DiscountTotal);
+    public string AdditionalTotalText => Money(AdditionalTotal);
+    public string SubtotalText => Money(Subtotal);
+    public string GstAmountText => Money(GstAmount);
+    public string TotalText => Money(Total);
+    public string CostTotalText => Money(CostTotal);
+    public string ProfitTotalText => Money(ProfitTotal);
     public string MarginPercentText => MarginPercent.ToString("0.0");
     public string MarginWarningText => MarginWarning ?? string.Empty;
     public string JobMarkupPercentText => JobMarkupPercent.ToString("0.##");
@@ -276,6 +290,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
     {
         try
         {
+            await LoadCurrencySymbolAsync();
             _pricing = await _api.GetAsync<PricingSettingsDto>("api/pricing/settings");
             DefaultValidityDays = _pricing.Quote.DefaultValidityDays > 0
                 ? _pricing.Quote.DefaultValidityDays
@@ -286,7 +301,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 : $"{(tax.Inclusive ? "inc" : "ex")} GST {(tax.Rate * 100m):0.##}%";
             PricingDefaultsSummary =
                 $"Job labour + markup on Σ part costs · {_pricing.Parts.MarkupMethod} {_pricing.Parts.DefaultMarkupPercent:0.##}% · " +
-                $"labour ${_pricing.Labour.DefaultLabourFee:0.##} · round {_pricing.Rounding.Method} · " +
+                $"labour {Money(_pricing.Labour.DefaultLabourFee)} · round {_pricing.Rounding.Method} · " +
                 $"min margin {_pricing.Profitability.MinimumGrossMarginPercent:0.##}% · {taxText}";
         }
         catch (Exception ex)
@@ -294,6 +309,24 @@ public partial class QuoteBuilderViewModel : ObservableObject
             _pricing = null;
             PricingDefaultsSummary = $"Could not load pricing settings: {ex.Message}";
         }
+    }
+
+    private async Task LoadCurrencySymbolAsync()
+    {
+        try
+        {
+            var business = await _api.GetAsync<BusinessProfileDto>("api/settings/business");
+            CurrencySymbol = MoneyDisplay.SymbolFromCurrencyCode(business?.Currency);
+        }
+        catch
+        {
+            CurrencySymbol = "$";
+        }
+
+        QuoteLineDraft.CurrencySymbol = CurrencySymbol;
+        foreach (var line in Lines)
+            line.RefreshMoneyText();
+        NotifySummaryText();
     }
 
     private void SeedJobDefaultsFromSettings()

@@ -2,10 +2,15 @@
 
 ## 1.2.16 — 2026-09-28
 
+### Fixed
+- **Customer quote print** (`GET /api/quotes/{id}/print`): money uses `$` (or business currency symbol) — never culture `¤`; A4 `@page { size: A4; margin: 12mm }` with ~190mm sheet width
+- Print lists **parts** (customer sell amounts, no per-line labour) plus one **Labour / service** line; summary Parts / Labour / Tax / Total matches job-level pricing. No cost, markup %, or profit on the customer doc
+
 ### Changed
 - **Quote pricing**: labour is one fee for the whole job; markup applies once to Σ landed part costs (not per line)
 - Quote entity stores job-level `LabourFee`, `MarkupPercent`/`MarkupAmount`, `PartsCostTotal`, `PartsSellTotal`
 - QuoteBuilder: remove per-line labour/markup; job Labour NumberBox + Markup %; summary Parts cost → Markup → Parts sell → Labour
+- **Quote Builder**: displayed prices use business currency symbol (default `$`)
 - Accepted/frozen quotes unchanged (no recalculation of history)
 - Client / API / product version `1.2.16`
 

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WorkshopOS.Application.Abstractions;
 using WorkshopOS.Application.Common;
 using WorkshopOS.Contracts.Auth;
+using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Workshop;
 using WorkshopOS.Domain.Entities;
@@ -452,26 +453,77 @@ public sealed class QuoteService : IQuoteService
         var business = await DbSeed.GetSettingAsync<BusinessProfileDto?>(_db, SettingKeys.BusinessProfile, null, ct);
         static string Esc(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
         var biz = business?.Name ?? "Workshop";
+        // Never use culture ToString("C") — that yields ¤ when culture has no currency region.
+        var currencyCode = business?.Currency;
+        string Money(decimal amount) => Esc(MoneyDisplay.Format(amount, currencyCode));
+
+        var partsSell = q.PartsSellTotal != 0m ? q.PartsSellTotal : q.PartsSubtotal;
+        var labour = q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal;
+
         var device = string.Join(" ", new[] { q.DeviceBrand, q.DeviceModel }.Where(x => !string.IsNullOrWhiteSpace(x)));
         if (string.IsNullOrWhiteSpace(device)) device = "—";
-        var lines = string.Join("", q.Lines.OrderBy(l => l.SortOrder).Select(l =>
-            "<tr><td>" + Esc(l.Description) + "</td><td style=\"text-align:right\">" +
-            Esc(l.Quantity.ToString("0.##")) + "</td><td style=\"text-align:right\">" +
-            Esc(l.UnitPrice.ToString("C")) + "</td><td style=\"text-align:right\">" +
-            Esc(l.LineTotal.ToString("C")) + "</td></tr>"));
+
+        // Customer lines: parts only (sell after job markup allocation), never per-line labour.
+        // Legacy quotes may still store LabourAmount on each line — strip it from the amount shown.
+        static decimal CustomerPartAmount(QuoteLine l)
+        {
+            if (l.PartSell > 0m)
+                return PricingCalculator.RoundMoney(l.PartSell * l.Quantity + l.AdditionalAmount - l.DiscountAmount);
+            // UnitPrice is the customer unit when PartSell was not populated; exclude LabourAmount.
+            if (l.UnitPrice > 0m && l.LabourAmount > 0m)
+                return PricingCalculator.RoundMoney(l.UnitPrice * l.Quantity + l.AdditionalAmount - l.DiscountAmount);
+            return PricingCalculator.RoundMoney(Math.Max(0m, l.LineTotal - l.LabourAmount));
+        }
+
+        var lineHtml = new System.Text.StringBuilder();
+        foreach (var l in q.Lines.OrderBy(x => x.SortOrder))
+        {
+            var amount = CustomerPartAmount(l);
+            lineHtml.Append("<tr><td>").Append(Esc(l.Description)).Append("</td>")
+                .Append("<td class=\"num\">").Append(Esc(l.Quantity.ToString("0.##"))).Append("</td>")
+                .Append("<td class=\"num\">").Append(Money(amount)).Append("</td></tr>");
+        }
+        if (labour > 0m)
+        {
+            lineHtml.Append("<tr><td>Labour / service</td><td class=\"num\">1</td><td class=\"num\">")
+                .Append(Money(labour)).Append("</td></tr>");
+        }
 
         var sb = new System.Text.StringBuilder();
-        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>")
-          .Append(Esc(q.Number)).Append("</title><style>")
-          .Append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#111}")
-          .Append("h1{margin:0 0 4px;font-size:22px}.meta{color:#444;margin-bottom:16px}")
-          .Append("table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}")
-          .Append(".box{border:1px solid #ccc;border-radius:8px;padding:12px;margin:12px 0}")
-          .Append(".label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#666}")
-          .Append(".totals{margin-left:auto;width:280px} .totals div{display:flex;justify-content:space-between;margin:4px 0}")
-          .Append("@media print{button{display:none}}")
-          .Append("</style></head><body>")
-          .Append("<button onclick=\"window.print()\">Print</button>")
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>")
+          .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>")
+          .Append("<title>").Append(Esc(q.Number)).Append("</title><style>")
+          // A4 customer quote — WinUI print opens this HTML in the browser
+          .Append("@page{size:A4;margin:12mm}")
+          .Append("*{box-sizing:border-box}")
+          .Append("html,body{margin:0;padding:0;color:#111;background:#fff}")
+          .Append("body{font-family:Segoe UI,Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.35;")
+          .Append("width:100%;max-width:190mm;margin:0 auto;padding:12px 14px}")
+          .Append(".sheet{width:100%;max-width:190mm}")
+          .Append("h1{margin:0 0 4px;font-size:18pt;font-weight:700}")
+          .Append(".meta{color:#444;margin:0 0 14px;font-size:10pt}")
+          .Append("table{width:100%;border-collapse:collapse;margin:10px 0;table-layout:fixed}")
+          .Append("th,td{border-bottom:1px solid #ccc;padding:7px 6px;text-align:left;vertical-align:top;")
+          .Append("word-wrap:break-word;overflow-wrap:anywhere;font-size:10pt}")
+          .Append("th{font-size:9pt;text-transform:uppercase;letter-spacing:.03em;color:#555}")
+          .Append("th.num,td.num{text-align:right;white-space:nowrap}")
+          .Append("th:nth-child(1),td:nth-child(1){width:62%}")
+          .Append("th:nth-child(2),td:nth-child(2){width:12%}")
+          .Append("th:nth-child(3),td:nth-child(3){width:26%}")
+          .Append(".box{border:1px solid #bbb;border-radius:4px;padding:10px 12px;margin:10px 0}")
+          .Append(".label{font-size:8pt;text-transform:uppercase;letter-spacing:.04em;color:#666;margin-bottom:4px}")
+          .Append(".totals{margin:12px 0 0 auto;width:100%;max-width:70mm}")
+          .Append(".totals div{display:flex;justify-content:space-between;gap:12px;margin:3px 0;font-size:10pt}")
+          .Append(".totals .grand{font-weight:700;font-size:12pt;margin-top:6px;padding-top:6px;border-top:1px solid #333}")
+          .Append("button{margin:0 0 12px;padding:8px 14px;font-size:11pt}")
+          .Append("@media print{")
+          .Append("button{display:none!important}")
+          .Append("body{padding:0;max-width:190mm;width:auto;font-size:10pt}")
+          .Append(".sheet{max-width:190mm}")
+          .Append("a{color:inherit;text-decoration:none}")
+          .Append("}")
+          .Append("</style></head><body><div class=\"sheet\">")
+          .Append("<button type=\"button\" onclick=\"window.print()\">Print</button>")
           .Append("<h1>").Append(Esc(biz)).Append("</h1>")
           .Append("<div class=\"meta\">Quote ").Append(Esc(q.Number)).Append(" · ").Append(Esc(q.Status))
           .Append(q.ExpiresAt is null ? "" : " · Valid until " + Esc(q.ExpiresAt.Value.ToLocalTime().ToString("d")))
@@ -484,20 +536,20 @@ public sealed class QuoteService : IQuoteService
         if (!string.IsNullOrWhiteSpace(q.Issue))
             sb.Append("<div class=\"box\"><div class=\"label\">Issue</div><pre style=\"white-space:pre-wrap;font-family:inherit;margin:0\">")
               .Append(Esc(q.Issue)).Append("</pre></div>");
-        sb.Append("<table><thead><tr><th>Description</th><th style=\"text-align:right\">Qty</th><th style=\"text-align:right\">Price</th><th style=\"text-align:right\">Total</th></tr></thead><tbody>")
-          .Append(lines).Append("</tbody></table>")
+        sb.Append("<table><thead><tr><th>Description</th><th class=\"num\">Qty</th><th class=\"num\">Amount</th></tr></thead><tbody>")
+          .Append(lineHtml).Append("</tbody></table>")
           .Append("<div class=\"totals\">")
-          .Append("<div><span>Parts</span><span>").Append(Esc((q.PartsSellTotal != 0m ? q.PartsSellTotal : q.PartsSubtotal).ToString("C"))).Append("</span></div>")
-          .Append("<div><span>Labour</span><span>").Append(Esc((q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal).ToString("C"))).Append("</span></div>");
+          .Append("<div><span>Parts</span><span>").Append(Money(partsSell)).Append("</span></div>")
+          .Append("<div><span>Labour</span><span>").Append(Money(labour)).Append("</span></div>");
         if (q.DiscountTotal > 0)
-            sb.Append("<div><span>Discount</span><span>-").Append(Esc(q.DiscountTotal.ToString("C"))).Append("</span></div>");
-        sb.Append("<div><span>Subtotal</span><span>").Append(Esc(q.Subtotal.ToString("C"))).Append("</span></div>")
-          .Append("<div><span>Tax</span><span>").Append(Esc(q.GstAmount.ToString("C"))).Append("</span></div>")
-          .Append("<div style=\"font-weight:700\"><span>Total</span><span>").Append(Esc(q.Total.ToString("C"))).Append("</span></div>")
+            sb.Append("<div><span>Discount</span><span>-").Append(Money(q.DiscountTotal)).Append("</span></div>");
+        sb.Append("<div><span>Subtotal</span><span>").Append(Money(q.Subtotal)).Append("</span></div>")
+          .Append("<div><span>Tax</span><span>").Append(Money(q.GstAmount)).Append("</span></div>")
+          .Append("<div class=\"grand\"><span>Total</span><span>").Append(Money(q.Total)).Append("</span></div>")
           .Append("</div>");
         if (!string.IsNullOrWhiteSpace(q.CustomerNotes))
             sb.Append("<div class=\"box\"><div class=\"label\">Notes</div>").Append(Esc(q.CustomerNotes)).Append("</div>");
-        sb.Append("<script>window.onload=function(){setTimeout(function(){window.print()},300);}</script>")
+        sb.Append("</div><script>window.onload=function(){setTimeout(function(){window.print()},300);}</script>")
           .Append("</body></html>");
         return sb.ToString();
     }
