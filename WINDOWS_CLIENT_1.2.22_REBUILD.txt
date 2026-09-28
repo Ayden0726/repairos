@@ -1,0 +1,36 @@
+WorkshopOS Windows client 1.2.22 - rebuild on Windows
+
+Banner must show: Client 1.2.22
+
+Root cause of 1.2.21 publish failure (CS0101):
+  ServicePickerControl.xaml.cs AND ServiceCataloguePickerLogic.cs both
+  defined CatalogueServiceRow. Zip Expand-Archive -Force does NOT delete
+  leftover files, so ServicePickerControl survived after the 1.2.21 overlay.
+
+1.2.22 fix:
+  - ServicePickerControl.xaml + .xaml.cs must be ABSENT
+  - Only ServiceCataloguePickerLogic.cs owns CatalogueServiceRow
+  - Wipe apps\windows-client\WorkshopOS.Client\obj before publish
+  - Rebuild script asserts picker files are gone
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.22
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.22 -SkipInstaller
+
+One-shot (overlay + DELETE leftover picker + wipe obj + build):
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.22.ps1
+
+If publish fails:
+  powershell -ExecutionPolicy Bypass -File .\packaging\dump-xaml-errors.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.22.zip
+  packaging\dist\WorkshopOS-Setup-1.2.22.exe  (if Inno Setup 6 installed)
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update
+
+Agent overlay:
+  http://127.0.0.1:28765/repairos-github-sync.zip

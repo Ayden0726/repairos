@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (docs/setup 1.2.15+)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (client 1.2.22 — delete ServicePickerControl)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -74,11 +74,26 @@ PowerShell (ASCII-safe):
   Invoke-WebRequest -Uri 'http://127.0.0.1:28765/repairos-github-sync.zip' -OutFile \$zip
   Expand-Archive -Path \$zip -DestinationPath \$repo -Force
   Set-Location \$repo
+  # CRITICAL: Expand-Archive never deletes orphans. Remove leftover UserControl:
+  Remove-Item -Force -ErrorAction SilentlyContinue \`
+    "\$repo\\apps\\windows-client\\WorkshopOS.Client\\Views\\ServicePickerControl.xaml", \`
+    "\$repo\\apps\\windows-client\\WorkshopOS.Client\\Views\\ServicePickerControl.xaml.cs"
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue \`
+    "\$repo\\apps\\windows-client\\WorkshopOS.Client\\obj", \`
+    "\$repo\\apps\\windows-client\\WorkshopOS.Client\\bin"
   git add -A
   git status
-  git commit -m "Docs + setup: Release Setup.exe install path, improved get-workshopos.sh"
+  # Expect: deleted ServicePickerControl.*, Version 1.2.22
+  git commit -m "Client 1.2.22: delete ServicePickerControl (fix CS0101 CatalogueServiceRow)"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
+
+Windows client rebuild (after overlay + delete above):
+
+  powershell -ExecutionPolicy Bypass -File .\\scripts\\rebuild-client-1.2.22.ps1
+
+  # or manually:
+  # powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.22
 
 Then update SERVER (WSL):
 
@@ -87,10 +102,6 @@ Then update SERVER (WSL):
   chmod +x scripts/*.sh
   ./scripts/restart-workshopos.sh --update
 
-Windows client: download WorkshopOS-Setup-x.y.z.exe from
-  https://github.com/Ayden0726/repairos/releases
-(Do not run packaging\\build-client.ps1 for normal use.)
-
 WSL / bash:
 
   REPO="\${HOME}/workshopos"
@@ -98,7 +109,10 @@ WSL / bash:
   curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO"
-  git add -A && git commit -m "Docs + setup: Release Setup.exe install path, improved get-workshopos.sh"
+  rm -f apps/windows-client/WorkshopOS.Client/Views/ServicePickerControl.xaml \\
+        apps/windows-client/WorkshopOS.Client/Views/ServicePickerControl.xaml.cs
+  rm -rf apps/windows-client/WorkshopOS.Client/obj apps/windows-client/WorkshopOS.Client/bin
+  git add -A && git commit -m "Client 1.2.22: delete ServicePickerControl (fix CS0101 CatalogueServiceRow)"
   git push -u origin main
   chmod +x scripts/*.sh
   ./scripts/restart-workshopos.sh --update
@@ -111,15 +125,19 @@ OPTION B: git bundle
   cd "\$REPO"
   git fetch /tmp/repairos-main.bundle main:refs/remotes/agent/main
   git merge --ff-only refs/remotes/agent/main
+  # Still force-delete orphans if merge did not remove them:
+  rm -f apps/windows-client/WorkshopOS.Client/Views/ServicePickerControl.xaml \\
+        apps/windows-client/WorkshopOS.Client/Views/ServicePickerControl.xaml.cs
   git push origin main
 
 ────────────────────────────────────────────────────────────
-Key changes in this sync
+Key changes in this sync (1.2.22)
 ────────────────────────────────────────────────────────────
-  Improved scripts/get-workshopos.sh (--update, health, pairing, Releases next steps)
-  restart-workshopos.sh / continue-workshopos-setup.sh clearer banners
-  README + docs/INSTALL.md: client via GitHub Release Setup.exe
-  Troubleshooting: 404=old server, Smart App Control, divergent git, chmod, Docker, ports
+  FIX CS0101: CatalogueServiceRow defined twice — ServicePickerControl.xaml.cs
+  still on disk after 1.2.21 zip overlay. Delete those files + wipe obj.
+  CatalogueServiceRow lives only in ServiceCataloguePickerLogic.cs.
+  Client / API / ClientMinVersion = 1.2.22
+  scripts/rebuild-client-1.2.22.ps1 force-deletes orphans before publish
 EOF
 cp -f "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" "$SERVE/"
 ls -lh "$OUT/repairos-github-sync.zip" "$OUT/repairos-main.bundle" "$SERVE/repairos-github-sync.zip"

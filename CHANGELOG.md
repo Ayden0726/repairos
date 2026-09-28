@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.22 — 2026-09-28
+
+### Fixed
+- **CS0101 / CS0111 duplicate `CatalogueServiceRow`**: zip overlay from 1.2.21 did not delete orphan `ServicePickerControl.xaml(.cs)` on disk, so both the old UserControl and `ServiceCataloguePickerLogic.cs` compiled. Rebuild script now force-deletes those files and wipes `obj`/`bin` after overlay.
+- `CatalogueServiceRow` remains defined only in `ServiceCataloguePickerLogic.cs`.
+
+### Changed
+- API / product version `1.2.22` (ClientMinVersion `1.2.22`)
+
 ## 1.2.21 — 2026-09-28
 
 ### Fixed

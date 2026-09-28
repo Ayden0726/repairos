@@ -35,7 +35,7 @@ Write-Host ""
 
 if (-not (Test-Path $LogPath)) {
     Write-Host "MISSING log file. Run a publish first:" -ForegroundColor Red
-    Write-Host "  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.21 -SkipInstaller"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.22 -SkipInstaller"
     exit 1
 }
 
@@ -100,4 +100,4 @@ Write-Host ("-" * 72)
 $lines | Select-Object -Last $Tail
 Write-Host ("-" * 72)
 Write-Host ""
-Write-Host "Done. Fix the >> lines above, then rebuild 1.2.21." -ForegroundColor Green
+Write-Host "Done. Fix the >> lines above, then rebuild 1.2.22." -ForegroundColor Green
