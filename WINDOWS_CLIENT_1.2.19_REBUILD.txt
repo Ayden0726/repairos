@@ -9,6 +9,11 @@ Banner must show: Client 1.2.19
   - Favourites / recent, brands & models, repair_service_lines + warranty on print
   - API /api/catalogue/* + seed.service_catalogue_version import
 
+XamlCompiler fix (republish if publish failed on ServicePicker):
+  - ServicePicker DataTemplates bind CatalogueServiceRow string helpers only
+  - Do NOT x:Bind decimal/int? (DefaultLabourFee, EstimatedMinutes) to Run.Text
+  - NumberBox.Value is double — custom labour/minutes read in code-behind
+
 Build Setup.exe:
   powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.19
 

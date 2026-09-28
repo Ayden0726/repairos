@@ -14,8 +14,8 @@ $ErrorActionPreference = 'Stop'
 # ========== EDIT IF NEEDED ==========
 $Repo   = 'C:\Users\ayden\src\repairos'
 $NewRun = Join-Path $env:USERPROFILE 'Desktop\WorkshopOS-Client-1.2.19'
-$AgentSyncUrl = 'http://127.0.0.1:28765/repairos-github-sync.zip'   # optional overlay if GitHub stale
-$UseAgentOverlay = $false   # set $true to force zip overlay from agent :28765
+$AgentSyncUrl = 'http://127.0.0.1:28765/repairos-github-sync.zip'   # ServicePicker XamlCompiler fix overlay
+$UseAgentOverlay = $true   # pull agent zip (XamlCompiler ServicePicker string-row fix) before build
 # ====================================
 
 Write-Host '=== WorkshopOS Client 1.2.19 - wipe / verify / build / launch ===' -ForegroundColor Cyan

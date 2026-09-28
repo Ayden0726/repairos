@@ -10,6 +10,10 @@
 - Multi-service repair lines + per-line complete; warranty days on ticket/quote print
 - Permission `pricing.manage_catalogue` (writes also accept `pricing.edit_settings`)
 
+### Fixed
+- **XamlCompiler MSB3073** on ServicePicker: DataTemplates no longer `x:Bind` `decimal` / `int?` (`DefaultLabourFee`, `EstimatedMinutes`) to `Run.Text` — use string-only `CatalogueServiceRow` helpers (same rule as Quote Builder NumberBox `double` vs `decimal`)
+- ServicePicker NumberBoxes stay unbound (code-behind reads `double` Value); removed unused WPF `System.Windows.Input` using
+
 ### Server / Client
 - API / product version `1.2.19` (ClientMinVersion `1.2.19`)
 
