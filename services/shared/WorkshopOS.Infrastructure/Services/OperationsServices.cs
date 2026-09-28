@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using WorkshopOS.Application.Abstractions;
 using WorkshopOS.Application.Common;
 using WorkshopOS.Contracts.Operations;
+using WorkshopOS.Domain;
 using WorkshopOS.Domain.Entities;
 using WorkshopOS.Infrastructure.Persistence;
 
@@ -28,6 +29,8 @@ internal static class DocumentNumbering
         seq.NextValue++;
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        // Avoid leftover Modified tracking interacting with later SaveChanges in the same scope.
+        db.Entry(seq).State = EntityState.Detached;
         return $"{prefix}-{year}-{value:D5}";
     }
 }
@@ -271,17 +274,31 @@ public sealed class InventoryService : IInventoryService
         _audit = audit;
     }
 
-    public async Task<IReadOnlyList<InventoryListItemDto>> ListAsync(CancellationToken ct = default) =>
-        await _db.InventoryItems.AsNoTracking()
+    public async Task<IReadOnlyList<InventoryListItemDto>> ListAsync(string? componentType = null, bool availableOnly = false, CancellationToken ct = default)
+    {
+        var query = _db.InventoryItems.AsNoTracking()
             .Include(i => i.Supplier)
-            .Where(i => i.ArchivedAt == null)
+            .Where(i => i.ArchivedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(componentType) &&
+            !componentType.Equals("All", StringComparison.OrdinalIgnoreCase))
+        {
+            var type = PcComponentTypes.Normalize(componentType);
+            query = query.Where(i => i.ComponentType == type);
+        }
+
+        if (availableOnly)
+            query = query.Where(i => (i.QuantityOnHand - i.QuantityReserved) > 0);
+
+        return await query
             .OrderBy(i => i.Sku)
             .Select(i => new InventoryListItemDto(
                 i.Id, i.Sku, i.Name, i.Category, i.QuantityOnHand, i.QuantityReserved,
                 Math.Max(0, i.QuantityOnHand - i.QuantityReserved), i.MinimumStock, i.SellPrice,
                 (i.QuantityOnHand - i.QuantityReserved) <= i.MinimumStock,
-                i.Cost, i.Supplier != null ? i.Supplier.Name : null))
+                i.Cost, i.Supplier != null ? i.Supplier.Name : null, i.ComponentType))
             .ToListAsync(ct);
+    }
 
     public async Task<InventoryListItemDto> UpsertAsync(UpsertInventoryRequest request, Guid actorId, CancellationToken ct = default)
     {
@@ -306,6 +323,7 @@ public sealed class InventoryService : IInventoryService
         item.Barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
         item.Name = request.Name.Trim();
         item.Category = string.IsNullOrWhiteSpace(request.Category) ? "Parts" : request.Category.Trim();
+        item.ComponentType = PcComponentTypes.Normalize(request.ComponentType);
         item.Cost = request.Cost;
         item.SellPrice = request.SellPrice;
         item.QuantityOnHand = request.QuantityOnHand;
@@ -316,7 +334,7 @@ public sealed class InventoryService : IInventoryService
         item.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "inventory.upsert", "InventoryItem", item.Id.ToString(), newValue: new { item.Sku }, ct: ct);
-        return (await ListAsync(ct)).First(x => x.Id == item.Id);
+        return (await ListAsync(ct: ct)).First(x => x.Id == item.Id);
     }
 
     public async Task<InventoryListItemDto> AdjustAsync(Guid id, AdjustStockRequest request, Guid actorId, CancellationToken ct = default)
@@ -338,18 +356,33 @@ public sealed class InventoryService : IInventoryService
             ActorUserId = actorId
         });
         await _db.SaveChangesAsync(ct);
-        return (await ListAsync(ct)).First(x => x.Id == id);
+        return (await ListAsync(ct: ct)).First(x => x.Id == id);
     }
 
     public async Task ReserveAsync(ReserveStockRequest request, Guid actorId, CancellationToken ct = default)
     {
         if (request.Quantity <= 0) throw new ValidationAppException("Quantity must be positive.");
+        var hasTicket = request.TicketId is Guid;
+        var hasBuild = request.PcBuildId is Guid;
+        if (hasTicket == hasBuild)
+            throw new ValidationAppException("Provide exactly one of TicketId or PcBuildId.");
+
         var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == request.ItemId && i.ArchivedAt == null, ct)
             ?? throw new AppException("not_found", "Inventory item was not found.", 404);
-        _ = await _db.RepairTickets.FirstOrDefaultAsync(t => t.Id == request.TicketId && t.ArchivedAt == null, ct)
-            ?? throw new AppException("not_found", "Repair was not found.", 404);
+
+        if (hasTicket)
+        {
+            _ = await _db.RepairTickets.FirstOrDefaultAsync(t => t.Id == request.TicketId && t.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Repair was not found.", 404);
+        }
+        else
+        {
+            _ = await _db.PcBuilds.FirstOrDefaultAsync(b => b.Id == request.PcBuildId && b.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "PC build was not found.", 404);
+        }
+
         if (item.Available < request.Quantity)
-            throw new ValidationAppException("Insufficient available stock.");
+            throw new ValidationAppException("Insufficient available stock (already reserved or out of stock).");
 
         item.QuantityReserved += request.Quantity;
         item.UpdatedAt = DateTimeOffset.UtcNow;
@@ -357,6 +390,7 @@ public sealed class InventoryService : IInventoryService
         {
             ItemId = item.Id,
             TicketId = request.TicketId,
+            PcBuildId = request.PcBuildId,
             Quantity = request.Quantity,
             Status = "Reserved"
         });
@@ -365,7 +399,9 @@ public sealed class InventoryService : IInventoryService
             ItemId = item.Id,
             Type = "Reserve",
             QuantityDelta = 0,
-            Reason = $"Reserved {request.Quantity} for ticket",
+            Reason = hasTicket
+                ? $"Reserved {request.Quantity} for repair"
+                : $"Reserved {request.Quantity} for PC build",
             TicketId = request.TicketId,
             ActorUserId = actorId
         });
@@ -396,6 +432,28 @@ public sealed class InventoryService : IInventoryService
             ActorUserId = actorId
         });
         await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task ReleaseReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default)
+    {
+        var res = await _db.InventoryReservations.Include(r => r.Item)
+            .FirstOrDefaultAsync(r => r.Id == reservationId && r.Status == "Reserved", ct)
+            ?? throw new AppException("not_found", "Reservation was not found.", 404);
+        var item = res.Item;
+        item.QuantityReserved = Math.Max(0, item.QuantityReserved - res.Quantity);
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        res.Status = "Released";
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Release",
+            QuantityDelta = 0,
+            Reason = "Released reservation",
+            TicketId = res.TicketId,
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "inventory.release", "InventoryReservation", reservationId.ToString(), ct: ct);
     }
 }
 
@@ -662,6 +720,9 @@ public sealed class KnowledgeService : IKnowledgeService
 
 public sealed class PcBuildService : IPcBuildService
 {
+    private static readonly string[] AllowedStatuses =
+        ["Quoted", "Reserved", "Building", "Completed", "Sold", "Cancelled"];
+
     private readonly WorkshopDbContext _db;
     private readonly IAuditService _audit;
 
@@ -672,50 +733,360 @@ public sealed class PcBuildService : IPcBuildService
     }
 
     public async Task<IReadOnlyList<PcBuildListItemDto>> ListAsync(CancellationToken ct = default) =>
-        await _db.PcBuilds.AsNoTracking().Include(b => b.Customer)
+        await _db.PcBuilds.AsNoTracking()
+            .Include(b => b.Customer)
+            .Include(b => b.Parts)
             .Where(b => b.ArchivedAt == null)
             .OrderByDescending(b => b.CreatedAt)
-            .Select(b => new PcBuildListItemDto(b.Id, b.Number, b.Customer != null ? b.Customer.DisplayName : null, b.Status, b.CostTotal, b.SellTotal, b.SellTotal - b.CostTotal))
+            .Select(b => new PcBuildListItemDto(
+                b.Id, b.Number, b.Name,
+                b.Customer != null ? b.Customer.DisplayName : null,
+                b.Status, b.CostTotal, b.SellTotal, b.SellTotal - b.CostTotal, b.Parts.Count))
             .ToListAsync(ct);
 
-    public async Task<PcBuildListItemDto> CreateAsync(CreatePcBuildRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task<PcBuildDetailDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.AsNoTracking()
+            .Include(b => b.Customer)
+            .Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+        return await MapDetailAsync(build, ct);
+    }
+
+    public async Task<PcBuildDetailDto> CreateAsync(CreatePcBuildRequest request, Guid actorId, CancellationToken ct = default)
     {
         if (request.CustomerId is Guid cid)
             _ = await _db.Customers.FirstOrDefaultAsync(c => c.Id == cid && c.ArchivedAt == null, ct)
                 ?? throw new AppException("not_found", "Customer was not found.", 404);
 
+        var status = NormalizeStatus(request.Status) ?? "Quoted";
+        if (IsTerminalConsumed(status) || status == "Cancelled")
+            throw new ValidationAppException("Create a build as Quoted, Reserved, or Building first.");
+
         var number = await DocumentNumbering.NextAsync(_db, "PCB", ct);
         var build = new PcBuild
         {
             Number = number,
+            Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim(),
             CustomerId = request.CustomerId,
-            Status = "Quoted",
+            Status = status,
             UseCase = request.UseCase?.Trim(),
             Budget = request.Budget,
-            CostTotal = request.Parts?.Sum(p => p.Cost) ?? 0,
-            SellTotal = request.Parts?.Sum(p => p.SellPrice) ?? 0
+            Notes = request.Notes?.Trim()
         };
-        if (request.Parts is not null)
+        _db.PcBuilds.Add(build);
+
+        await ApplyPartsAndReservationsAsync(build, request.Parts ?? Array.Empty<PcPartInputDto>(), actorId, releaseExisting: false, ct);
+        if (build.Parts.Any(p => p.InventoryItemId != null) && build.Status == "Quoted")
+            build.Status = "Reserved";
+
+        await _db.SaveChangesAsync(ct);
+        await AttachReservationIdsAsync(build, ct);
+        await _audit.WriteAsync(actorId, "build.create", "PcBuild", build.Id.ToString(), newValue: new { build.Number }, ct: ct);
+        return await GetAsync(build.Id, ct);
+    }
+
+    public async Task<PcBuildDetailDto> UpdateAsync(Guid id, UpdatePcBuildRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+
+        if (IsTerminalConsumed(build.Status) || build.Status == "Cancelled")
+            throw new ValidationAppException("Cannot edit a completed, sold, or cancelled build.");
+
+        if (request.CustomerId is Guid cid)
+            _ = await _db.Customers.FirstOrDefaultAsync(c => c.Id == cid && c.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Customer was not found.", 404);
+
+        build.CustomerId = request.CustomerId;
+        build.Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim();
+        build.UseCase = request.UseCase?.Trim();
+        build.Budget = request.Budget;
+        build.Notes = request.Notes?.Trim();
+
+        await ApplyPartsAndReservationsAsync(build, request.Parts, actorId, releaseExisting: true, ct);
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
         {
-            foreach (var p in request.Parts)
+            var next = NormalizeStatus(request.Status)!;
+            await ApplyStatusSideEffectsAsync(build, next, actorId, ct);
+            build.Status = next;
+        }
+        else if (build.Parts.Any(p => p.InventoryItemId.HasValue) && build.Status == "Quoted")
+        {
+            build.Status = "Reserved";
+        }
+
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await AttachReservationIdsAsync(build, ct);
+        await _audit.WriteAsync(actorId, "build.update", "PcBuild", build.Id.ToString(), ct: ct);
+        return await GetAsync(build.Id, ct);
+    }
+
+    public async Task<PcBuildDetailDto> UpdateStatusAsync(Guid id, UpdatePcBuildStatusRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+
+        var next = NormalizeStatus(request.Status)
+            ?? throw new ValidationAppException("Status is required.");
+        await ApplyStatusSideEffectsAsync(build, next, actorId, ct);
+        build.Status = next;
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "build.status", "PcBuild", build.Id.ToString(), newValue: new { next }, ct: ct);
+        return await GetAsync(build.Id, ct);
+    }
+
+    public async Task DeleteAsync(Guid id, Guid actorId, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+
+        await ReleaseBuildReservationsAsync(build, actorId, ct);
+        build.Status = "Cancelled";
+        build.ArchivedAt = DateTimeOffset.UtcNow;
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "build.delete", "PcBuild", build.Id.ToString(), ct: ct);
+    }
+
+    private async Task ApplyStatusSideEffectsAsync(PcBuild build, string next, Guid actorId, CancellationToken ct)
+    {
+        if (next == build.Status) return;
+
+        if (next == "Cancelled")
+        {
+            await ReleaseBuildReservationsAsync(build, actorId, ct);
+            return;
+        }
+
+        if (IsTerminalConsumed(next))
+        {
+            await ConsumeBuildReservationsAsync(build, actorId, ct);
+            return;
+        }
+
+        if (IsTerminalConsumed(build.Status) || build.Status == "Cancelled")
+            throw new ValidationAppException($"Cannot move a {build.Status} build to {next}.");
+    }
+
+    private async Task ApplyPartsAndReservationsAsync(
+        PcBuild build,
+        IReadOnlyList<PcPartInputDto> parts,
+        Guid actorId,
+        bool releaseExisting,
+        CancellationToken ct)
+    {
+        if (releaseExisting)
+            await ReleaseBuildReservationsAsync(build, actorId, ct);
+
+        if (build.Parts.Count > 0)
+        {
+            _db.PcBuildParts.RemoveRange(build.Parts);
+            build.Parts.Clear();
+        }
+
+        // Aggregate demand per inventory item so exclusivity is checked up front.
+        var demand = new Dictionary<Guid, int>();
+        foreach (var p in parts)
+        {
+            if (p.InventoryItemId is not Guid iid) continue;
+            var qty = p.Quantity <= 0 ? 1 : p.Quantity;
+            demand[iid] = demand.GetValueOrDefault(iid) + qty;
+        }
+
+        var items = new Dictionary<Guid, InventoryItem>();
+        foreach (var (itemId, needed) in demand)
+        {
+            var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+            if (item.Available < needed)
+                throw new ValidationAppException(
+                    $"Insufficient available stock for '{item.Sku}' ({item.Available} available, {needed} needed). Already reserved elsewhere.");
+            items[itemId] = item;
+        }
+
+        foreach (var p in parts)
+        {
+            var category = PcComponentTypes.Normalize(p.Category);
+            var qty = p.Quantity <= 0 ? 1 : p.Quantity;
+            var name = string.IsNullOrWhiteSpace(p.Name) ? category : p.Name.Trim();
+            Guid? itemId = p.InventoryItemId;
+            var cost = p.Cost;
+            var sell = p.SellPrice;
+
+            if (itemId is Guid iid)
             {
-                build.Parts.Add(new PcBuildPart
+                var item = items[iid];
+                if (!string.Equals(item.ComponentType, category, StringComparison.OrdinalIgnoreCase) &&
+                    item.ComponentType != PcComponentTypes.Other)
                 {
-                    Category = p.Category,
-                    Name = p.Name,
-                    InventoryItemId = p.InventoryItemId,
-                    Cost = p.Cost,
-                    SellPrice = p.SellPrice
+                    throw new ValidationAppException(
+                        $"Inventory item '{item.Sku}' is typed as {item.ComponentType}, not {category}.");
+                }
+
+                if (cost == 0) cost = item.Cost;
+                if (sell == 0) sell = item.SellPrice;
+                if (string.IsNullOrWhiteSpace(p.Name)) name = item.Name;
+
+                item.QuantityReserved += qty;
+                item.UpdatedAt = DateTimeOffset.UtcNow;
+                _db.InventoryReservations.Add(new InventoryReservation
+                {
+                    ItemId = item.Id,
+                    PcBuildId = build.Id,
+                    Quantity = qty,
+                    Status = "Reserved"
+                });
+                _db.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    ItemId = item.Id,
+                    Type = "Reserve",
+                    QuantityDelta = 0,
+                    Reason = $"Reserved {qty} for PC build {build.Number}",
+                    ActorUserId = actorId
                 });
             }
+
+            build.Parts.Add(new PcBuildPart
+            {
+                Category = category,
+                Name = name,
+                InventoryItemId = itemId,
+                Quantity = qty,
+                Cost = cost,
+                SellPrice = sell
+            });
         }
-        _db.PcBuilds.Add(build);
+
+        RecalcTotals(build);
+    }
+
+    private async Task AttachReservationIdsAsync(PcBuild build, CancellationToken ct)
+    {
+        var reservations = await _db.InventoryReservations
+            .Where(r => r.PcBuildId == build.Id && r.Status == "Reserved")
+            .OrderBy(r => r.CreatedAt)
+            .ToListAsync(ct);
+        if (reservations.Count == 0) return;
+
+        var tracked = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstAsync(b => b.Id == build.Id, ct);
+        var unused = reservations.ToList();
+        foreach (var part in tracked.Parts.Where(p => p.InventoryItemId.HasValue).OrderBy(p => p.Category))
+        {
+            var match = unused.FirstOrDefault(r => r.ItemId == part.InventoryItemId && r.Quantity == part.Quantity);
+            if (match is null) continue;
+            part.ReservationId = match.Id;
+            unused.Remove(match);
+        }
         await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(actorId, "build.create", "PcBuild", build.Id.ToString(), newValue: new { build.Number }, ct: ct);
-        string? customerName = null;
-        if (build.CustomerId is Guid)
-            customerName = await _db.Customers.Where(c => c.Id == build.CustomerId).Select(c => c.DisplayName).FirstAsync(ct);
-        return new PcBuildListItemDto(build.Id, build.Number, customerName, build.Status, build.CostTotal, build.SellTotal, build.SellTotal - build.CostTotal);
+    }
+
+    private async Task ReleaseBuildReservationsAsync(PcBuild build, Guid actorId, CancellationToken ct)
+    {
+        var reservations = await _db.InventoryReservations
+            .Include(r => r.Item)
+            .Where(r => r.PcBuildId == build.Id && r.Status == "Reserved")
+            .ToListAsync(ct);
+
+        foreach (var res in reservations)
+        {
+            res.Item.QuantityReserved = Math.Max(0, res.Item.QuantityReserved - res.Quantity);
+            res.Item.UpdatedAt = DateTimeOffset.UtcNow;
+            res.Status = "Released";
+            _db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                ItemId = res.ItemId,
+                Type = "Release",
+                QuantityDelta = 0,
+                Reason = $"Released from PC build {build.Number}",
+                ActorUserId = actorId
+            });
+        }
+
+        foreach (var part in build.Parts)
+            part.ReservationId = null;
+
+        if (reservations.Count > 0)
+            await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task ConsumeBuildReservationsAsync(PcBuild build, Guid actorId, CancellationToken ct)
+    {
+        var reservations = await _db.InventoryReservations
+            .Include(r => r.Item)
+            .Where(r => r.PcBuildId == build.Id && r.Status == "Reserved")
+            .ToListAsync(ct);
+
+        foreach (var res in reservations)
+        {
+            if (res.Item.QuantityOnHand < res.Quantity)
+                throw new ValidationAppException($"On-hand stock insufficient to complete build for '{res.Item.Sku}'.");
+
+            res.Item.QuantityOnHand -= res.Quantity;
+            res.Item.QuantityReserved = Math.Max(0, res.Item.QuantityReserved - res.Quantity);
+            res.Item.UpdatedAt = DateTimeOffset.UtcNow;
+            res.Status = "Consumed";
+            _db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                ItemId = res.ItemId,
+                Type = "Consume",
+                QuantityDelta = -res.Quantity,
+                Reason = $"Consumed for PC build {build.Number}",
+                ActorUserId = actorId
+            });
+        }
+
+        if (reservations.Count > 0)
+            await _db.SaveChangesAsync(ct);
+    }
+
+    private static void RecalcTotals(PcBuild build)
+    {
+        build.CostTotal = build.Parts.Sum(p => p.Cost * p.Quantity);
+        build.SellTotal = build.Parts.Sum(p => p.SellPrice * p.Quantity);
+    }
+
+    private static bool IsTerminalConsumed(string status) =>
+        status is "Completed" or "Sold";
+
+    private static string? NormalizeStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return null;
+        var trimmed = status.Trim();
+        foreach (var s in AllowedStatuses)
+        {
+            if (string.Equals(s, trimmed, StringComparison.OrdinalIgnoreCase))
+                return s;
+        }
+        throw new ValidationAppException($"Unknown build status '{status}'. Use: {string.Join(", ", AllowedStatuses)}");
+    }
+
+    private async Task<PcBuildDetailDto> MapDetailAsync(PcBuild build, CancellationToken ct)
+    {
+        var itemIds = build.Parts.Where(p => p.InventoryItemId.HasValue).Select(p => p.InventoryItemId!.Value).Distinct().ToList();
+        var skus = itemIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.InventoryItems.AsNoTracking()
+                .Where(i => itemIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id, i => i.Sku, ct);
+
+        return new PcBuildDetailDto(
+            build.Id, build.Number, build.Name, build.CustomerId,
+            build.Customer?.DisplayName,
+            build.Status, build.UseCase, build.Budget, build.Notes,
+            build.CostTotal, build.SellTotal, build.SellTotal - build.CostTotal,
+            build.Parts.Select(p => new PcBuildPartDto(
+                p.Id, p.Category, p.Name, p.InventoryItemId,
+                p.InventoryItemId is Guid iid && skus.TryGetValue(iid, out var sku) ? sku : null,
+                p.Quantity, p.Cost, p.SellPrice, p.ReservationId)).ToList());
     }
 }
 

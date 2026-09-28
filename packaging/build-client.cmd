@@ -5,7 +5,7 @@ echo === WorkshopOS client build (script v6) ===
 echo Working directory: %CD%
 echo Prefer: Developer PowerShell for VS 2022
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0build-client.ps1" -Configuration Release -Version 1.2.14 -SkipInstaller
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0build-client.ps1" -Configuration Release -Version 1.2.15 -SkipInstaller
 echo.
 if errorlevel 1 (
   echo BUILD FAILED - no zip was created from a failed publish.

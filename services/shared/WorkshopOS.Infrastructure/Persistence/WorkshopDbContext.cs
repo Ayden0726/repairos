@@ -375,11 +375,13 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Barcode).HasMaxLength(64);
             e.Property(x => x.Name).HasMaxLength(240).IsRequired();
             e.Property(x => x.Category).HasMaxLength(64);
+            e.Property(x => x.ComponentType).HasMaxLength(32).HasDefaultValue("Other");
             e.Property(x => x.Manufacturer).HasMaxLength(120);
             e.Property(x => x.LocationBin).HasMaxLength(64);
             e.Property(x => x.Cost).HasPrecision(12, 2);
             e.Property(x => x.SellPrice).HasPrecision(12, 2);
             e.Ignore(x => x.Available);
+            e.HasIndex(x => x.ComponentType);
             e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -399,8 +401,10 @@ public sealed class WorkshopDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Status).HasMaxLength(32);
             e.HasIndex(x => new { x.TicketId, x.Status });
+            e.HasIndex(x => new { x.PcBuildId, x.Status });
             e.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId);
-            e.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId);
+            e.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.PcBuild).WithMany().HasForeignKey(x => x.PcBuildId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PurchaseOrder>(e =>
@@ -464,6 +468,7 @@ public sealed class WorkshopDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Number).IsUnique();
             e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(240);
             e.Property(x => x.Status).HasMaxLength(32);
             e.Property(x => x.Budget).HasPrecision(12, 2);
             e.Property(x => x.CostTotal).HasPrecision(12, 2);
@@ -480,6 +485,7 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Cost).HasPrecision(12, 2);
             e.Property(x => x.SellPrice).HasPrecision(12, 2);
             e.HasOne(x => x.PcBuild).WithMany(b => b.Parts).HasForeignKey(x => x.PcBuildId);
+            e.HasOne(x => x.InventoryItem).WithMany().HasForeignKey(x => x.InventoryItemId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<UsedDevice>(e =>

@@ -357,8 +357,8 @@ public partial class ShellViewModel : ObservableObject
     public static readonly (string Title, string[] Keys)[] NavGroups =
     [
         ("Dashboard", ["dashboard"]),
-        ("Work", ["repairs", "quotes", "invoices", "calendar", "builds"]),
-        ("Inventory", ["inventory", "purchasing", "used"]),
+        ("Work", ["repairs", "quotes", "invoices", "calendar"]),
+        ("Inventory", ["inventory", "builds", "purchasing", "used"]),
         ("Customers", ["customers"]),
         ("Reports", ["reports"])
     ];

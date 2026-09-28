@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.15 — 2026-09-27
+
+### Added
+- Inventory **component type** for PC parts (CPU, Motherboard, RAM, GPU, Storage, PSU, Case, Cooler, OS, Peripheral, Other) with create/edit + list filter
+- Full **PC Build builder** UI (slots, multi RAM/storage, cost/sell/margin summary)
+- Inventory reservations tied to **PcBuildId**; exclusive vs repairs; release on cancel; consume on completed/sold
+
+### Changed
+- Client / API / product version `1.2.15`
+- PC Builds nav under Inventory
+- Builds API: get/update/status/delete with reservation validation
+
 ## 1.2.14 — 2026-09-27
 
 ### Fixed

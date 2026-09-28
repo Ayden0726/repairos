@@ -232,13 +232,15 @@ public partial class GenericListViewModel : ObservableObject
                     if (!decimal.TryParse(BuildBudget, out var budget)) budget = 0m;
                     if (!decimal.TryParse(BuildPartCost, out var partCost)) partCost = 0m;
                     if (!decimal.TryParse(BuildPartSell, out var partSell)) partSell = 0m;
-                    await _api.PostAsync<CreatePcBuildRequest, PcBuildListItemDto>(
+                    await _api.PostAsync<CreatePcBuildRequest, PcBuildDetailDto>(
                         "api/builds",
                         new CreatePcBuildRequest(
                             SelectedCustomer?.Id,
                             string.IsNullOrWhiteSpace(BuildUseCase) ? null : BuildUseCase.Trim(),
+                            string.IsNullOrWhiteSpace(BuildUseCase) ? null : BuildUseCase.Trim(),
                             budget <= 0 ? null : budget,
-                            [new PcPartInputDto("Kit", string.IsNullOrWhiteSpace(BuildPartName) ? "Build kit" : BuildPartName.Trim(), null, partCost, partSell)]));
+                            null,
+                            [new PcPartInputDto("Other", string.IsNullOrWhiteSpace(BuildPartName) ? "Build kit" : BuildPartName.Trim(), null, partCost, partSell)]));
                     Status = "PC build created.";
                     break;
                 }

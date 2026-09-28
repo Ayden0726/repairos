@@ -126,10 +126,15 @@ public sealed record PaymentDto(Guid Id, string Method, decimal Amount, string? 
 
 public sealed record InventoryListItemDto(
     Guid Id, string Sku, string Name, string Category, int OnHand, int Reserved, int Available,
-    int Minimum, decimal SellPrice, bool IsLow, decimal Cost = 0m, string? SupplierName = null);
-public sealed record UpsertInventoryRequest(Guid? Id, string Sku, string? Barcode, string Name, string Category, decimal Cost, decimal SellPrice, int QuantityOnHand, int MinimumStock, int ReorderQuantity, string? LocationBin, Guid? SupplierId);
+    int Minimum, decimal SellPrice, bool IsLow, decimal Cost = 0m, string? SupplierName = null,
+    string ComponentType = "Other");
+public sealed record UpsertInventoryRequest(
+    Guid? Id, string Sku, string? Barcode, string Name, string Category, decimal Cost, decimal SellPrice,
+    int QuantityOnHand, int MinimumStock, int ReorderQuantity, string? LocationBin, Guid? SupplierId,
+    string? ComponentType = null);
 public sealed record AdjustStockRequest(int QuantityDelta, string Reason);
-public sealed record ReserveStockRequest(Guid ItemId, Guid TicketId, int Quantity);
+/// <summary>Reserve stock for a repair ticket or a PC build (exactly one of TicketId / PcBuildId).</summary>
+public sealed record ReserveStockRequest(Guid ItemId, int Quantity, Guid? TicketId = null, Guid? PcBuildId = null);
 
 public sealed record SupplierDto(Guid Id, string Name, string? Phone, string? Email);
 public sealed record UpsertSupplierRequest(Guid? Id, string Name, string? Contact, string? Phone, string? Email, string? Website, string? AccountNumber, string? Notes);
@@ -144,9 +149,32 @@ public sealed record CreateBookingRequest(Guid CustomerId, Guid? StaffId, string
 public sealed record KnowledgeDto(Guid Id, string Title, string Category, string Body, string? Tags, DateTimeOffset CreatedAt);
 public sealed record UpsertKnowledgeRequest(Guid? Id, string Title, string Category, string Body, string? Tags);
 
-public sealed record PcBuildListItemDto(Guid Id, string Number, string? CustomerName, string Status, decimal CostTotal, decimal SellTotal, decimal Margin);
-public sealed record CreatePcBuildRequest(Guid? CustomerId, string? UseCase, decimal? Budget, IReadOnlyList<PcPartInputDto> Parts);
-public sealed record PcPartInputDto(string Category, string Name, Guid? InventoryItemId, decimal Cost, decimal SellPrice);
+public sealed record PcBuildListItemDto(
+    Guid Id, string Number, string? Name, string? CustomerName, string Status,
+    decimal CostTotal, decimal SellTotal, decimal Margin, int PartCount = 0);
+
+public sealed record PcBuildPartDto(
+    Guid Id, string Category, string Name, Guid? InventoryItemId, string? InventorySku,
+    int Quantity, decimal Cost, decimal SellPrice, Guid? ReservationId);
+
+public sealed record PcBuildDetailDto(
+    Guid Id, string Number, string? Name, Guid? CustomerId, string? CustomerName,
+    string Status, string? UseCase, decimal? Budget, string? Notes,
+    decimal CostTotal, decimal SellTotal, decimal Margin,
+    IReadOnlyList<PcBuildPartDto> Parts);
+
+public sealed record CreatePcBuildRequest(
+    Guid? CustomerId, string? Name, string? UseCase, decimal? Budget, string? Notes,
+    IReadOnlyList<PcPartInputDto>? Parts, string? Status = null);
+
+public sealed record UpdatePcBuildRequest(
+    Guid? CustomerId, string? Name, string? UseCase, decimal? Budget, string? Notes,
+    string? Status, IReadOnlyList<PcPartInputDto> Parts);
+
+public sealed record UpdatePcBuildStatusRequest(string Status);
+
+public sealed record PcPartInputDto(
+    string Category, string Name, Guid? InventoryItemId, decimal Cost, decimal SellPrice, int Quantity = 1);
 
 public sealed record UsedDeviceDto(
     Guid Id,

@@ -2,7 +2,7 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Current version: 1.2.14+**
+**Current version: 1.2.15+**
 
 ## What it is
 
@@ -57,7 +57,7 @@ Full guide (clean install, troubleshooting, ports): **[docs/INSTALL.md](docs/INS
 ## Install the Windows client
 
 1. Go to **[GitHub Releases](https://github.com/Ayden0726/repairos/releases)**
-2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.14.exe`)
+2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.15.exe`)
 3. Run the installer on each Windows 10/11 **x64** PC
 4. Enter the pairing code from `/connect`, or tap **Find on this network**
 

@@ -172,6 +172,8 @@ public class InventoryItem : SoftDeleteEntity
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string Category { get; set; } = "Parts";
+    /// <summary>PC part slot type: CPU, Motherboard, RAM, GPU, Storage, PSU, Case, Cooler, OS, Peripheral, Other.</summary>
+    public string ComponentType { get; set; } = "Other";
     public string? Manufacturer { get; set; }
     public Guid? SupplierId { get; set; }
     public Supplier? Supplier { get; set; }
@@ -203,8 +205,12 @@ public class InventoryReservation
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ItemId { get; set; }
     public InventoryItem Item { get; set; } = null!;
-    public Guid TicketId { get; set; }
-    public RepairTicket Ticket { get; set; } = null!;
+    /// <summary>Repair ticket holding this reservation (mutually exclusive with PcBuildId).</summary>
+    public Guid? TicketId { get; set; }
+    public RepairTicket? Ticket { get; set; }
+    /// <summary>PC build holding this reservation (mutually exclusive with TicketId).</summary>
+    public Guid? PcBuildId { get; set; }
+    public PcBuild? PcBuild { get; set; }
     public int Quantity { get; set; }
     public string Status { get; set; } = "Reserved"; // Reserved, Consumed, Released
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -290,10 +296,11 @@ public class KnowledgeArticle : SoftDeleteEntity
 public class PcBuild : SoftDeleteEntity
 {
     public string Number { get; set; } = string.Empty;
+    public string? Name { get; set; }
     public Guid? CustomerId { get; set; }
     public Customer? Customer { get; set; }
     public Guid? AssignedToId { get; set; }
-    public string Status { get; set; } = "Quoted";
+    public string Status { get; set; } = "Quoted"; // Quoted, Reserved, Building, Completed, Sold, Cancelled
     public string? UseCase { get; set; }
     public decimal? Budget { get; set; }
     public decimal CostTotal { get; set; }
@@ -310,8 +317,11 @@ public class PcBuildPart
     public string Category { get; set; } = "Other";
     public string Name { get; set; } = string.Empty;
     public Guid? InventoryItemId { get; set; }
+    public InventoryItem? InventoryItem { get; set; }
+    public int Quantity { get; set; } = 1;
     public decimal Cost { get; set; }
     public decimal SellPrice { get; set; }
+    public Guid? ReservationId { get; set; }
 }
 
 public class UsedDevice : SoftDeleteEntity

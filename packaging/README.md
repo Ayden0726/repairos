@@ -8,7 +8,7 @@ This folder is for **maintainers** who publish a new client Release.
 | File | Purpose |
 | --- | --- |
 | `build-client.ps1` | Publish WinUI client (win-x64) + zip; optionally compile Inno installer (**v6**) |
-| `rebuild-client.ps1` | Wipe local data, verify ServerConnect, build 1.2.14, extract, launch |
+| `rebuild-client.ps1` | Wipe local data, verify ServerConnect, build 1.2.15, extract, launch |
 | `build-client.cmd` | Double-click launcher for the PowerShell script |
 | `WorkshopOS-Setup.iss` | Inno Setup 6 script for `WorkshopOS-Setup-*.exe` |
 | `dist/` | Build outputs (gitignored) |
@@ -21,16 +21,16 @@ Use **Developer PowerShell for VS**. From repo root.
 
 ```powershell
 # Portable zip
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.14 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.15 -SkipInstaller
 
 # Zip + Setup.exe (omit -SkipInstaller; needs Inno Setup 6)
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.14
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.15
 ```
 
 Expect: `WorkshopOS client build script v6`. Outputs in `packaging\dist\`:
 
-- `WorkshopOS-Client-win-x64-v1.2.14.zip` — portable
-- `WorkshopOS-Setup-1.2.14.exe` — upload this to the GitHub Release
+- `WorkshopOS-Client-win-x64-v1.2.15.zip` — portable
+- `WorkshopOS-Setup-1.2.15.exe` — upload this to the GitHub Release
 
 Server packaging: `../scripts/publish-server.sh` and `../scripts/install-server.sh`.  
 End-user install: [docs/INSTALL.md](../docs/INSTALL.md).

@@ -207,7 +207,11 @@ public sealed class InventoryController : ControllerBase
 
     [HttpGet]
     [Authorize(Policy = "perm:inventory.view")]
-    public Task<IReadOnlyList<InventoryListItemDto>> List(CancellationToken ct) => _inventory.ListAsync(ct);
+    public Task<IReadOnlyList<InventoryListItemDto>> List(
+        [FromQuery] string? componentType,
+        [FromQuery] bool availableOnly = false,
+        CancellationToken ct = default) =>
+        _inventory.ListAsync(componentType, availableOnly, ct);
 
     [HttpPost]
     [Authorize(Policy = "perm:inventory.manage")]
@@ -232,6 +236,14 @@ public sealed class InventoryController : ControllerBase
     public async Task<IActionResult> Consume(Guid reservationId, CancellationToken ct)
     {
         await _inventory.ConsumeReservationAsync(reservationId, UserId(), ct);
+        return NoContent();
+    }
+
+    [HttpPost("reservations/{reservationId:guid}/release")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public async Task<IActionResult> Release(Guid reservationId, CancellationToken ct)
+    {
+        await _inventory.ReleaseReservationAsync(reservationId, UserId(), ct);
         return NoContent();
     }
 
@@ -355,10 +367,32 @@ public sealed class BuildsController : ControllerBase
     [Authorize(Policy = "perm:builds.view")]
     public Task<IReadOnlyList<PcBuildListItemDto>> List(CancellationToken ct) => _builds.ListAsync(ct);
 
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "perm:builds.view")]
+    public Task<PcBuildDetailDto> Get(Guid id, CancellationToken ct) => _builds.GetAsync(id, ct);
+
     [HttpPost]
     [Authorize(Policy = "perm:builds.manage")]
-    public Task<PcBuildListItemDto> Create([FromBody] CreatePcBuildRequest request, CancellationToken ct) =>
+    public Task<PcBuildDetailDto> Create([FromBody] CreatePcBuildRequest request, CancellationToken ct) =>
         _builds.CreateAsync(request, UserId(), ct);
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "perm:builds.manage")]
+    public Task<PcBuildDetailDto> Update(Guid id, [FromBody] UpdatePcBuildRequest request, CancellationToken ct) =>
+        _builds.UpdateAsync(id, request, UserId(), ct);
+
+    [HttpPost("{id:guid}/status")]
+    [Authorize(Policy = "perm:builds.manage")]
+    public Task<PcBuildDetailDto> Status(Guid id, [FromBody] UpdatePcBuildStatusRequest request, CancellationToken ct) =>
+        _builds.UpdateStatusAsync(id, request, UserId(), ct);
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "perm:builds.manage")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await _builds.DeleteAsync(id, UserId(), ct);
+        return NoContent();
+    }
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

@@ -164,17 +164,33 @@ public partial class InventoryViewModel : ObservableObject
 {
     private readonly ApiClient _api;
     public ObservableCollection<InventoryListItemDto> Items { get; } = new();
+    public ObservableCollection<string> ComponentFilterOptions { get; } = new(
+        ["All", "CPU", "Motherboard", "RAM", "GPU", "Storage", "PSU", "Case", "Cooler", "OS", "Peripheral", "Other"]);
+    public ObservableCollection<string> ComponentTypeOptions { get; } = new(
+        ["CPU", "Motherboard", "RAM", "GPU", "Storage", "PSU", "Case", "Cooler", "OS", "Peripheral", "Other"]);
+
     [ObservableProperty] private string _sku = string.Empty;
     [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _category = "Parts";
+    [ObservableProperty] private string _componentType = "Other";
+    [ObservableProperty] private string _componentFilter = "All";
+    [ObservableProperty] private string _cost = "0";
+    [ObservableProperty] private string _sell = "0";
+    [ObservableProperty] private string _qtyOnHand = "1";
     [ObservableProperty] private string? _error;
     public InventoryViewModel(ApiClient api) => _api = api;
+
+    partial void OnComponentFilterChanged(string value) => _ = RefreshAsync();
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
         try
         {
-            var list = await _api.GetAsync<IReadOnlyList<InventoryListItemDto>>("api/inventory");
+            var path = "api/inventory";
+            if (!string.IsNullOrWhiteSpace(ComponentFilter) && ComponentFilter != "All")
+                path += $"?componentType={Uri.EscapeDataString(ComponentFilter)}";
+            var list = await _api.GetAsync<IReadOnlyList<InventoryListItemDto>>(path);
             Items.Clear();
             foreach (var i in list) Items.Add(i);
         }
@@ -186,8 +202,17 @@ public partial class InventoryViewModel : ObservableObject
     {
         try
         {
-            await _api.PostAsync("api/inventory", new UpsertInventoryRequest(null, Sku, null, Name, "Parts", 0, 0, 0, 1, 5, null, null));
+            _ = decimal.TryParse(Cost, out var cost);
+            _ = decimal.TryParse(Sell, out var sell);
+            _ = int.TryParse(QtyOnHand, out var qty);
+            if (qty < 0) qty = 0;
+            await _api.PostAsync("api/inventory", new UpsertInventoryRequest(
+                null, Sku, null, Name,
+                string.IsNullOrWhiteSpace(Category) ? "Parts" : Category.Trim(),
+                cost, sell, qty, 1, 5, null, null, ComponentType));
             Sku = Name = string.Empty;
+            Cost = Sell = "0";
+            QtyOnHand = "1";
             await RefreshAsync();
         }
         catch (Exception ex) { Error = ex.Message; }

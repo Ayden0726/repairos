@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (docs/setup 1.2.14+)
+Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (docs/setup 1.2.15+)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.

@@ -186,7 +186,7 @@ public sealed partial class ShellPage : Page
                     ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Calendar / Bookings", "api/bookings"));
                     return;
                 case "builds":
-                    ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("PC Builds", "api/builds"));
+                    ContentFrame.Navigate(typeof(PcBuildsPage));
                     return;
                 case "used":
                     ContentFrame.Navigate(typeof(UsedTechPage));

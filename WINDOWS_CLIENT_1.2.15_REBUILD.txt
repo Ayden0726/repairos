@@ -1,0 +1,21 @@
+WorkshopOS Windows client 1.2.15 - rebuild on Windows
+
+Banner must show: Client 1.2.15
+
+1.2.15 adds:
+  - Inventory component types for PC parts + filter
+  - Full PC Build builder (slots, reserve exclusive stock, margin summary)
+  - Reservations release on cancel / consume on completed or sold
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.15
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.15 -SkipInstaller
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.15.zip
+  packaging\dist\WorkshopOS-Setup-1.2.15.exe  (if Inno Setup 6 installed)
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update

@@ -1,31 +1,79 @@
 <Page x:Class="WorkshopOS.Client.Views.InventoryPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:ops="using:WorkshopOS.Contracts.Operations">
+      xmlns:ops="using:WorkshopOS.Contracts.Operations"
+      Background="{ThemeResource WorkshopPageBackgroundBrush}">
   <Grid Padding="24" ColumnSpacing="16">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="2*" /><ColumnDefinition Width="*" />
+      <ColumnDefinition Width="2*" /><ColumnDefinition Width="320" />
     </Grid.ColumnDefinitions>
     <StackPanel Spacing="8">
-      <TextBlock Text="Inventory" FontSize="22" FontWeight="SemiBold" />
-      <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" />
+      <TextBlock Text="Inventory" FontSize="22" FontWeight="SemiBold"
+                 Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+      <Grid ColumnSpacing="8">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="180" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <ComboBox Header="Component type"
+                  ItemsSource="{x:Bind ViewModel.ComponentFilterOptions, Mode=OneWay}"
+                  SelectedItem="{x:Bind ViewModel.ComponentFilter, Mode=TwoWay}"
+                  HorizontalAlignment="Stretch" />
+        <Button Grid.Column="1" Content="Refresh" VerticalAlignment="Bottom"
+                Command="{x:Bind ViewModel.RefreshCommand}" />
+      </Grid>
       <ListView ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
         <ListView.ItemTemplate>
           <DataTemplate x:DataType="ops:InventoryListItemDto">
-            <TextBlock>
-              <Run Text="{x:Bind Sku}" FontWeight="Bold" /><Run Text=" · " /><Run Text="{x:Bind Name}" />
-              <Run Text=" · avail " /><Run Text="{x:Bind Available}" />
-            </TextBlock>
+            <Grid Padding="4,8" ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Spacing="2">
+                <TextBlock Foreground="{ThemeResource WorkshopTextPrimaryBrush}">
+                  <Run Text="{x:Bind Sku}" FontWeight="Bold" /><Run Text=" · " /><Run Text="{x:Bind Name}" />
+                </TextBlock>
+                <TextBlock FontSize="12" Foreground="{ThemeResource WorkshopTextSecondaryBrush}">
+                  <Run Text="{x:Bind ComponentType}" />
+                  <Run Text=" · avail " /><Run Text="{x:Bind Available}" />
+                  <Run Text=" · reserved " /><Run Text="{x:Bind Reserved}" />
+                  <Run Text=" · $" /><Run Text="{x:Bind Cost}" />
+                  <Run Text=" / $" /><Run Text="{x:Bind SellPrice}" />
+                </TextBlock>
+              </StackPanel>
+            </Grid>
           </DataTemplate>
         </ListView.ItemTemplate>
       </ListView>
     </StackPanel>
-    <StackPanel Grid.Column="1" Spacing="8">
-      <TextBlock Text="Add item" FontWeight="SemiBold" />
-      <TextBox Header="SKU" Text="{x:Bind ViewModel.Sku, Mode=TwoWay}" />
-      <TextBox Header="Name" Text="{x:Bind ViewModel.Name, Mode=TwoWay}" />
-      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
-      <Button Content="Create" Command="{x:Bind ViewModel.CreateCommand}" Style="{StaticResource AccentButtonStyle}" />
-    </StackPanel>
+    <Border Grid.Column="1" Padding="16" CornerRadius="8"
+            Background="{ThemeResource WorkshopSurfaceBrush}"
+            BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Add item" FontWeight="SemiBold"
+                   Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+        <TextBox Header="SKU" Text="{x:Bind ViewModel.Sku, Mode=TwoWay}" />
+        <TextBox Header="Name" Text="{x:Bind ViewModel.Name, Mode=TwoWay}" />
+        <ComboBox Header="Component type"
+                  ItemsSource="{x:Bind ViewModel.ComponentTypeOptions, Mode=OneWay}"
+                  SelectedItem="{x:Bind ViewModel.ComponentType, Mode=TwoWay}"
+                  HorizontalAlignment="Stretch" />
+        <TextBox Header="Category" Text="{x:Bind ViewModel.Category, Mode=TwoWay}" />
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBox Header="Cost" Text="{x:Bind ViewModel.Cost, Mode=TwoWay}" />
+          <TextBox Grid.Column="1" Header="Sell" Text="{x:Bind ViewModel.Sell, Mode=TwoWay}" />
+        </Grid>
+        <TextBox Header="Qty on hand" Text="{x:Bind ViewModel.QtyOnHand, Mode=TwoWay}" />
+        <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
+                   Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
+        <Button Content="Create" Command="{x:Bind ViewModel.CreateCommand}"
+                Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+      </StackPanel>
+    </Border>
   </Grid>
 </Page>

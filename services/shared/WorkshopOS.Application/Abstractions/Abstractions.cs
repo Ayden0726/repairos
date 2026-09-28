@@ -125,11 +125,12 @@ public interface IInvoiceService
 
 public interface IInventoryService
 {
-    Task<IReadOnlyList<InventoryListItemDto>> ListAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<InventoryListItemDto>> ListAsync(string? componentType = null, bool availableOnly = false, CancellationToken ct = default);
     Task<InventoryListItemDto> UpsertAsync(UpsertInventoryRequest request, Guid actorId, CancellationToken ct = default);
     Task<InventoryListItemDto> AdjustAsync(Guid id, AdjustStockRequest request, Guid actorId, CancellationToken ct = default);
     Task ReserveAsync(ReserveStockRequest request, Guid actorId, CancellationToken ct = default);
     Task ConsumeReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default);
+    Task ReleaseReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default);
 }
 
 public interface IPurchasingService
@@ -163,7 +164,11 @@ public interface IKnowledgeService
 public interface IPcBuildService
 {
     Task<IReadOnlyList<PcBuildListItemDto>> ListAsync(CancellationToken ct = default);
-    Task<PcBuildListItemDto> CreateAsync(CreatePcBuildRequest request, Guid actorId, CancellationToken ct = default);
+    Task<PcBuildDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<PcBuildDetailDto> CreateAsync(CreatePcBuildRequest request, Guid actorId, CancellationToken ct = default);
+    Task<PcBuildDetailDto> UpdateAsync(Guid id, UpdatePcBuildRequest request, Guid actorId, CancellationToken ct = default);
+    Task<PcBuildDetailDto> UpdateStatusAsync(Guid id, UpdatePcBuildStatusRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, Guid actorId, CancellationToken ct = default);
 }
 
 public interface IUsedTechService
