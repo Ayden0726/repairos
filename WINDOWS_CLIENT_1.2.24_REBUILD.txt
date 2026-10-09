@@ -1,0 +1,20 @@
+WorkshopOS Windows client 1.2.24 - rebuild on Windows
+
+Banner must show: Client 1.2.24
+
+1.2.24 features:
+  - Calendar: real month/week booking grid (Work → Calendar)
+  - Schedule / edit / cancel bookings from the side panel
+  - API: GET/PUT booking by id + POST cancel
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.24
+
+One-shot:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.24.ps1
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update
+
+Agent overlay:
+  http://127.0.0.1:28765/repairos-github-sync.zip

@@ -1,0 +1,45 @@
+<Page
+    x:Class="WorkshopOS.Client.Views.CustomersPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:w="using:WorkshopOS.Contracts.Workshop">
+  <Grid Padding="24" RowSpacing="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <TextBlock Text="Customers" FontSize="22" FontWeight="SemiBold" />
+    <Grid Grid.Row="1" ColumnSpacing="8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBox PlaceholderText="Search name, phone, email" Text="{x:Bind ViewModel.Query, Mode=TwoWay}" />
+      <Button Grid.Column="1" Content="Search" Command="{x:Bind ViewModel.RefreshCommand}" />
+    </Grid>
+    <Grid Grid.Row="2" ColumnSpacing="16">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" /><ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <ListView ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Customer_ItemClick">
+        <ListView.ItemTemplate>
+          <DataTemplate x:DataType="w:CustomerListItemDto">
+            <StackPanel Padding="4" Spacing="2">
+              <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+              <TextBlock FontSize="12" Opacity="0.7" Text="{x:Bind Phone}" />
+            </StackPanel>
+          </DataTemplate>
+        </ListView.ItemTemplate>
+      </ListView>
+      <StackPanel Grid.Column="1" Spacing="8">
+        <TextBlock Text="Quick add" FontWeight="SemiBold" />
+        <TextBox Header="First name" Text="{x:Bind ViewModel.FirstName, Mode=TwoWay}" />
+        <TextBox Header="Last name" Text="{x:Bind ViewModel.LastName, Mode=TwoWay}" />
+        <TextBox Header="Phone" Text="{x:Bind ViewModel.Phone, Mode=TwoWay}" />
+        <TextBox Header="Email" Text="{x:Bind ViewModel.Email, Mode=TwoWay}" />
+        <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+        <Button Content="Create customer" Command="{x:Bind ViewModel.CreateCommand}" Style="{StaticResource AccentButtonStyle}" />
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Page>

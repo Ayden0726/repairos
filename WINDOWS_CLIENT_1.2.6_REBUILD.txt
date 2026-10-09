@@ -1,0 +1,27 @@
+WorkshopOS Windows client 1.2.6 - rebuild on Windows
+====================================================
+
+Banner must show: Client 1.2.6
+
+Changes in 1.2.6:
+- New ticket: Existing customer checkbox + inline create (name/phone/email)
+- Customer search with empty / loading / error states on New ticket
+- Creates customer via POST /api/customers then opens the repair ticket
+
+From repo root (Developer PowerShell for VS 2022):
+
+  git pull origin main
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.6 -SkipInstaller
+
+Or wipe + verify + build + launch:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\rebuild-client.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.6.zip
+  packaging\dist\WorkshopOS-Setup-1.2.6.exe  (if Inno Setup 6 installed)
+
+Optional agent overlay if GitHub looks stale:
+  http://127.0.0.1:28765/repairos-github-sync.zip
+  Set $UseAgentOverlay = $true in packaging\rebuild-client.ps1

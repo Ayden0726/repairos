@@ -1,0 +1,21 @@
+WorkshopOS Windows client 1.2.25 - rebuild on Windows
+
+Banner must show: Client 1.2.25
+
+Fixes Calendar blank month grid caused by bookings API 500
+("An unexpected error occurred.").
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.25
+
+One-shot:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.25.ps1
+
+Server (required — hard reset recommended):
+  cd ~/workshopos
+  git fetch origin && git reset --hard origin/main
+  ./scripts/restart-workshopos.sh --update
+  curl -fsS http://127.0.0.1:5088/api/health
+
+Agent overlay:
+  http://127.0.0.1:28765/repairos-github-sync.zip

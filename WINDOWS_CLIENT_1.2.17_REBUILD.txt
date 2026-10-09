@@ -1,0 +1,27 @@
+WorkshopOS Windows client 1.2.16 - rebuild on Windows
+
+Banner must show: Client 1.2.16
+
+1.2.16 adds:
+  - Job-level quote labour (one fee for the whole job)
+  - Markup applied once to Σ landed part costs (not per line)
+  - QuoteBuilder: job Labour + Markup %; lines show part costs only
+  - Customer quote print: $ (AUD) currency symbol, A4 @page CSS (~190mm)
+  - Print shows parts + one Labour / service line (job-level pricing)
+  - Quote Builder money display uses business currency symbol
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.16
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.16 -SkipInstaller
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.16.zip
+  packaging\dist\WorkshopOS-Setup-1.2.16.exe  (if Inno Setup 6 installed)
+
+Server update after pull (print fix is server-side):
+  ./scripts/restart-workshopos.sh --update
+
+Optional agent overlay if GitHub lags:
+  http://127.0.0.1:28765/repairos-github-sync.zip

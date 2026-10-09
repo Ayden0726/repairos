@@ -1,0 +1,53 @@
+# WorkshopOS features
+
+Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
+Stack: **WinUI 3 Windows client** → REST + SignalR → **ASP.NET Core API** → **PostgreSQL**.
+
+Currency and tax are **AUD / GST-inclusive** (10% default, configurable at setup).
+
+## Core (Phases 1–2)
+
+| Feature | Details |
+| --- | --- |
+| First-run setup | Business profile (name, ABN, address, GST, labour rate) + owner account |
+| Auth | JWT login / refresh / logout, hashed refresh tokens, rate limiting |
+| Roles & permissions | Owner, Administrator, Manager, Technician, Front Desk, Sales, Read Only |
+| Health | `/api/health` (+ authenticated `/api/health/detail`) |
+| Users / settings | Staff accounts, password reset/change, business profile, module visibility |
+| Customers | Individuals & businesses, contact prefs, create/list/detail |
+| Devices | Per-customer devices (category, brand/model, serial/IMEI) |
+| Repairs | Intake, ticket numbers `REP-YYYY-#####`, statuses, priorities, assign tech |
+| Repair detail | Notes (customer/internal), diagnosis, timeline, encrypted passcode flag |
+| Search | Global search across repairs, customers, devices |
+| SignalR hub | `/hubs/workshop` for live multi-PC events |
+
+## Operations (Phases 3–12)
+
+| Module | Features |
+| --- | --- |
+| **Dashboard** | Open/due/awaiting/parts/ready/overdue cards, pipeline, urgent jobs, tech workload, low stock, recent activity, 30-day revenue & gross profit |
+| **Quotes** | Quote builder with automatic pricing (markup, labour, rounding, margin guards), statuses Draft→Sent→Accepted/…, revisions, customer HTML print (no costs), convert to repair |
+| **Pricing** | Settings-driven labour/parts/profitability/rounding/discounts; markup tiers; service catalogue; tax from business GST (rate + inclusive/exclusive) |
+| **Inventory** | SKUs, on-hand / reserved / available, min stock, adjust, reserve & consume against tickets |
+| **Purchasing** | Suppliers, purchase orders, receive lines into stock |
+| **Invoices & payments** | Create from repair, record payments/deposits, balances |
+| **POS** | Admin-gated register (off by default); inventory + custom lines; invoice + stock; Cash / Manual EFTPOS / Tyro / Square / Stripe Terminal / Linkly — see [POS_EFTPOS.md](POS_EFTPOS.md) |
+| **Notifications** | Per-user inbox; mark read (SMS/email providers optional / “not configured”) |
+| **PC Builds** | Build jobs with parts, cost/sell/margin |
+| **Refurbished** | Buy-in / refurb / sell stock with purchase, parts, asking price, condition, status, margin |
+| **Calendar** | Bookings (drop-off, consult, pickup, etc.) |
+| **Knowledge** | Internal KB articles by category/tags |
+| **QA** | Per-repair QA checklist results |
+| **Reports** | Period summary: revenue, COGS, gross profit, repairs opened/completed, payments by method |
+| **AI Assist** | Optional Ollama; disabled by default; never auto-applies suggestions |
+| **Backups** | Manual backup records + marker files under configured backup directory |
+| **Website / WordPress** | Public + customer-portal REST APIs for quotes, bookings, Sell Your Tech, tracking, quote approval, refurbished publish; WorkshopOS stays source of truth — see [WORDPRESS_INTEGRATION.md](WORDPRESS_INTEGRATION.md) |
+
+## Windows client modules
+
+Slim sidebar (1.2.7+): Dashboard, Work (Tickets / Quotes / Invoices / Calendar / PC Builds), Inventory (incl. Purchasing / Refurbished), Customers, Reports, Settings.  
+AI Assist and Knowledge Base are available from Settings / module flags when enabled — not primary nav. Install the client from **GitHub Releases** (`WorkshopOS-Setup-*.exe`).
+
+## What is intentionally not fake
+
+Empty lists show empty (or an honest “no records yet”). AI returns an explicit disabled message when Ollama is off. SMS/email send only when a provider is configured.

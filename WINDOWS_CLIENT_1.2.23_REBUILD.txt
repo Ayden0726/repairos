@@ -1,0 +1,35 @@
+WorkshopOS Windows client 1.2.23 - rebuild on Windows
+
+Banner must show: Client 1.2.23
+
+1.2.23 features:
+  - Quote Builder Parts: Service + Inventory ComboBoxes are searchable (type to filter)
+  - Login: press Enter in email/password to Sign in
+  - Settings → App: "Start with Windows" toggle (HKCU Run key)
+  - Setup.exe optional task: Start WorkshopOS when Windows starts
+
+Still required (from 1.2.22):
+  - ServicePickerControl.xaml + .xaml.cs must be ABSENT
+  - Wipe apps\windows-client\WorkshopOS.Client\obj before publish
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.23
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.23 -SkipInstaller
+
+One-shot (overlay + DELETE leftover picker + wipe obj + build):
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.23.ps1
+
+If publish fails:
+  powershell -ExecutionPolicy Bypass -File .\packaging\dump-xaml-errors.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.23.zip
+  packaging\dist\WorkshopOS-Setup-1.2.23.exe  (if Inno Setup 6 installed)
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update
+
+Agent overlay:
+  http://127.0.0.1:28765/repairos-github-sync.zip

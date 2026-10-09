@@ -1,0 +1,8 @@
+WorkshopOS 1.2.27 — API-focused release (WordPress / website integration).
+
+ClientMinVersion remains 1.2.25. A new Windows client build is optional for this
+release unless you want the health banner to show 1.2.27.
+
+Server: pull main, restart API/Docker so migration WebsiteWordPressIntegration applies.
+Create a website API key (staff: website.manage) and configure WordPress with
+X-WorkshopOS-Key. See docs/WORDPRESS_INTEGRATION.md.

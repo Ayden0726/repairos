@@ -1,0 +1,10 @@
+WorkshopOS / TechBench NQ 1.2.28
+
+Rebuild Windows client (Command centre + nav IA; Custom PC Builds removed):
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.28
+
+Or full wipe/rebuild script pattern from earlier 1.2.x REBUILD notes.
+
+Server: pull main, restart API. Custom PC endpoints return 410.
+See docs/PLATFORM_ANALYSIS.md and docs/IMPLEMENTATION_PLAN.md.

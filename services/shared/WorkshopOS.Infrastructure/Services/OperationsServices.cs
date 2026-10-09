@@ -1,0 +1,1695 @@
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using WorkshopOS.Application.Abstractions;
+using WorkshopOS.Application.Common;
+using WorkshopOS.Contracts.Operations;
+using WorkshopOS.Domain;
+using WorkshopOS.Domain.Entities;
+using WorkshopOS.Infrastructure.Persistence;
+
+namespace WorkshopOS.Infrastructure.Services;
+
+internal static class DocumentNumbering
+{
+    public static async Task<string> NextAsync(WorkshopDbContext db, string prefix, CancellationToken ct, int digits = 5)
+    {
+        var year = DateTime.UtcNow.Year;
+        var key = $"doc:{prefix}:{year}";
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var seq = await db.DocumentSequences.FirstOrDefaultAsync(s => s.Key == key, ct);
+        if (seq is null)
+        {
+            seq = new DocumentSequence { Key = key, Year = year, NextValue = 1 };
+            db.DocumentSequences.Add(seq);
+        }
+        var value = seq.NextValue;
+        seq.NextValue++;
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        // Avoid leftover Modified tracking interacting with later SaveChanges in the same scope.
+        db.Entry(seq).State = EntityState.Detached;
+        digits = Math.Clamp(digits, 4, 8);
+        return $"{prefix}-{year}-{value.ToString().PadLeft(digits, '0')}";
+    }
+}
+
+public sealed class DashboardService : IDashboardService
+{
+    private readonly WorkshopDbContext _db;
+    public DashboardService(WorkshopDbContext db) => _db = db;
+
+    public async Task<DashboardDto> GetAsync(CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var todayStart = new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero);
+        var todayEnd = todayStart.AddDays(1);
+        var since30 = now.AddDays(-30);
+
+        var openTickets = await _db.RepairTickets.AsNoTracking()
+            .Include(t => t.Status).Include(t => t.Priority).Include(t => t.Customer)
+            .Include(t => t.Device).Include(t => t.AssignedTo)
+            .Where(t => t.ArchivedAt == null && !t.Status.IsCompleted && !t.Status.IsCancelled)
+            .ToListAsync(ct);
+
+        var openJobs = openTickets.Count;
+        var dueToday = openTickets.Count(t => t.DueAt >= todayStart && t.DueAt < todayEnd);
+        var awaitingApproval = openTickets.Count(t => t.Status.CountsAsAwaitingApproval);
+        var waitingParts = openTickets.Count(t => t.Status.CountsAsWaitingForParts);
+        var readyPickup = openTickets.Count(t => t.Status.CountsAsReadyForPickup);
+        var overdue = openTickets.Count(t => t.DueAt < now);
+
+        // Revenue = sum of payments in last 30 days.
+        var revenue30 = await _db.Payments.AsNoTracking()
+            .Where(p => p.PaidAt >= since30)
+            .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+
+        // COGS proxy: cost of consumed stock (negative deltas) in window; else interim 45% COGS (55% GP).
+        var consumeCost = await _db.InventoryTransactions.AsNoTracking()
+            .Include(t => t.Item)
+            .Where(t => t.CreatedAt >= since30 && t.QuantityDelta < 0)
+            .SumAsync(t => (decimal?)(Math.Abs(t.QuantityDelta) * t.Item.Cost), ct) ?? 0m;
+        // Interim until stock costs land on invoices: when no consume txs, GrossProfit ≈ Revenue * 0.55.
+        var grossProfit30 = consumeCost > 0 ? revenue30 - consumeCost : Math.Round(revenue30 * 0.55m, 2, MidpointRounding.AwayFromZero);
+
+        var cards = new DashboardCardsDto(openJobs, dueToday, awaitingApproval, waitingParts, readyPickup, overdue, revenue30, grossProfit30);
+
+        var statuses = await _db.RepairStatuses.AsNoTracking().Where(s => s.ArchivedAt == null).OrderBy(s => s.SortOrder).ToListAsync(ct);
+        var counts = await _db.RepairTickets.AsNoTracking()
+            .Where(t => t.ArchivedAt == null)
+            .GroupBy(t => t.StatusId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var countMap = counts.ToDictionary(x => x.Key, x => x.Count);
+        var pipeline = statuses.Select(s => new PipelineStageDto(s.Key, s.Name, countMap.GetValueOrDefault(s.Id), s.Colour)).ToList();
+
+        var urgent = openTickets
+            .Where(t => t.DueAt < now || t.Priority.Severity >= 3)
+            .OrderByDescending(t => t.DueAt < now)
+            .ThenByDescending(t => t.Priority.Severity)
+            .ThenBy(t => t.DueAt)
+            .Take(12)
+            .Select(t => new UrgentJobDto(
+                t.Id, t.TicketNumber, t.Customer.DisplayName,
+                t.Device is null ? null : $"{t.Device.Brand} {t.Device.Model}".Trim(),
+                t.Status.Name, t.Priority.Name, t.AssignedTo?.DisplayName, t.DueAt,
+                t.DueAt < now ? "Overdue" : t.DueAt < todayEnd ? "Due today" : ""))
+            .ToList();
+
+        var techIds = openTickets.Where(t => t.AssignedToId != null).Select(t => t.AssignedToId!.Value).Distinct().ToList();
+        var techs = await _db.Users.AsNoTracking().Where(u => techIds.Contains(u.Id)).ToListAsync(ct);
+        var workload = techs.Select(u =>
+        {
+            var jobs = openTickets.Where(t => t.AssignedToId == u.Id).ToList();
+            var active = jobs.OrderByDescending(j => j.UpdatedAt).FirstOrDefault();
+            return new TechnicianWorkloadDto(
+                u.Id, u.DisplayName, jobs.Count,
+                jobs.Count(j => j.DueAt >= todayStart && j.DueAt < todayEnd),
+                jobs.Count(j => j.DueAt < now),
+                active?.TicketNumber);
+        }).OrderByDescending(w => w.OpenJobs).ToList();
+
+        var unassigned = openTickets.Count(t => t.AssignedToId == null);
+
+        var lowStock = await _db.InventoryItems.AsNoTracking()
+            .Include(i => i.Supplier)
+            .Where(i => i.ArchivedAt == null && (i.QuantityOnHand - i.QuantityReserved) <= i.MinimumStock)
+            .OrderBy(i => i.Sku).Take(20)
+            .Select(i => new LowStockDto(i.Id, i.Sku, i.Name, Math.Max(0, i.QuantityOnHand - i.QuantityReserved), i.QuantityReserved, i.MinimumStock, i.Supplier != null ? i.Supplier.Name : null))
+            .ToListAsync(ct);
+
+        var activity = await _db.AuditEvents.AsNoTracking()
+            .OrderByDescending(a => a.CreatedAt).Take(20)
+            .Select(a => new ActivityDto(a.Id, a.CreatedAt, a.Action, a.Action + (a.EntityType != null ? " · " + a.EntityType : ""), null))
+            .ToListAsync(ct);
+
+        var todaysRepairs = openTickets
+            .Where(t => (t.DueAt >= todayStart && t.DueAt < todayEnd) || t.Status.CountsAsReadyForPickup)
+            .Take(15)
+            .Select(t => new TodayItemDto("Repair", t.TicketNumber + " — " + t.Customer.DisplayName, t.DueAt ?? t.UpdatedAt, $"/repairs/{t.Id}"))
+            .ToList();
+        var todaysBookings = await _db.Bookings.AsNoTracking()
+            .Where(b => b.StartsAt >= todayStart && b.StartsAt < todayEnd)
+            .OrderBy(b => b.StartsAt).Take(10)
+            .Select(b => new TodayItemDto("Booking", b.Type, b.StartsAt, "/calendar"))
+            .ToListAsync(ct);
+        var todaysWork = todaysRepairs.Concat(todaysBookings).OrderBy(x => x.When).ToList();
+
+        var quoteAnalytics = await BuildQuoteAnalyticsAsync(since30, ct);
+        return new DashboardDto(cards, pipeline, urgent, workload, unassigned, lowStock, activity, todaysWork, quoteAnalytics);
+    }
+
+    private async Task<QuoteAnalyticsDto> BuildQuoteAnalyticsAsync(DateTimeOffset since30, CancellationToken ct)
+    {
+        var quotes = await _db.Quotes.AsNoTracking()
+            .Where(q => q.ArchivedAt == null && q.CreatedAt >= since30)
+            .Select(q => new { q.Status, q.Total, q.MarginPercent, q.AcceptedAt })
+            .ToListAsync(ct);
+        var sentLike = quotes.Count(q => q.Status is "Sent" or "Viewed" or "Accepted" or "Declined" or "Expired" or "Converted");
+        var accepted = quotes.Where(q => q.Status is "Accepted" or "Converted").ToList();
+        var declined = quotes.Count(q => q.Status == "Declined");
+        var expired = quotes.Count(q => q.Status == "Expired");
+        var conversion = sentLike > 0
+            ? Math.Round(accepted.Count * 100m / sentLike, 2, MidpointRounding.AwayFromZero)
+            : 0m;
+        var avgTotal = accepted.Count > 0 ? Math.Round(accepted.Average(a => a.Total), 2, MidpointRounding.AwayFromZero) : 0m;
+        var avgMargin = accepted.Count > 0 ? Math.Round(accepted.Average(a => a.MarginPercent), 2, MidpointRounding.AwayFromZero) : 0m;
+        return new QuoteAnalyticsDto(sentLike, accepted.Count, declined, expired, conversion, avgTotal, avgMargin);
+    }
+}
+
+public sealed class InvoiceService : IInvoiceService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public InvoiceService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<InvoiceListItemDto>> ListAsync(CancellationToken ct = default) =>
+        await _db.Invoices.AsNoTracking().Include(i => i.Customer)
+            .Where(i => i.ArchivedAt == null)
+            .OrderByDescending(i => i.CreatedAt)
+            .Select(i => new InvoiceListItemDto(i.Id, i.Number, i.Customer.DisplayName, i.Status, i.Total, i.AmountPaid, i.Total - i.AmountPaid, i.CreatedAt))
+            .ToListAsync(ct);
+
+    public async Task<InvoiceDetailDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var inv = await _db.Invoices.AsNoTracking()
+            .Include(i => i.Customer).Include(i => i.Lines).Include(i => i.Payments)
+            .FirstOrDefaultAsync(i => i.Id == id && i.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Invoice was not found.", 404);
+        return Map(inv);
+    }
+
+    public async Task<InvoiceDetailDto> CreateFromRepairAsync(Guid repairTicketId, Guid actorId, CancellationToken ct = default)
+    {
+        var ticket = await _db.RepairTickets.Include(t => t.Customer)
+            .FirstOrDefaultAsync(t => t.Id == repairTicketId && t.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Repair was not found.", 404);
+
+        var existing = await _db.Invoices.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.RepairTicketId == repairTicketId && i.ArchivedAt == null && i.Status != "Cancelled", ct);
+        if (existing is not null)
+            return await GetAsync(existing.Id, ct);
+
+        var labourInclusive = ticket.EstimatedPrice ?? 0m;
+        if (labourInclusive <= 0)
+            throw new ValidationAppException("Repair has no estimated price to invoice.");
+
+        var (sub, gst, total) = MoneyGst.FromInclusiveTotal(labourInclusive);
+        var number = await DocumentNumbering.NextAsync(_db, "INV", ct);
+        var inv = new Invoice
+        {
+            Number = number,
+            CustomerId = ticket.CustomerId,
+            RepairTicketId = ticket.Id,
+            Status = "Unpaid",
+            CreatedById = actorId,
+            Subtotal = sub,
+            GstAmount = gst,
+            Total = total,
+            AmountPaid = 0,
+            IssuedAt = DateTimeOffset.UtcNow,
+            DueAt = DateTimeOffset.UtcNow.AddDays(7)
+        };
+        inv.Lines.Add(new InvoiceLine
+        {
+            Type = "LABOUR",
+            Description = $"Labour — {ticket.TicketNumber}",
+            Quantity = 1,
+            UnitPrice = labourInclusive,
+            SortOrder = 0
+        });
+        _db.Invoices.Add(inv);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "invoice.create", "Invoice", inv.Id.ToString(), newValue: new { inv.Number, ticket.TicketNumber }, ct: ct);
+        return await GetAsync(inv.Id, ct);
+    }
+
+    public async Task<InvoiceDetailDto> RecordPaymentAsync(Guid id, RecordPaymentRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.Amount <= 0) throw new ValidationAppException("Payment amount must be positive.");
+        var inv = await _db.Invoices.Include(i => i.Payments).FirstOrDefaultAsync(i => i.Id == id && i.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Invoice was not found.", 404);
+        if (inv.Status is "Cancelled" or "Refunded")
+            throw new ConflictAppException("Cannot record payment on this invoice.");
+
+        inv.Payments.Add(new Payment
+        {
+            Method = string.IsNullOrWhiteSpace(request.Method) ? "Cash" : request.Method.Trim(),
+            Amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero),
+            Reference = request.Reference?.Trim(),
+            RecordedById = actorId,
+            IsDeposit = request.IsDeposit,
+            PaidAt = DateTimeOffset.UtcNow
+        });
+        inv.AmountPaid = inv.Payments.Sum(p => p.Amount);
+        inv.Status = inv.AmountPaid >= inv.Total ? "Paid" : inv.AmountPaid > 0 ? "PartiallyPaid" : inv.Status;
+        inv.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "payment.record", "Invoice", id.ToString(), newValue: new { request.Amount, request.Method }, ct: ct);
+        return await GetAsync(id, ct);
+    }
+
+    private static InvoiceDetailDto Map(Invoice i) => new(
+        i.Id, i.Number, i.CustomerId, i.Customer.DisplayName, i.RepairTicketId, i.Status,
+        i.Subtotal, i.GstAmount, i.Total, i.AmountPaid, i.Total - i.AmountPaid,
+        i.Lines.OrderBy(l => l.SortOrder).Select(l => new LineDto(l.Id, l.Type, l.Description, l.Quantity, l.UnitPrice, Math.Round(l.Quantity * l.UnitPrice, 2))).ToList(),
+        i.Payments.OrderByDescending(p => p.PaidAt).Select(p => new PaymentDto(p.Id, p.Method, p.Amount, p.Reference, p.PaidAt, p.IsDeposit)).ToList());
+}
+
+public sealed class InventoryService : IInventoryService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public InventoryService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<InventoryListItemDto>> ListAsync(string? componentType = null, bool availableOnly = false, CancellationToken ct = default)
+    {
+        var query = _db.InventoryItems.AsNoTracking()
+            .Include(i => i.Supplier)
+            .Where(i => i.ArchivedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(componentType) &&
+            !componentType.Equals("All", StringComparison.OrdinalIgnoreCase))
+        {
+            var type = PcComponentTypes.Normalize(componentType);
+            query = query.Where(i => i.ComponentType == type);
+        }
+
+        if (availableOnly)
+            query = query.Where(i => (i.QuantityOnHand - i.QuantityReserved) > 0);
+
+        return await query
+            .OrderBy(i => i.Sku)
+            .Select(i => new InventoryListItemDto(
+                i.Id, i.Sku, i.Name, i.Category, i.QuantityOnHand, i.QuantityReserved,
+                Math.Max(0, i.QuantityOnHand - i.QuantityReserved), i.MinimumStock, i.SellPrice,
+                (i.QuantityOnHand - i.QuantityReserved) <= i.MinimumStock,
+                i.Cost, i.Supplier != null ? i.Supplier.Name : null, i.ComponentType))
+            .ToListAsync(ct);
+    }
+
+    public async Task<InventoryListItemDto> UpsertAsync(UpsertInventoryRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Sku) || string.IsNullOrWhiteSpace(request.Name))
+            throw new ValidationAppException("SKU and name are required.");
+
+        InventoryItem item;
+        if (request.Id is Guid id)
+        {
+            item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == id && i.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+        }
+        else
+        {
+            if (await _db.InventoryItems.AnyAsync(i => i.Sku == request.Sku.Trim() && i.ArchivedAt == null, ct))
+                throw new ConflictAppException("An item with that SKU already exists.");
+            item = new InventoryItem();
+            _db.InventoryItems.Add(item);
+        }
+
+        item.Sku = request.Sku.Trim();
+        item.Barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
+        item.Name = request.Name.Trim();
+        item.Category = string.IsNullOrWhiteSpace(request.Category) ? "Parts" : request.Category.Trim();
+        item.ComponentType = PcComponentTypes.Normalize(request.ComponentType);
+        item.Cost = request.Cost;
+        item.SellPrice = request.SellPrice;
+        item.QuantityOnHand = request.QuantityOnHand;
+        item.MinimumStock = request.MinimumStock;
+        item.ReorderQuantity = request.ReorderQuantity;
+        item.LocationBin = request.LocationBin?.Trim();
+        item.SupplierId = request.SupplierId;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "inventory.upsert", "InventoryItem", item.Id.ToString(), newValue: new { item.Sku }, ct: ct);
+        return (await ListAsync(ct: ct)).First(x => x.Id == item.Id);
+    }
+
+    public async Task<InventoryListItemDto> AdjustAsync(Guid id, AdjustStockRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.QuantityDelta == 0) throw new ValidationAppException("Quantity delta cannot be zero.");
+        var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == id && i.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+        if (item.QuantityOnHand + request.QuantityDelta < 0)
+            throw new ValidationAppException("Adjustment would make on-hand negative.");
+
+        item.QuantityOnHand += request.QuantityDelta;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Adjustment",
+            QuantityDelta = request.QuantityDelta,
+            Reason = string.IsNullOrWhiteSpace(request.Reason) ? "Manual adjustment" : request.Reason.Trim(),
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+        return (await ListAsync(ct: ct)).First(x => x.Id == id);
+    }
+
+    public async Task ReserveAsync(ReserveStockRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.Quantity <= 0) throw new ValidationAppException("Quantity must be positive.");
+        var hasTicket = request.TicketId is Guid;
+        var hasBuild = request.PcBuildId is Guid;
+        if (hasTicket == hasBuild)
+            throw new ValidationAppException("Provide exactly one of TicketId or PcBuildId.");
+
+        var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == request.ItemId && i.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+
+        if (hasTicket)
+        {
+            _ = await _db.RepairTickets.FirstOrDefaultAsync(t => t.Id == request.TicketId && t.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Repair was not found.", 404);
+        }
+        else
+        {
+            _ = await _db.PcBuilds.FirstOrDefaultAsync(b => b.Id == request.PcBuildId && b.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "PC build was not found.", 404);
+        }
+
+        if (item.Available < request.Quantity)
+            throw new ValidationAppException("Insufficient available stock (already reserved or out of stock).");
+
+        item.QuantityReserved += request.Quantity;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        _db.InventoryReservations.Add(new InventoryReservation
+        {
+            ItemId = item.Id,
+            TicketId = request.TicketId,
+            PcBuildId = request.PcBuildId,
+            Quantity = request.Quantity,
+            Status = "Reserved"
+        });
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Reserve",
+            QuantityDelta = 0,
+            Reason = hasTicket
+                ? $"Reserved {request.Quantity} for repair"
+                : $"Reserved {request.Quantity} for PC build",
+            TicketId = request.TicketId,
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "inventory.reserve", "InventoryItem", item.Id.ToString(), newValue: request, ct: ct);
+    }
+
+    public async Task ConsumeReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default)
+    {
+        var res = await _db.InventoryReservations.Include(r => r.Item)
+            .FirstOrDefaultAsync(r => r.Id == reservationId && r.Status == "Reserved", ct)
+            ?? throw new AppException("not_found", "Reservation was not found.", 404);
+        var item = res.Item;
+        if (item.QuantityOnHand < res.Quantity)
+            throw new ValidationAppException("On-hand stock is insufficient to consume reservation.");
+
+        item.QuantityOnHand -= res.Quantity;
+        item.QuantityReserved = Math.Max(0, item.QuantityReserved - res.Quantity);
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        res.Status = "Consumed";
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Consume",
+            QuantityDelta = -res.Quantity,
+            Reason = "Consumed reservation",
+            TicketId = res.TicketId,
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task ReleaseReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default)
+    {
+        var res = await _db.InventoryReservations.Include(r => r.Item)
+            .FirstOrDefaultAsync(r => r.Id == reservationId && r.Status == "Reserved", ct)
+            ?? throw new AppException("not_found", "Reservation was not found.", 404);
+        var item = res.Item;
+        item.QuantityReserved = Math.Max(0, item.QuantityReserved - res.Quantity);
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        res.Status = "Released";
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Release",
+            QuantityDelta = 0,
+            Reason = "Released reservation",
+            TicketId = res.TicketId,
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "inventory.release", "InventoryReservation", reservationId.ToString(), ct: ct);
+    }
+}
+
+public sealed class PurchasingService : IPurchasingService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public PurchasingService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<SupplierDto>> ListSuppliersAsync(CancellationToken ct = default) =>
+        await _db.Suppliers.AsNoTracking().Where(s => s.ArchivedAt == null).OrderBy(s => s.Name)
+            .Select(s => new SupplierDto(s.Id, s.Name, s.Phone, s.Email)).ToListAsync(ct);
+
+    public async Task<SupplierDto> UpsertSupplierAsync(UpsertSupplierRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) throw new ValidationAppException("Supplier name is required.");
+        Supplier s;
+        if (request.Id is Guid id)
+        {
+            s = await _db.Suppliers.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Supplier was not found.", 404);
+        }
+        else
+        {
+            s = new Supplier();
+            _db.Suppliers.Add(s);
+        }
+        s.Name = request.Name.Trim();
+        s.Contact = request.Contact?.Trim();
+        s.Phone = request.Phone?.Trim();
+        s.Email = request.Email?.Trim();
+        s.Website = request.Website?.Trim();
+        s.AccountNumber = request.AccountNumber?.Trim();
+        s.Notes = request.Notes?.Trim();
+        s.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "supplier.upsert", "Supplier", s.Id.ToString(), ct: ct);
+        return new SupplierDto(s.Id, s.Name, s.Phone, s.Email);
+    }
+
+    public async Task<IReadOnlyList<PurchaseOrderListItemDto>> ListPurchaseOrdersAsync(CancellationToken ct = default) =>
+        await _db.PurchaseOrders.AsNoTracking().Include(p => p.Supplier)
+            .Where(p => p.ArchivedAt == null)
+            .OrderByDescending(p => p.CreatedAt)
+            .Select(p => new PurchaseOrderListItemDto(p.Id, p.Number, p.Supplier.Name, p.Status, p.Total, p.ExpectedAt))
+            .ToListAsync(ct);
+
+    public async Task<PurchaseOrderListItemDto> CreatePurchaseOrderAsync(CreatePurchaseOrderRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var supplier = await _db.Suppliers.FirstOrDefaultAsync(s => s.Id == request.SupplierId && s.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Supplier was not found.", 404);
+        if (request.Lines is null || request.Lines.Count == 0)
+            throw new ValidationAppException("At least one PO line is required.");
+
+        var linesTotal = request.Lines.Sum(l => l.Quantity * l.UnitCost) + request.Shipping;
+        var (sub, gst, total) = MoneyGst.FromInclusiveTotal(linesTotal);
+        var number = await DocumentNumbering.NextAsync(_db, "PO", ct);
+        var po = new PurchaseOrder
+        {
+            Number = number,
+            SupplierId = supplier.Id,
+            Status = "Ordered",
+            OrderedAt = DateTimeOffset.UtcNow,
+            ExpectedAt = request.ExpectedAt,
+            CreatedById = actorId,
+            Shipping = request.Shipping,
+            GstAmount = gst,
+            Total = total
+        };
+        foreach (var line in request.Lines)
+        {
+            po.Lines.Add(new PurchaseOrderLine
+            {
+                ItemId = line.ItemId,
+                Description = line.Description.Trim(),
+                QuantityOrdered = line.Quantity,
+                UnitCost = line.UnitCost
+            });
+        }
+        _db.PurchaseOrders.Add(po);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "po.create", "PurchaseOrder", po.Id.ToString(), newValue: new { po.Number }, ct: ct);
+        return new PurchaseOrderListItemDto(po.Id, po.Number, supplier.Name, po.Status, po.Total, po.ExpectedAt);
+    }
+
+    public async Task<PurchaseOrderListItemDto> ReceiveLineAsync(Guid poId, ReceivePoLineRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var po = await _db.PurchaseOrders.Include(p => p.Supplier).Include(p => p.Lines)
+            .FirstOrDefaultAsync(p => p.Id == poId && p.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Purchase order was not found.", 404);
+        var line = po.Lines.FirstOrDefault(l => l.Id == request.LineId)
+            ?? throw new AppException("not_found", "PO line was not found.", 404);
+        if (request.Quantity <= 0) throw new ValidationAppException("Quantity must be positive.");
+        if (line.QuantityReceived + request.Quantity > line.QuantityOrdered)
+            throw new ValidationAppException("Cannot receive more than ordered.");
+
+        line.QuantityReceived += request.Quantity;
+        if (line.ItemId is Guid itemId)
+        {
+            var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ArchivedAt == null, ct);
+            if (item is not null)
+            {
+                item.QuantityOnHand += request.Quantity;
+                item.UpdatedAt = DateTimeOffset.UtcNow;
+                _db.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    ItemId = item.Id,
+                    Type = "Receive",
+                    QuantityDelta = request.Quantity,
+                    Reason = $"PO {po.Number}",
+                    ActorUserId = actorId
+                });
+            }
+        }
+
+        var allReceived = po.Lines.All(l => l.QuantityReceived >= l.QuantityOrdered);
+        var anyReceived = po.Lines.Any(l => l.QuantityReceived > 0);
+        po.Status = allReceived ? "Received" : anyReceived ? "PartiallyReceived" : po.Status;
+        if (allReceived) po.ReceivedAt = DateTimeOffset.UtcNow;
+        po.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return new PurchaseOrderListItemDto(po.Id, po.Number, po.Supplier.Name, po.Status, po.Total, po.ExpectedAt);
+    }
+}
+
+public sealed class NotificationService : INotificationService
+{
+    private readonly WorkshopDbContext _db;
+    public NotificationService(WorkshopDbContext db) => _db = db;
+
+    public async Task<IReadOnlyList<NotificationDto>> ListForUserAsync(Guid userId, CancellationToken ct = default) =>
+        await _db.Notifications.AsNoTracking()
+            .Where(n => n.UserId == userId)
+            .OrderByDescending(n => n.CreatedAt).Take(100)
+            .Select(n => new NotificationDto(n.Id, n.Title, n.Body, n.Severity, n.Route, n.IsRead, n.CreatedAt))
+            .ToListAsync(ct);
+
+    public async Task MarkReadAsync(Guid id, Guid userId, CancellationToken ct = default)
+    {
+        var n = await _db.Notifications.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct)
+            ?? throw new AppException("not_found", "Notification was not found.", 404);
+        n.IsRead = true;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task NotifyAsync(Guid userId, string title, string body, string severity = "Info", string? route = null, CancellationToken ct = default)
+    {
+        _db.Notifications.Add(new AppNotification
+        {
+            UserId = userId,
+            Title = title,
+            Body = body,
+            Severity = severity,
+            Route = route
+        });
+        await _db.SaveChangesAsync(ct);
+    }
+}
+
+public sealed class BookingService : IBookingService
+{
+    private static readonly HashSet<string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Intake", "Diagnostic", "Pickup", "Onsite", "Consult", "Repair", "Other"
+    };
+
+    private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Confirmed", "Cancelled", "Completed", "NoShow"
+    };
+
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public BookingService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<BookingDto>> ListAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+    {
+        // Prefer a SQL projection so missing/soft-deleted navigations cannot NRE in Map().
+        var q = _db.Bookings.AsNoTracking().AsQueryable();
+        if (from is DateTimeOffset f)
+        {
+            var fromUtc = f.ToUniversalTime();
+            q = q.Where(b => b.EndsAt >= fromUtc);
+        }
+        if (to is DateTimeOffset t)
+        {
+            var toUtc = t.ToUniversalTime();
+            q = q.Where(b => b.StartsAt <= toUtc);
+        }
+
+        return await q.OrderBy(b => b.StartsAt)
+            .Select(b => new BookingDto(
+                b.Id,
+                b.CustomerId,
+                b.Customer != null ? b.Customer.DisplayName : "(deleted customer)",
+                b.StaffId,
+                b.Staff != null ? b.Staff.DisplayName : null,
+                b.Type,
+                b.Status,
+                b.StartsAt,
+                b.EndsAt,
+                b.Notes))
+            .ToListAsync(ct);
+    }
+
+    public async Task<BookingDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var booking = await _db.Bookings.AsNoTracking()
+            .Include(b => b.Customer)
+            .Include(b => b.Staff)
+            .FirstOrDefaultAsync(b => b.Id == id, ct)
+            ?? throw new AppException("not_found", "Booking was not found.", 404);
+        return Map(booking);
+    }
+
+    public async Task<BookingDto> CreateAsync(CreateBookingRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.EndsAt <= request.StartsAt) throw new ValidationAppException("End must be after start.");
+        var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == request.CustomerId && c.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Customer was not found.", 404);
+        string? staffName = null;
+        if (request.StaffId is Guid sid)
+        {
+            var staff = await _db.Users.FirstOrDefaultAsync(u => u.Id == sid && u.ArchivedAt == null, ct)
+                ?? throw new ValidationAppException("Staff member was not found.");
+            staffName = staff.DisplayName;
+        }
+        var booking = new Booking
+        {
+            CustomerId = customer.Id,
+            StaffId = request.StaffId,
+            Type = NormalizeType(request.Type),
+            Status = "Confirmed",
+            StartsAt = request.StartsAt,
+            EndsAt = request.EndsAt,
+            Notes = request.Notes?.Trim()
+        };
+        _db.Bookings.Add(booking);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "booking.create", "Booking", booking.Id.ToString(), ct: ct);
+        return new BookingDto(booking.Id, booking.CustomerId, customer.DisplayName, booking.StaffId, staffName, booking.Type, booking.Status, booking.StartsAt, booking.EndsAt, booking.Notes);
+    }
+
+    public async Task<BookingDto> UpdateAsync(Guid id, UpdateBookingRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.EndsAt <= request.StartsAt) throw new ValidationAppException("End must be after start.");
+        var booking = await _db.Bookings.Include(b => b.Customer).Include(b => b.Staff)
+            .FirstOrDefaultAsync(b => b.Id == id, ct)
+            ?? throw new AppException("not_found", "Booking was not found.", 404);
+
+        var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == request.CustomerId && c.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Customer was not found.", 404);
+
+        string? staffName = null;
+        if (request.StaffId is Guid sid)
+        {
+            var staff = await _db.Users.FirstOrDefaultAsync(u => u.Id == sid && u.ArchivedAt == null, ct)
+                ?? throw new ValidationAppException("Staff member was not found.");
+            staffName = staff.DisplayName;
+            booking.StaffId = sid;
+        }
+        else
+        {
+            booking.StaffId = null;
+        }
+
+        booking.CustomerId = customer.Id;
+        booking.Type = NormalizeType(request.Type);
+        booking.Status = NormalizeStatus(request.Status);
+        booking.StartsAt = request.StartsAt;
+        booking.EndsAt = request.EndsAt;
+        booking.Notes = request.Notes?.Trim();
+
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "booking.update", "Booking", booking.Id.ToString(), ct: ct);
+        return new BookingDto(booking.Id, booking.CustomerId, customer.DisplayName, booking.StaffId, staffName, booking.Type, booking.Status, booking.StartsAt, booking.EndsAt, booking.Notes);
+    }
+
+    public async Task<BookingDto> CancelAsync(Guid id, Guid actorId, CancellationToken ct = default)
+    {
+        var booking = await _db.Bookings.Include(b => b.Customer).Include(b => b.Staff)
+            .FirstOrDefaultAsync(b => b.Id == id, ct)
+            ?? throw new AppException("not_found", "Booking was not found.", 404);
+        if (string.Equals(booking.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
+            return Map(booking);
+
+        booking.Status = "Cancelled";
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "booking.cancel", "Booking", booking.Id.ToString(), ct: ct);
+        return Map(booking);
+    }
+
+    private static string NormalizeType(string? type)
+    {
+        var t = string.IsNullOrWhiteSpace(type) ? "Intake" : type.Trim();
+        return AllowedTypes.Contains(t) ? AllowedTypes.First(a => a.Equals(t, StringComparison.OrdinalIgnoreCase)) : t;
+    }
+
+    private static string NormalizeStatus(string? status)
+    {
+        var s = string.IsNullOrWhiteSpace(status) ? "Confirmed" : status.Trim();
+        if (!AllowedStatuses.Contains(s))
+            throw new ValidationAppException("Status must be Confirmed, Cancelled, Completed, or NoShow.");
+        return AllowedStatuses.First(a => a.Equals(s, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static BookingDto Map(Booking b) =>
+        new(b.Id, b.CustomerId, b.Customer.DisplayName, b.StaffId, b.Staff != null ? b.Staff.DisplayName : null, b.Type, b.Status, b.StartsAt, b.EndsAt, b.Notes);
+}
+
+public sealed class KnowledgeService : IKnowledgeService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public KnowledgeService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<KnowledgeDto>> ListAsync(string? q, CancellationToken ct = default)
+    {
+        var query = _db.KnowledgeArticles.AsNoTracking().Where(a => a.ArchivedAt == null);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim().ToLowerInvariant();
+            query = query.Where(a => a.Title.ToLower().Contains(term) || a.Body.ToLower().Contains(term) || (a.Tags != null && a.Tags.ToLower().Contains(term)));
+        }
+        return await query.OrderByDescending(a => a.UpdatedAt)
+            .Select(a => new KnowledgeDto(a.Id, a.Title, a.Category, a.Body, a.Tags, a.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    public async Task<KnowledgeDto> UpsertAsync(UpsertKnowledgeRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
+            throw new ValidationAppException("Title and body are required.");
+        KnowledgeArticle article;
+        if (request.Id is Guid id)
+        {
+            article = await _db.KnowledgeArticles.FirstOrDefaultAsync(a => a.Id == id && a.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Article was not found.", 404);
+        }
+        else
+        {
+            article = new KnowledgeArticle { AuthorId = actorId };
+            _db.KnowledgeArticles.Add(article);
+        }
+        article.Title = request.Title.Trim();
+        article.Category = string.IsNullOrWhiteSpace(request.Category) ? "General" : request.Category.Trim();
+        article.Body = request.Body;
+        article.Tags = request.Tags?.Trim();
+        article.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "knowledge.upsert", "KnowledgeArticle", article.Id.ToString(), ct: ct);
+        return new KnowledgeDto(article.Id, article.Title, article.Category, article.Body, article.Tags, article.CreatedAt);
+    }
+}
+
+public sealed class PcBuildService : IPcBuildService
+{
+    private static readonly string[] AllowedStatuses =
+        ["Quoted", "Reserved", "Building", "Completed", "Sold", "Cancelled"];
+
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public PcBuildService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<PcBuildListItemDto>> ListAsync(CancellationToken ct = default) =>
+        await _db.PcBuilds.AsNoTracking()
+            .Include(b => b.Customer)
+            .Include(b => b.Parts)
+            .Where(b => b.ArchivedAt == null)
+            .OrderByDescending(b => b.CreatedAt)
+            .Select(b => new PcBuildListItemDto(
+                b.Id, b.Number, b.Name,
+                b.Customer != null ? b.Customer.DisplayName : null,
+                b.Status, b.CostTotal, b.SellTotal, b.SellTotal - b.CostTotal, b.Parts.Count))
+            .ToListAsync(ct);
+
+    public async Task<PcBuildDetailDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.AsNoTracking()
+            .Include(b => b.Customer)
+            .Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+        return await MapDetailAsync(build, ct);
+    }
+
+    public async Task<PcBuildDetailDto> CreateAsync(CreatePcBuildRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.CustomerId is Guid cid)
+            _ = await _db.Customers.FirstOrDefaultAsync(c => c.Id == cid && c.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Customer was not found.", 404);
+
+        var status = NormalizeStatus(request.Status) ?? "Quoted";
+        if (IsTerminalConsumed(status) || status == "Cancelled")
+            throw new ValidationAppException("Create a build as Quoted, Reserved, or Building first.");
+
+        var number = await DocumentNumbering.NextAsync(_db, "PCB", ct);
+        var build = new PcBuild
+        {
+            Number = number,
+            Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim(),
+            CustomerId = request.CustomerId,
+            Status = status,
+            UseCase = request.UseCase?.Trim(),
+            Budget = request.Budget,
+            Notes = request.Notes?.Trim()
+        };
+        _db.PcBuilds.Add(build);
+
+        await ApplyPartsAndReservationsAsync(build, request.Parts ?? Array.Empty<PcPartInputDto>(), actorId, releaseExisting: false, ct);
+        if (build.Parts.Any(p => p.InventoryItemId != null) && build.Status == "Quoted")
+            build.Status = "Reserved";
+
+        await _db.SaveChangesAsync(ct);
+        await AttachReservationIdsAsync(build, ct);
+        await _audit.WriteAsync(actorId, "build.create", "PcBuild", build.Id.ToString(), newValue: new { build.Number }, ct: ct);
+        return await GetAsync(build.Id, ct);
+    }
+
+    public async Task<PcBuildDetailDto> UpdateAsync(Guid id, UpdatePcBuildRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+
+        if (IsTerminalConsumed(build.Status) || build.Status == "Cancelled")
+            throw new ValidationAppException("Cannot edit a completed, sold, or cancelled build.");
+
+        if (request.CustomerId is Guid cid)
+            _ = await _db.Customers.FirstOrDefaultAsync(c => c.Id == cid && c.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Customer was not found.", 404);
+
+        build.CustomerId = request.CustomerId;
+        build.Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim();
+        build.UseCase = request.UseCase?.Trim();
+        build.Budget = request.Budget;
+        build.Notes = request.Notes?.Trim();
+
+        await ApplyPartsAndReservationsAsync(build, request.Parts, actorId, releaseExisting: true, ct);
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            var next = NormalizeStatus(request.Status)!;
+            await ApplyStatusSideEffectsAsync(build, next, actorId, ct);
+            build.Status = next;
+        }
+        else if (build.Parts.Any(p => p.InventoryItemId.HasValue) && build.Status == "Quoted")
+        {
+            build.Status = "Reserved";
+        }
+
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await AttachReservationIdsAsync(build, ct);
+        await _audit.WriteAsync(actorId, "build.update", "PcBuild", build.Id.ToString(), ct: ct);
+        return await GetAsync(build.Id, ct);
+    }
+
+    public async Task<PcBuildDetailDto> UpdateStatusAsync(Guid id, UpdatePcBuildStatusRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+
+        var next = NormalizeStatus(request.Status)
+            ?? throw new ValidationAppException("Status is required.");
+        await ApplyStatusSideEffectsAsync(build, next, actorId, ct);
+        build.Status = next;
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "build.status", "PcBuild", build.Id.ToString(), newValue: new { next }, ct: ct);
+        return await GetAsync(build.Id, ct);
+    }
+
+    public async Task DeleteAsync(Guid id, Guid actorId, CancellationToken ct = default)
+    {
+        var build = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstOrDefaultAsync(b => b.Id == id && b.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "PC build was not found.", 404);
+
+        await ReleaseBuildReservationsAsync(build, actorId, ct);
+        build.Status = "Cancelled";
+        build.ArchivedAt = DateTimeOffset.UtcNow;
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "build.delete", "PcBuild", build.Id.ToString(), ct: ct);
+    }
+
+    private async Task ApplyStatusSideEffectsAsync(PcBuild build, string next, Guid actorId, CancellationToken ct)
+    {
+        if (next == build.Status) return;
+
+        if (next == "Cancelled")
+        {
+            await ReleaseBuildReservationsAsync(build, actorId, ct);
+            return;
+        }
+
+        if (IsTerminalConsumed(next))
+        {
+            await ConsumeBuildReservationsAsync(build, actorId, ct);
+            return;
+        }
+
+        if (IsTerminalConsumed(build.Status) || build.Status == "Cancelled")
+            throw new ValidationAppException($"Cannot move a {build.Status} build to {next}.");
+    }
+
+    private async Task ApplyPartsAndReservationsAsync(
+        PcBuild build,
+        IReadOnlyList<PcPartInputDto> parts,
+        Guid actorId,
+        bool releaseExisting,
+        CancellationToken ct)
+    {
+        if (releaseExisting)
+            await ReleaseBuildReservationsAsync(build, actorId, ct);
+
+        if (build.Parts.Count > 0)
+        {
+            _db.PcBuildParts.RemoveRange(build.Parts);
+            build.Parts.Clear();
+        }
+
+        // Aggregate demand per inventory item so exclusivity is checked up front.
+        var demand = new Dictionary<Guid, int>();
+        foreach (var p in parts)
+        {
+            if (p.InventoryItemId is not Guid iid) continue;
+            var qty = p.Quantity <= 0 ? 1 : p.Quantity;
+            demand[iid] = demand.GetValueOrDefault(iid) + qty;
+        }
+
+        var items = new Dictionary<Guid, InventoryItem>();
+        foreach (var (itemId, needed) in demand)
+        {
+            var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+            if (item.Available < needed)
+                throw new ValidationAppException(
+                    $"Insufficient available stock for '{item.Sku}' ({item.Available} available, {needed} needed). Already reserved elsewhere.");
+            items[itemId] = item;
+        }
+
+        foreach (var p in parts)
+        {
+            var category = PcComponentTypes.Normalize(p.Category);
+            var qty = p.Quantity <= 0 ? 1 : p.Quantity;
+            var name = string.IsNullOrWhiteSpace(p.Name) ? category : p.Name.Trim();
+            Guid? itemId = p.InventoryItemId;
+            var cost = p.Cost;
+            var sell = p.SellPrice;
+
+            if (itemId is Guid iid)
+            {
+                var item = items[iid];
+                if (!string.Equals(item.ComponentType, category, StringComparison.OrdinalIgnoreCase) &&
+                    item.ComponentType != PcComponentTypes.Other)
+                {
+                    throw new ValidationAppException(
+                        $"Inventory item '{item.Sku}' is typed as {item.ComponentType}, not {category}.");
+                }
+
+                if (cost == 0) cost = item.Cost;
+                if (sell == 0) sell = item.SellPrice;
+                if (string.IsNullOrWhiteSpace(p.Name)) name = item.Name;
+
+                item.QuantityReserved += qty;
+                item.UpdatedAt = DateTimeOffset.UtcNow;
+                _db.InventoryReservations.Add(new InventoryReservation
+                {
+                    ItemId = item.Id,
+                    PcBuildId = build.Id,
+                    Quantity = qty,
+                    Status = "Reserved"
+                });
+                _db.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    ItemId = item.Id,
+                    Type = "Reserve",
+                    QuantityDelta = 0,
+                    Reason = $"Reserved {qty} for PC build {build.Number}",
+                    ActorUserId = actorId
+                });
+            }
+
+            build.Parts.Add(new PcBuildPart
+            {
+                Category = category,
+                Name = name,
+                InventoryItemId = itemId,
+                Quantity = qty,
+                Cost = cost,
+                SellPrice = sell
+            });
+        }
+
+        RecalcTotals(build);
+    }
+
+    private async Task AttachReservationIdsAsync(PcBuild build, CancellationToken ct)
+    {
+        var reservations = await _db.InventoryReservations
+            .Where(r => r.PcBuildId == build.Id && r.Status == "Reserved")
+            .OrderBy(r => r.CreatedAt)
+            .ToListAsync(ct);
+        if (reservations.Count == 0) return;
+
+        var tracked = await _db.PcBuilds.Include(b => b.Parts)
+            .FirstAsync(b => b.Id == build.Id, ct);
+        var unused = reservations.ToList();
+        foreach (var part in tracked.Parts.Where(p => p.InventoryItemId.HasValue).OrderBy(p => p.Category))
+        {
+            var match = unused.FirstOrDefault(r => r.ItemId == part.InventoryItemId && r.Quantity == part.Quantity);
+            if (match is null) continue;
+            part.ReservationId = match.Id;
+            unused.Remove(match);
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task ReleaseBuildReservationsAsync(PcBuild build, Guid actorId, CancellationToken ct)
+    {
+        var reservations = await _db.InventoryReservations
+            .Include(r => r.Item)
+            .Where(r => r.PcBuildId == build.Id && r.Status == "Reserved")
+            .ToListAsync(ct);
+
+        foreach (var res in reservations)
+        {
+            res.Item.QuantityReserved = Math.Max(0, res.Item.QuantityReserved - res.Quantity);
+            res.Item.UpdatedAt = DateTimeOffset.UtcNow;
+            res.Status = "Released";
+            _db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                ItemId = res.ItemId,
+                Type = "Release",
+                QuantityDelta = 0,
+                Reason = $"Released from PC build {build.Number}",
+                ActorUserId = actorId
+            });
+        }
+
+        foreach (var part in build.Parts)
+            part.ReservationId = null;
+
+        if (reservations.Count > 0)
+            await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task ConsumeBuildReservationsAsync(PcBuild build, Guid actorId, CancellationToken ct)
+    {
+        var reservations = await _db.InventoryReservations
+            .Include(r => r.Item)
+            .Where(r => r.PcBuildId == build.Id && r.Status == "Reserved")
+            .ToListAsync(ct);
+
+        foreach (var res in reservations)
+        {
+            if (res.Item.QuantityOnHand < res.Quantity)
+                throw new ValidationAppException($"On-hand stock insufficient to complete build for '{res.Item.Sku}'.");
+
+            res.Item.QuantityOnHand -= res.Quantity;
+            res.Item.QuantityReserved = Math.Max(0, res.Item.QuantityReserved - res.Quantity);
+            res.Item.UpdatedAt = DateTimeOffset.UtcNow;
+            res.Status = "Consumed";
+            _db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                ItemId = res.ItemId,
+                Type = "Consume",
+                QuantityDelta = -res.Quantity,
+                Reason = $"Consumed for PC build {build.Number}",
+                ActorUserId = actorId
+            });
+        }
+
+        if (reservations.Count > 0)
+            await _db.SaveChangesAsync(ct);
+    }
+
+    private static void RecalcTotals(PcBuild build)
+    {
+        build.CostTotal = build.Parts.Sum(p => p.Cost * p.Quantity);
+        build.SellTotal = build.Parts.Sum(p => p.SellPrice * p.Quantity);
+    }
+
+    private static bool IsTerminalConsumed(string status) =>
+        status is "Completed" or "Sold";
+
+    private static string? NormalizeStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return null;
+        var trimmed = status.Trim();
+        foreach (var s in AllowedStatuses)
+        {
+            if (string.Equals(s, trimmed, StringComparison.OrdinalIgnoreCase))
+                return s;
+        }
+        throw new ValidationAppException($"Unknown build status '{status}'. Use: {string.Join(", ", AllowedStatuses)}");
+    }
+
+    private async Task<PcBuildDetailDto> MapDetailAsync(PcBuild build, CancellationToken ct)
+    {
+        var itemIds = build.Parts.Where(p => p.InventoryItemId.HasValue).Select(p => p.InventoryItemId!.Value).Distinct().ToList();
+        var skus = itemIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.InventoryItems.AsNoTracking()
+                .Where(i => itemIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id, i => i.Sku, ct);
+
+        return new PcBuildDetailDto(
+            build.Id, build.Number, build.Name, build.CustomerId,
+            build.Customer?.DisplayName,
+            build.Status, build.UseCase, build.Budget, build.Notes,
+            build.CostTotal, build.SellTotal, build.SellTotal - build.CostTotal,
+            build.Parts.Select(p => new PcBuildPartDto(
+                p.Id, p.Category, p.Name, p.InventoryItemId,
+                p.InventoryItemId is Guid iid && skus.TryGetValue(iid, out var sku) ? sku : null,
+                p.Quantity, p.Cost, p.SellPrice, p.ReservationId)).ToList());
+    }
+}
+
+public sealed class UsedTechService : IUsedTechService
+{
+    /// <summary>Full refurb + store lifecycle (WordPress/Sell Your Tech). Canonical casing returned.</summary>
+    private static readonly string[] AllowedStatuses =
+    [
+        "Purchased", "Inspection", "Parts Required", "Repair", "Testing", "Cleaning",
+        "Final Quality Check", "Ready for Sale", "Listed", "Reserved", "Sold",
+        // Legacy aliases kept for existing Windows client rows
+        "In stock", "Refurbishing"
+    ];
+    private static readonly string[] AllowedConditions =
+        ["New refurbished", "Excellent", "Good", "Fair", "A", "B", "C", "D"];
+
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public UsedTechService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<UsedDeviceDto>> ListAsync(string? q = null, string? status = null, CancellationToken ct = default)
+    {
+        var query = _db.UsedDevices.AsNoTracking().Where(d => d.ArchivedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(status) && !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+            query = query.Where(d => d.Status == status.Trim());
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim().ToLowerInvariant();
+            query = query.Where(d =>
+                d.Summary.ToLower().Contains(term) ||
+                (d.Brand != null && d.Brand.ToLower().Contains(term)) ||
+                (d.Model != null && d.Model.ToLower().Contains(term)) ||
+                (d.Category != null && d.Category.ToLower().Contains(term)) ||
+                (d.Serial != null && d.Serial.ToLower().Contains(term)) ||
+                (d.Imei != null && d.Imei.ToLower().Contains(term)) ||
+                (d.Colour != null && d.Colour.ToLower().Contains(term)) ||
+                (d.StorageCapacity != null && d.StorageCapacity.ToLower().Contains(term)) ||
+                (d.Source != null && d.Source.ToLower().Contains(term)) ||
+                (d.Notes != null && d.Notes.ToLower().Contains(term)));
+        }
+
+        var rows = await query.OrderByDescending(d => d.CreatedAt).ToListAsync(ct);
+        return rows.Select(MapList).ToList();
+    }
+
+    public async Task<UsedDeviceDetailDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var d = await _db.UsedDevices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Used device was not found.", 404);
+        return await MapDetailAsync(d, ct);
+    }
+
+    public async Task<UsedDeviceDetailDto> CreateAsync(CreateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var brand = Norm(request.Brand);
+        var model = Norm(request.Model);
+        var summary = BuildSummary(request.Summary, brand, model, request.Category, request.StorageCapacity);
+        if (string.IsNullOrWhiteSpace(summary))
+            throw new ValidationAppException("Brand/model or summary is required.");
+
+        var condition = NormalizeCondition(request.ConditionGrade);
+        var status = string.IsNullOrWhiteSpace(request.Status) ? "In stock" : NormalizeStatus(request.Status);
+
+        var d = new UsedDevice
+        {
+            Summary = summary,
+            Brand = brand,
+            Model = model,
+            Category = Norm(request.Category),
+            Serial = Norm(request.Serial),
+            Imei = Norm(request.Imei),
+            Colour = Norm(request.Colour),
+            StorageCapacity = Norm(request.StorageCapacity),
+            Specs = Norm(request.Specs),
+            ConditionGrade = condition,
+            Status = status,
+            PurchasePrice = request.PurchasePrice,
+            ExpectedResale = request.AskingPrice,
+            ExpectedRepairCost = request.PartsCost,
+            Faults = Norm(request.Faults),
+            Notes = Norm(request.Notes),
+            Source = Norm(request.Source),
+            SellerCustomerId = request.SellerCustomerId,
+            CustomerId = request.CustomerId,
+            RepairTicketId = request.RepairTicketId
+        };
+        _db.UsedDevices.Add(d);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "used.create", "UsedDevice", d.Id.ToString(), ct: ct);
+        return await MapDetailAsync(d, ct);
+    }
+
+    public async Task<UsedDeviceDetailDto> UpdateAsync(Guid id, UpdateUsedDeviceRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var d = await _db.UsedDevices.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Used device was not found.", 404);
+
+        var brand = Norm(request.Brand);
+        var model = Norm(request.Model);
+        var summary = BuildSummary(request.Summary, brand, model, request.Category, request.StorageCapacity);
+        if (string.IsNullOrWhiteSpace(summary))
+            throw new ValidationAppException("Brand/model or summary is required.");
+
+        d.Summary = summary;
+        d.Brand = brand;
+        d.Model = model;
+        d.Category = Norm(request.Category);
+        d.Serial = Norm(request.Serial);
+        d.Imei = Norm(request.Imei);
+        d.Colour = Norm(request.Colour);
+        d.StorageCapacity = Norm(request.StorageCapacity);
+        d.Specs = Norm(request.Specs);
+        d.ConditionGrade = NormalizeCondition(request.ConditionGrade);
+        d.Status = NormalizeStatus(request.Status);
+        d.PurchasePrice = request.PurchasePrice;
+        d.ExpectedResale = request.AskingPrice;
+        d.ExpectedRepairCost = request.PartsCost;
+        d.ActualSalePrice = request.ActualSalePrice;
+        d.Faults = Norm(request.Faults);
+        d.Notes = Norm(request.Notes);
+        d.Source = Norm(request.Source);
+        d.SellerCustomerId = request.SellerCustomerId;
+        d.CustomerId = request.CustomerId;
+        d.RepairTicketId = request.RepairTicketId;
+        d.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "used.update", "UsedDevice", id.ToString(), ct: ct);
+        return await MapDetailAsync(d, ct);
+    }
+
+    public async Task<UsedDeviceDetailDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var d = await _db.UsedDevices.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Used device was not found.", 404);
+        d.Status = NormalizeStatus(request.Status);
+        if (request.ActualSalePrice is decimal sale) d.ActualSalePrice = sale;
+        d.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "used.status", "UsedDevice", id.ToString(), newValue: d.Status, ct: ct);
+        return await MapDetailAsync(d, ct);
+    }
+
+    private static UsedDeviceDto MapList(UsedDevice d)
+    {
+        var total = d.PurchasePrice + d.ExpectedRepairCost;
+        var margin = d.ActualSalePrice.HasValue
+            ? d.ActualSalePrice.Value - total
+            : d.ExpectedResale - total;
+        return new UsedDeviceDto(
+            d.Id, d.Summary, d.Brand, d.Model, d.Category, d.Status, d.ConditionGrade,
+            d.PurchasePrice, d.ExpectedRepairCost, total, d.ExpectedResale, d.ActualSalePrice, margin,
+            d.Serial, d.Colour, d.StorageCapacity);
+    }
+
+    private async Task<UsedDeviceDetailDto> MapDetailAsync(UsedDevice d, CancellationToken ct)
+    {
+        string? sellerName = null;
+        string? customerName = null;
+        string? ticketNumber = null;
+
+        if (d.SellerCustomerId is Guid sellerId)
+            sellerName = await _db.Customers.AsNoTracking()
+                .Where(c => c.Id == sellerId).Select(c => c.DisplayName).FirstOrDefaultAsync(ct);
+        if (d.CustomerId is Guid customerId)
+            customerName = await _db.Customers.AsNoTracking()
+                .Where(c => c.Id == customerId).Select(c => c.DisplayName).FirstOrDefaultAsync(ct);
+        if (d.RepairTicketId is Guid ticketId)
+            ticketNumber = await _db.RepairTickets.AsNoTracking()
+                .Where(t => t.Id == ticketId).Select(t => t.TicketNumber).FirstOrDefaultAsync(ct);
+
+        var total = d.PurchasePrice + d.ExpectedRepairCost;
+        var margin = d.ActualSalePrice.HasValue
+            ? d.ActualSalePrice.Value - total
+            : d.ExpectedResale - total;
+
+        return new UsedDeviceDetailDto(
+            d.Id, d.Summary, d.Brand, d.Model, d.Category,
+            d.Serial, d.Imei, d.Colour, d.StorageCapacity, d.Specs,
+            d.Status, d.ConditionGrade,
+            d.PurchasePrice, d.ExpectedRepairCost, total, d.ExpectedResale, d.ActualSalePrice, margin,
+            d.Faults, d.Notes, d.Source,
+            d.SellerCustomerId, sellerName,
+            d.CustomerId, customerName,
+            d.RepairTicketId, ticketNumber,
+            d.CreatedAt, d.UpdatedAt);
+    }
+
+    private static string BuildSummary(string? summary, string? brand, string? model, string? category, string? storage)
+    {
+        if (!string.IsNullOrWhiteSpace(summary)) return summary.Trim();
+        var parts = new[] { brand, model, storage, category }
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim());
+        return string.Join(" ", parts);
+    }
+
+    private static string NormalizeCondition(string? value)
+    {
+        var v = string.IsNullOrWhiteSpace(value) ? "Good" : value.Trim();
+        var match = AllowedConditions.FirstOrDefault(a => a.Equals(v, StringComparison.OrdinalIgnoreCase));
+        return match ?? (v.Length <= 32 ? v : v[..32]);
+    }
+
+    private static string NormalizeStatus(string? value)
+    {
+        var v = string.IsNullOrWhiteSpace(value) ? "Purchased" : value.Trim();
+        if (v.Equals("Listed for sale", StringComparison.OrdinalIgnoreCase)) return "Listed";
+        if (v.Equals("In stock", StringComparison.OrdinalIgnoreCase)) return "Ready for Sale";
+        if (v.Equals("Refurbishing", StringComparison.OrdinalIgnoreCase)) return "Repair";
+        if (v.Equals("Final QC", StringComparison.OrdinalIgnoreCase)) return "Final Quality Check";
+        var match = AllowedStatuses.FirstOrDefault(a => a.Equals(v, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+            throw new ValidationAppException(
+                "Status must be one of: Purchased, Inspection, Parts Required, Repair, Testing, Cleaning, Final Quality Check, Ready for Sale, Listed, Reserved, Sold.");
+        return match;
+    }
+
+    private static string? Norm(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+public sealed class QaService : IQaService
+{
+    private static readonly string[] DefaultItems =
+    [
+        "Powers on",
+        "Touchscreen / display",
+        "Buttons / ports",
+        "Wi-Fi / connectivity",
+        "Camera / speakers",
+        "No residual damage noted",
+        "Customer data / passcode cleared if required"
+    ];
+
+    private readonly WorkshopDbContext _db;
+    public QaService(WorkshopDbContext db) => _db = db;
+
+    public async Task EnsureDefaultChecklistAsync(Guid ticketId, CancellationToken ct = default)
+    {
+        var ticket = await _db.RepairTickets.Include(t => t.Status)
+            .FirstOrDefaultAsync(t => t.Id == ticketId && t.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Repair was not found.", 404);
+
+        if (ticket.Status.Key is not ("testing" or "ready_pickup"))
+            return;
+
+        if (await _db.QaChecklists.AnyAsync(q => q.TicketId == ticketId, ct))
+            return;
+
+        var order = 0;
+        foreach (var item in DefaultItems)
+        {
+            _db.QaChecklists.Add(new QaChecklist
+            {
+                TicketId = ticketId,
+                Item = item,
+                Result = "NotTested",
+                SortOrder = order++
+            });
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<QaItemDto>> ListForTicketAsync(Guid ticketId, CancellationToken ct = default)
+    {
+        await EnsureDefaultChecklistAsync(ticketId, ct);
+        return await _db.QaChecklists.AsNoTracking()
+            .Where(q => q.TicketId == ticketId)
+            .OrderBy(q => q.SortOrder)
+            .Select(q => new QaItemDto(q.Id, q.Item, q.Result, q.SortOrder))
+            .ToListAsync(ct);
+    }
+
+    public async Task<QaItemDto> SetResultAsync(Guid ticketId, Guid itemId, string result, Guid actorId, CancellationToken ct = default)
+    {
+        var allowed = new[] { "Pass", "Fail", "NotApplicable", "NotTested" };
+        if (!allowed.Contains(result, StringComparer.OrdinalIgnoreCase))
+            throw new ValidationAppException("Invalid QA result.");
+        var row = await _db.QaChecklists.FirstOrDefaultAsync(q => q.Id == itemId && q.TicketId == ticketId, ct)
+            ?? throw new AppException("not_found", "QA item was not found.", 404);
+        row.Result = allowed.First(a => a.Equals(result, StringComparison.OrdinalIgnoreCase));
+        await _db.SaveChangesAsync(ct);
+        return new QaItemDto(row.Id, row.Item, row.Result, row.SortOrder);
+    }
+}
+
+public sealed class ReportService : IReportService
+{
+    private readonly WorkshopDbContext _db;
+    public ReportService(WorkshopDbContext db) => _db = db;
+
+    public async Task<ReportSummaryDto> SummaryAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+    {
+        var end = to ?? DateTimeOffset.UtcNow;
+        var start = from ?? end.AddDays(-30);
+
+        var payments = await _db.Payments.AsNoTracking()
+            .Where(p => p.PaidAt >= start && p.PaidAt <= end).ToListAsync(ct);
+        var revenue = payments.Sum(p => p.Amount);
+        var cogs = await _db.InventoryTransactions.AsNoTracking().Include(t => t.Item)
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end && t.QuantityDelta < 0)
+            .SumAsync(t => (decimal?)(Math.Abs(t.QuantityDelta) * t.Item.Cost), ct) ?? 0m;
+        if (cogs == 0 && revenue > 0)
+            cogs = Math.Round(revenue * 0.45m, 2, MidpointRounding.AwayFromZero); // interim
+
+        var completed = await _db.RepairTickets.AsNoTracking()
+            .CountAsync(t => t.ArchivedAt == null && t.CompletedAt >= start && t.CompletedAt <= end, ct);
+        var opened = await _db.RepairTickets.AsNoTracking()
+            .CountAsync(t => t.ArchivedAt == null && t.CreatedAt >= start && t.CreatedAt <= end, ct);
+
+        var byStatus = await _db.RepairTickets.AsNoTracking().Include(t => t.Status)
+            .Where(t => t.ArchivedAt == null && t.CreatedAt >= start && t.CreatedAt <= end)
+            .GroupBy(t => t.Status.Name)
+            .Select(g => new NamedCountDto(g.Key, g.Count()))
+            .ToListAsync(ct);
+
+        var byMethod = payments.GroupBy(p => p.Method)
+            .Select(g => new NamedMoneyDto(g.Key, g.Sum(x => x.Amount)))
+            .OrderByDescending(x => x.Amount).ToList();
+
+        return new ReportSummaryDto(start, end, revenue, cogs, revenue - cogs, completed, opened, byStatus, byMethod);
+    }
+}
+
+public sealed class AiService : IAiService
+{
+    private readonly IConfiguration _config;
+    private readonly IHttpClientFactory _http;
+    private readonly WorkshopDbContext _db;
+
+    public AiService(IConfiguration config, IHttpClientFactory http, WorkshopDbContext db)
+    {
+        _config = config;
+        _http = http;
+        _db = db;
+    }
+
+    public async Task<AiAssistResponse> AssistAsync(AiAssistRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var enabled = _config.GetValue("Integrations:Ollama:Enabled", false);
+        var baseUrl = _config["Integrations:Ollama:BaseUrl"] ?? "http://127.0.0.1:11434";
+        var model = _config["Integrations:Ollama:Model"] ?? "llama3.2";
+        const string disclaimer = "AI suggestions must be reviewed before applying. WorkshopOS never auto-applies AI output.";
+
+        if (!enabled)
+        {
+            return new AiAssistResponse(false, "none",
+                "AI assistant is disabled. Set Integrations:Ollama:Enabled=true and run a local Ollama instance to enable.",
+                disclaimer);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Prompt))
+            throw new ValidationAppException("Prompt is required.");
+
+        var context = "";
+        if (request.TicketId is Guid tid)
+        {
+            var ticket = await _db.RepairTickets.AsNoTracking().Include(t => t.Customer).Include(t => t.Device)
+                .FirstOrDefaultAsync(t => t.Id == tid, ct);
+            if (ticket is not null)
+                context = $"Ticket {ticket.TicketNumber}: {ticket.ReportedIssue}. Diagnosis: {ticket.Diagnosis}. Customer: {ticket.Customer.DisplayName}.";
+        }
+
+        try
+        {
+            var client = _http.CreateClient("ollama");
+            client.Timeout = TimeSpan.FromSeconds(60);
+            var payload = new
+            {
+                model,
+                prompt = string.IsNullOrEmpty(context) ? request.Prompt : $"{context}\n\nUser request: {request.Prompt}",
+                stream = false
+            };
+            using var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/api/generate", payload, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync(ct);
+                return new AiAssistResponse(true, "ollama",
+                    $"Ollama request failed ({(int)response.StatusCode}): {Truncate(err, 400)}",
+                    disclaimer);
+            }
+            using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            var output = doc.RootElement.TryGetProperty("response", out var r) ? r.GetString() ?? "" : "";
+            if (string.IsNullOrWhiteSpace(output))
+                return new AiAssistResponse(true, "ollama", "Ollama returned an empty response.", disclaimer);
+            return new AiAssistResponse(true, "ollama", output.Trim(), disclaimer);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return new AiAssistResponse(true, "ollama",
+                $"Could not reach Ollama at {baseUrl}: {ex.Message}",
+                disclaimer);
+        }
+    }
+
+    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+}
+
+public sealed class BackupService : IBackupService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IConfiguration _config;
+    private readonly IAuditService _audit;
+
+    public BackupService(WorkshopDbContext db, IConfiguration config, IAuditService audit)
+    {
+        _db = db;
+        _config = config;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<BackupDto>> ListAsync(CancellationToken ct = default) =>
+        await _db.BackupRecords.AsNoTracking().OrderByDescending(b => b.StartedAt).Take(50)
+            .Select(b => new BackupDto(b.Id, b.Type, b.Status, b.Path, b.StartedAt, b.FinishedAt))
+            .ToListAsync(ct);
+
+    public async Task<BackupDto> CreateAsync(Guid actorId, CancellationToken ct = default)
+    {
+        var dir = Environment.GetEnvironmentVariable("BACKUP_DIR");
+        if (string.IsNullOrWhiteSpace(dir))
+            dir = _config["Backup:Directory"];
+        if (string.IsNullOrWhiteSpace(dir))
+            dir = Path.Combine(Path.GetTempPath(), "workshopos-backups");
+        Directory.CreateDirectory(dir);
+
+        var started = DateTimeOffset.UtcNow;
+        var fileName = $"workshopos-backup-{started:yyyyMMdd-HHmmss}.sql.marker";
+        var path = Path.Combine(dir, fileName);
+        var record = new BackupRecord
+        {
+            Type = "Manual",
+            Status = "Running",
+            Path = path,
+            StartedById = actorId,
+            StartedAt = started
+        };
+        _db.BackupRecords.Add(record);
+        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("-- WorkshopOS backup marker (logical dump placeholder)");
+            sb.AppendLine($"-- StartedAt: {started:O}");
+            sb.AppendLine($"-- Actor: {actorId}");
+            sb.AppendLine($"-- Database: {_db.Database.GetDbConnection().Database}");
+            sb.AppendLine("-- NOTE: Full pg_dump integration lands with hardened ops; this marker proves backup plumbing.");
+            await File.WriteAllTextAsync(path, sb.ToString(), ct);
+
+            record.Status = "Completed";
+            record.FinishedAt = DateTimeOffset.UtcNow;
+            record.Detail = "Marker file written";
+            await _db.SaveChangesAsync(ct);
+            await _audit.WriteAsync(actorId, "backup.create", "BackupRecord", record.Id.ToString(), newValue: new { path }, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            record.Status = "Failed";
+            record.Detail = ex.Message;
+            record.FinishedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            throw new AppException("backup_failed", $"Backup failed: {ex.Message}", 500);
+        }
+
+        return new BackupDto(record.Id, record.Type, record.Status, record.Path, record.StartedAt, record.FinishedAt);
+    }
+
+    public async Task<SystemHealthDetailDto> HealthDetailAsync(CancellationToken ct = default)
+    {
+        var dbOk = false;
+        try { dbOk = await _db.Database.CanConnectAsync(ct); } catch { /* degraded */ }
+
+        var lastBackup = await _db.BackupRecords.AsNoTracking()
+            .Where(b => b.Status == "Completed")
+            .OrderByDescending(b => b.FinishedAt)
+            .Select(b => (DateTimeOffset?)b.FinishedAt)
+            .FirstOrDefaultAsync(ct);
+        var backupCount = await _db.BackupRecords.AsNoTracking().LongCountAsync(ct);
+
+        // Worker heartbeat not wired yet — report false rather than inventing success.
+        return new SystemHealthDetailDto(
+            dbOk ? "Healthy" : "Degraded",
+            dbOk,
+            WorkerHeartbeat: false,
+            WorkshopOS.Contracts.Common.ProductVersions.Api,
+            WorkshopOS.Contracts.Common.ProductVersions.ClientMinimum,
+            lastBackup,
+            backupCount);
+    }
+}

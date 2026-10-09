@@ -1,0 +1,34 @@
+WorkshopOS Windows client 1.2.21 - rebuild on Windows
+
+Banner must show: Client 1.2.21
+
+1.2.21 nuclear XamlCompiler fix (publish still exited 1 on 1.2.20):
+  - DELETED ServicePickerControl UserControl entirely
+  - Inline minimal service UI on New Ticket + Quote Builder
+    (TextBox / Button / ComboBox DisplayMemberPath only — no DataTemplate,
+     no x:Bind on picker, no NumberBox, no UserControl)
+  - Quote Builder money NumberBoxes → TextBox (JobLabourFeeText + line *Text)
+  - Catalogue API unchanged; UI is simpler
+  - packaging\dump-xaml-errors.ps1 prints real errors from publish-last.log
+
+If publish fails:
+  powershell -ExecutionPolicy Bypass -File .\packaging\dump-xaml-errors.ps1
+
+Build Setup.exe:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.21
+
+Portable only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.21 -SkipInstaller
+
+Or one-shot wipe + overlay + build + launch:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.21.ps1
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.21.zip
+  packaging\dist\WorkshopOS-Setup-1.2.21.exe  (if Inno Setup 6 installed)
+
+Server update after pull:
+  ./scripts/restart-workshopos.sh --update
+
+Agent overlay (if GitHub lags):
+  http://127.0.0.1:28765/repairos-github-sync.zip
