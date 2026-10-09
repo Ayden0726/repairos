@@ -33,9 +33,13 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# Old / local data
-data/
+# Old / local data (repo-root only — do not ignore Infrastructure/Data seed JSON)
+/data/
 *.rdb
+
+# Keep embedded service catalogue seed
+!services/shared/WorkshopOS.Infrastructure/Data/
+!services/shared/WorkshopOS.Infrastructure/Data/**
 node_modules/
 .next/
 workshopos-build-client-*.zip
