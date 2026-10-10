@@ -11,7 +11,7 @@
   <Grid>
     <NavigationView x:Name="NavView"
                     PaneDisplayMode="Left"
-                    IsSettingsVisible="True"
+                    IsSettingsVisible="{x:Bind ViewModel.CanOpenSettings, Mode=OneWay}"
                     IsBackButtonVisible="Collapsed"
                     OpenPaneLength="196"
                     CompactPaneLength="48"
@@ -29,11 +29,14 @@
         </StackPanel>
       </NavigationView.PaneHeader>
       <NavigationView.PaneFooter>
-        <StackPanel Padding="10,6" Spacing="4">
-          <TextBlock Text="{x:Bind ViewModel.UserDisplay, Mode=OneWay}" FontSize="11"
+        <StackPanel Padding="10,6" Spacing="2">
+          <TextBlock Text="{x:Bind ViewModel.UserDisplay, Mode=OneWay}" FontSize="11" FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis" MaxLines="1"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+          <TextBlock Text="{x:Bind ViewModel.UserRole, Mode=OneWay}" FontSize="10"
                      TextTrimming="CharacterEllipsis" MaxLines="1"
                      Foreground="{ThemeResource WorkshopTextSecondaryBrush}" />
-          <Grid ColumnSpacing="4">
+          <Grid ColumnSpacing="4" Margin="0,4,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="*" />

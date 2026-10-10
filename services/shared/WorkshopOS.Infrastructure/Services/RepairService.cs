@@ -484,5 +484,6 @@ public sealed class RepairService : IRepairService
             r.Notes.Select(n => new RepairNoteDto(n.Id, n.Body, n.IsInternal, n.Author.DisplayName, n.CreatedAt)).ToList(),
             r.ServiceLines.Select(l => new RepairServiceLineDto(
                 l.Id, l.ServicePricingId, l.ServiceName, l.Code, l.LabourFee, l.ServiceFee,
-                l.EstimatedMinutes, l.WarrantyDays, l.Notes, l.PartsJson, l.IsCompleted, l.CompletedAt, l.SortOrder)).ToList());
+                l.EstimatedMinutes, l.WarrantyDays, l.Notes, l.PartsJson, l.IsCompleted, l.CompletedAt, l.SortOrder)).ToList(),
+            r.Device?.Category ?? WorkshopOS.Contracts.Workshop.DeviceCategory.Other);
 }

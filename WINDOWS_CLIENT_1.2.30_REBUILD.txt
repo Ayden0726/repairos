@@ -1,0 +1,134 @@
+WorkshopOS Windows client 1.2.30 — rebuild guide
+================================================
+
+Do this on a Windows 10/11 x64 PC (not Linux). Prefer
+"Developer PowerShell for VS 2022" from the Start menu.
+
+Prerequisites
+-------------
+- Visual Studio 2022 with WinUI / Windows App SDK workload
+- .NET 8 SDK (dotnet --list-sdks must show 8.x — .NET 10 alone is not enough)
+- Git (only if you pull instead of using the agent overlay zip)
+- Optional: Inno Setup 6 (only if you want Setup.exe)
+
+NETSDK1005 note
+---------------
+If you see "project.assets.json doesn't have a target for 'net8.0'", the fix
+is already in main (global.json pins SDK 8, Contracts clears RID/Platform,
+Client ProjectReference strips TargetFramework/Platform/RID). Use the overlay
+zip below so those files land on disk, then rebuild.
+
+0) One-command: GitHub sync + client zip + Setup.exe (recommended)
+------------------------------------------------------------------
+Developer PowerShell for VS 2022. Agent HTTP on port 28765. Needs GitHub auth
++ .NET 8 SDK + Inno Setup 6 (for Setup.exe).
+
+  $r='C:\Users\ayden\src\repairos'; $z="$env:TEMP\repairos-github-sync.zip"
+  New-Item -ItemType Directory -Force -Path $r | Out-Null
+  Invoke-WebRequest -Uri 'http://127.0.0.1:28765/repairos-github-sync.zip' -OutFile $z
+  Expand-Archive -Path $z -DestinationPath $r -Force
+  powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1"
+
+Success:
+  GitHub main updated (Ayden0726/repairos)
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.30.zip
+  packaging\dist\WorkshopOS-Setup-1.2.30.exe
+  Desktop\WorkshopOS-Client-1.2.30\WorkshopOS.Client.exe  (launched)
+
+Client-only rebuild (no GitHub push): scripts\rebuild-client-1.2.30.ps1
+
+1) Get latest source (git instead of overlay)
+---------------------------------------------
+  cd C:\Users\ayden\src\repairos
+  git fetch origin
+  git checkout main
+  git pull origin main
+
+  (Edit the path if your clone lives elsewhere.)
+
+2) Packaging script only (after overlay or git pull)
+----------------------------------------------------
+From the repo root:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.30 -SkipInstaller
+
+Or double-click:
+
+  packaging\build-client.cmd
+
+Expect console line: WorkshopOS client build script v8
+Expect: Active SDK 8.x via global.json; "Contracts assets contain net8.0 — OK"
+
+Output zip:
+
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.30.zip
+
+With installer (needs Inno Setup 6):
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.30
+
+  → packaging\dist\WorkshopOS-Setup-1.2.30.exe
+
+3) Manual publish (if you skip the script)
+------------------------------------------
+  cd apps\windows-client\WorkshopOS.Client
+  # Use --framework (not -p:TargetFramework=) so Contracts stays net8.0
+  dotnet publish -c Release --framework net8.0-windows10.0.19041.0 -r win-x64 --self-contained true
+
+Publish folder is under bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
+(or the path printed by the script under packaging\out\client).
+
+4) Install / run
+----------------
+- Zip: extract somewhere, run WorkshopOS.Client.exe
+- Setup: run WorkshopOS-Setup-1.2.30.exe
+
+Optional clean slate (wipes saved server/tokens on this PC):
+
+  Remove-Item -Recurse -Force "$env:LOCALAPPDATA\WorkshopOS" -ErrorAction SilentlyContinue
+
+5) After launch
+---------------
+1. Pair to your API (http://<server>:5088/connect → WOS-XXXX)
+2. Sign in as Owner/Admin
+3. Settings → POS → Enable POS → Save
+4. Sign out/in (or restart app) — POS appears in the sidebar
+5. Settings → App should show Client 1.2.30
+
+Server must already be 1.2.30+ (migrations pos_sales / pos_sale_lines).
+EFTPOS brands: docs\POS_EFTPOS.md
+
+Key files used by this build
+----------------------------
+  scripts\rebuild-client-1.2.30.ps1   (one-shot overlay + build)
+  packaging\build-client.ps1
+  packaging\build-client.cmd
+  packaging\WorkshopOS-Setup.iss          (installer only)
+  global.json                             (pin .NET 8 SDK)
+  apps\windows-client\WorkshopOS.Client\WorkshopOS.Client.csproj
+  apps\windows-client\WorkshopOS.Client\Views\PosPage.xaml
+  apps\windows-client\WorkshopOS.Client\Views\PosPage.xaml.cs
+  apps\windows-client\WorkshopOS.Client\Views\OperationsViewModels.cs
+  apps\windows-client\WorkshopOS.Client\Views\SettingsPage.xaml
+  apps\windows-client\WorkshopOS.Client\Views\SettingsPage.xaml.cs
+  apps\windows-client\WorkshopOS.Client\Views\ShellPage.xaml.cs
+  apps\windows-client\WorkshopOS.Client\ViewModels\ViewModels.cs
+  apps\windows-client\WorkshopOS.Client\ViewModels\UsersViewModel.cs
+  services\shared\WorkshopOS.Contracts\**  (referenced by the client)
+
+If publish fails (XAML)
+-----------------------
+  powershell -ExecutionPolicy Bypass -File .\packaging\dump-xaml-errors.ps1
+  Check packaging\out\logs\publish-last.log
+
+If publish fails (NETSDK1005)
+-----------------------------
+  Confirm global.json exists and `dotnet --version` prints 8.x
+  Confirm Client csproj has GlobalPropertiesToRemove including TargetFramework
+  Re-download the overlay zip and re-run rebuild-client-1.2.30.ps1
+
+If publish fails (CS0111 SelectComboString)
+------------------------------------------
+  That was a duplicate helper in SettingsPage.xaml.cs (POS pivot). Fixed in
+  main — re-download the overlay zip so the duplicate method is gone, then
+  rebuild. MSB3073 from XamlCompiler is a follow-on of CS0111, not a separate bug.

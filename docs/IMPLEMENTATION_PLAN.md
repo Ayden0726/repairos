@@ -26,7 +26,7 @@
 | **3** | Repair ticket architecture (board/kanban, intake wizard, photos, signatures, calendar overlays) | Planned |
 | **4** | Price book, quotes, digital approvals, deposits, checklists, warranty claims | Planned (quotes/approvals partially exist) |
 | **5** | Inventory depth, barcodes, stocktake, special orders, suppliers | Planned (inventory/PO partial) |
-| **6** | Full POS, registers, held sales, refunds, exchanges | **Started (1.2.29)** — enable gate, sales, stock, EFTPOS provider docs; held sales/refunds later |
+| **6** | Full POS, registers, held sales, refunds, exchanges | **Started (1.2.30)** — enable gate, sales, stock, repair deposits/payoffs, discount presets, EFTPOS docs; held sales/refunds later |
 | **7** | Invoices, pay-by-link, credit notes, statements, recurring | Planned |
 | **8** | SMS/email providers, public tracker polish, review requests | Planned (templates/outbox exist) |
 | **9** | Bookings public page + embed | Planned (bookings API + calendar exist) |

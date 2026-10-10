@@ -82,24 +82,36 @@
           <ComboBox Header="Assign technician (optional)" ItemsSource="{x:Bind ViewModel.Technicians, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedTechnician, Mode=TwoWay}"
                     DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+          <ComboBox Header="Device type" HorizontalAlignment="Stretch"
+                    ItemsSource="{x:Bind ViewModel.DeviceTypes, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedDeviceType, Mode=TwoWay}"
+                    SelectionChanged="DeviceType_SelectionChanged" />
           <Grid ColumnSpacing="12">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <TextBox Header="Device brand" Text="{x:Bind ViewModel.Brand, Mode=TwoWay}" PlaceholderText="Apple" />
-            <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" PlaceholderText="iPhone 13" />
+            <ComboBox x:Name="BrandBox" Header="Device brand" HorizontalAlignment="Stretch"
+                      IsEditable="True" PlaceholderText="Apple, Samsung…"
+                      SelectionChanged="BrandBox_SelectionChanged"
+                      LostFocus="BrandBox_LostFocus" />
+            <ComboBox x:Name="ModelBox" Grid.Column="1" Header="Model" HorizontalAlignment="Stretch"
+                      IsEditable="True" PlaceholderText="iPhone 13, Galaxy S23…"
+                      LostFocus="ModelBox_LostFocus" />
           </Grid>
           <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
 
-          <!-- Inline service catalogue (no UserControl / DataTemplate / NumberBox / x:Bind) -->
-          <TextBlock Text="Service catalogue" FontWeight="SemiBold" FontSize="16"
+          <!-- Inline service catalogue — filtered by device type -->
+          <TextBlock Text="Services for this device" FontWeight="SemiBold" FontSize="16"
                      Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+          <TextBlock x:Name="SvcFilterHint"
+                     Text="Showing Phone services — change device type to filter for Tablet, Laptop, or PC."
+                     Opacity="0.7" TextWrapping="Wrap" FontSize="12" />
           <TextBox x:Name="SvcSearchBox" Header="Search services"
                    PlaceholderText="Type screen, SSD, battery…"
                    TextChanged="SvcSearchBox_TextChanged" />
-          <ComboBox x:Name="SvcCategoryBox" Header="Category" DisplayMemberPath="Name"
+          <ComboBox x:Name="SvcCategoryBox" Header="Category (for this device)" DisplayMemberPath="Name"
                     HorizontalAlignment="Stretch" SelectionChanged="SvcCategoryBox_SelectionChanged" />
-          <ComboBox x:Name="SvcServicesBox" Header="Services" DisplayMemberPath="TitleLine"
+          <ComboBox x:Name="SvcServicesBox" Header="Matching services" DisplayMemberPath="TitleLine"
                     HorizontalAlignment="Stretch" />
           <Button Content="Add selected service" Click="SvcAdd_Click"
                   Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />

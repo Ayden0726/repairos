@@ -235,10 +235,26 @@ public partial class NewRepairViewModel : ObservableObject
     [ObservableProperty] private string _serial = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isSaving;
+    /// <summary>Catalogue device type label shown in the combo: Phone, Tablet, Laptop, PC, Other.</summary>
+    [ObservableProperty] private string _selectedDeviceType = "Phone";
+    public ObservableCollection<string> DeviceTypes { get; } = new(["Phone", "Tablet", "Laptop", "PC", "Other"]);
     public Action<Guid>? Created { get; set; }
+    public Action<string>? DeviceTypeChanged { get; set; }
     public List<Guid> SelectedServiceIds { get; set; } = new();
     public string? ServiceNotes { get; set; }
     public string? ServicePartsNotes { get; set; }
+
+    public DeviceCategory SelectedDeviceCategory => SelectedDeviceType switch
+    {
+        "Phone" => DeviceCategory.Phone,
+        "Tablet" => DeviceCategory.Tablet,
+        "Laptop" => DeviceCategory.Laptop,
+        "PC" => DeviceCategory.Desktop,
+        _ => DeviceCategory.Other
+    };
+
+    partial void OnSelectedDeviceTypeChanged(string value) =>
+        DeviceTypeChanged?.Invoke(value);
 
     public bool ShowNewCustomerFields => !UseExistingCustomer;
     public bool HasCustomers => Customers.Count > 0;
@@ -400,7 +416,7 @@ public partial class NewRepairViewModel : ObservableObject
                 customerId, null, SelectedType?.Id, SelectedPriority?.Id, SelectedTechnician?.Id,
                 Issue.Trim(), null, null, null, null, true,
                 true, false, false, false, null, null, null, null,
-                DeviceCategory.Phone,
+                SelectedDeviceCategory,
                 string.IsNullOrWhiteSpace(Brand) ? "Unknown" : Brand.Trim(),
                 string.IsNullOrWhiteSpace(Model) ? "Device" : Model.Trim(),
                 string.IsNullOrWhiteSpace(Serial) ? null : Serial.Trim(),

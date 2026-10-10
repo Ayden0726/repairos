@@ -299,15 +299,32 @@ public partial class SetupViewModel : ObservableObject
 public partial class LoginViewModel : ObservableObject
 {
     private readonly ApiClient _api;
+    private readonly IAppSettingsStore _settings;
 
     [ObservableProperty] private string _email = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _rememberEmail = true;
     [ObservableProperty] private string _hint = "Sign in with your WorkshopOS account.";
 
-    public LoginViewModel(ApiClient api) => _api = api;
+    public LoginViewModel(ApiClient api, IAppSettingsStore settings)
+    {
+        _api = api;
+        _settings = settings;
+        RememberEmail = settings.RememberEmail;
+        if (RememberEmail && !string.IsNullOrWhiteSpace(settings.RememberedEmail))
+        {
+            Email = settings.RememberedEmail!;
+            Hint = "Welcome back — enter your password to continue.";
+        }
+    }
+
     public Action? OnLoggedIn { get; set; }
+    /// <summary>True when email was prefilled so the login page can focus the password box.</summary>
+    public bool HasPrefillEmail => !string.IsNullOrWhiteSpace(Email);
+
+    partial void OnRememberEmailChanged(bool value) => _settings.RememberEmail = value;
 
     [RelayCommand]
     private async Task LoginAsync()
@@ -316,6 +333,7 @@ public partial class LoginViewModel : ObservableObject
         IsBusy = true;
         try
         {
+            _settings.RememberEmail = RememberEmail;
             await _api.LoginAsync(Email.Trim(), Password);
             OnLoggedIn?.Invoke();
         }
@@ -368,9 +386,27 @@ public partial class ShellViewModel : ObservableObject
         ("Reports", ["reports"])
     ];
 
+    /// <summary>Module key → permission required to see the tab (owner bypasses).</summary>
+    public static readonly IReadOnlyDictionary<string, string> ModulePermission =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["dashboard"] = "", // always when shop-visible
+            ["repairs"] = "tickets.view",
+            ["calendar"] = "bookings.view",
+            ["customers"] = "customers.view",
+            ["quotes"] = "quotes.view",
+            ["invoices"] = "invoices.view",
+            ["pos"] = "pos.view",
+            ["inventory"] = "inventory.view",
+            ["used"] = "used.view",
+            ["reports"] = "reports.view"
+        };
+
     public ObservableCollection<SearchHitRow> SearchHits { get; } = new();
     [ObservableProperty] private bool _isCommandCentreOpen;
     [ObservableProperty] private SearchHitRow? _selectedSearchHit;
+    [ObservableProperty] private bool _canOpenSettings;
+    [ObservableProperty] private bool _canRestartServer;
 
     public ShellViewModel(ApiClient api, AuthSession session, IAppSettingsStore settings)
     {
@@ -384,7 +420,33 @@ public partial class ShellViewModel : ObservableObject
                 ? session.User.RoleKey
                 : session.User.RoleName;
             BusinessName = session.User.Business?.Name ?? string.Empty;
+            CanOpenSettings = HasPermission("settings.view")
+                || HasPermission("settings.manage")
+                || HasPermission("staff.view")
+                || HasPermission("backups.manage")
+                || HasPermission("pricing.view")
+                || HasPermission("pos.manage");
+            CanRestartServer = session.User.IsOwner
+                || string.Equals(session.User.RoleKey, "owner", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(session.User.RoleKey, "administrator", StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    public bool HasPermission(string key)
+    {
+        var user = _session.User;
+        if (user is null) return false;
+        if (user.IsOwner) return true;
+        if (string.IsNullOrWhiteSpace(key)) return true;
+        return user.Permissions.Any(p => string.Equals(p, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public bool CanSeeModule(string moduleKey)
+    {
+        if (!ModulePermission.TryGetValue(moduleKey, out var perm))
+            return HasPermission("settings.view");
+        if (string.IsNullOrEmpty(perm)) return true;
+        return HasPermission(perm);
     }
 
     public Action<string, int, bool>? OpenModule { get; set; }

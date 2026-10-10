@@ -18,19 +18,33 @@ internal static class DocumentNumbering
     {
         var year = DateTime.UtcNow.Year;
         var key = $"doc:{prefix}:{year}";
+        // Allocate outside the caller's pending graph: use ExecuteUpdate/insert so SaveChanges
+        // is not required (avoids flushing half-built invoices/payments).
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var seq = await db.DocumentSequences.FirstOrDefaultAsync(s => s.Key == key, ct);
-        if (seq is null)
+
+        var updated = await db.DocumentSequences
+            .Where(s => s.Key == key)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.NextValue, x => x.NextValue + 1), ct);
+
+        int value;
+        if (updated == 0)
         {
-            seq = new DocumentSequence { Key = key, Year = year, NextValue = 1 };
-            db.DocumentSequences.Add(seq);
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO document_sequences (\"Key\", \"Year\", \"NextValue\") VALUES ({key}, {year}, 2)", ct);
+            value = 1;
         }
-        var value = seq.NextValue;
-        seq.NextValue++;
-        await db.SaveChangesAsync(ct);
+        else
+        {
+            value = await db.DocumentSequences.AsNoTracking()
+                .Where(s => s.Key == key)
+                .Select(s => s.NextValue)
+                .SingleAsync(ct) - 1;
+        }
+
+        foreach (var entry in db.ChangeTracker.Entries<DocumentSequence>().ToList())
+            entry.State = EntityState.Detached;
+
         await tx.CommitAsync(ct);
-        // Avoid leftover Modified tracking interacting with later SaveChanges in the same scope.
-        db.Entry(seq).State = EntityState.Detached;
         digits = Math.Clamp(digits, 4, 8);
         return $"{prefix}-{year}-{value.ToString().PadLeft(digits, '0')}";
     }
@@ -198,9 +212,19 @@ public sealed class InvoiceService : IInvoiceService
         if (existing is not null)
             return await GetAsync(existing.Id, ct);
 
-        var labourInclusive = ticket.EstimatedPrice ?? 0m;
+        // Prefer accepted quote total when present, else ticket estimate.
+        var acceptedQuote = await _db.Quotes.AsNoTracking()
+            .Where(q => q.RepairTicketId == repairTicketId && q.ArchivedAt == null
+                        && (q.Status == "Accepted" || q.Status == "Converted"))
+            .OrderByDescending(q => q.AcceptedAt ?? q.UpdatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var labourInclusive = acceptedQuote?.AcceptedTotal
+            ?? (acceptedQuote is not null && acceptedQuote.Total > 0 ? acceptedQuote.Total : (decimal?)null)
+            ?? ticket.EstimatedPrice
+            ?? 0m;
         if (labourInclusive <= 0)
-            throw new ValidationAppException("Repair has no estimated price to invoice.");
+            throw new ValidationAppException("Repair has no estimated price or accepted quote to invoice.");
 
         var (sub, gst, total) = MoneyGst.FromInclusiveTotal(labourInclusive);
         var number = await DocumentNumbering.NextAsync(_db, "INV", ct);
@@ -209,6 +233,7 @@ public sealed class InvoiceService : IInvoiceService
             Number = number,
             CustomerId = ticket.CustomerId,
             RepairTicketId = ticket.Id,
+            QuoteId = acceptedQuote?.Id,
             Status = "Unpaid",
             CreatedById = actorId,
             Subtotal = sub,
@@ -218,17 +243,21 @@ public sealed class InvoiceService : IInvoiceService
             IssuedAt = DateTimeOffset.UtcNow,
             DueAt = DateTimeOffset.UtcNow.AddDays(7)
         };
+        var lineDesc = acceptedQuote is not null
+            ? $"Repair {ticket.TicketNumber} — quote {acceptedQuote.Number}"
+            : $"Labour — {ticket.TicketNumber}";
         inv.Lines.Add(new InvoiceLine
         {
-            Type = "LABOUR",
-            Description = $"Labour — {ticket.TicketNumber}",
+            Type = acceptedQuote is not null ? "SERVICE" : "LABOUR",
+            Description = lineDesc,
             Quantity = 1,
             UnitPrice = labourInclusive,
             SortOrder = 0
         });
         _db.Invoices.Add(inv);
         await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(actorId, "invoice.create", "Invoice", inv.Id.ToString(), newValue: new { inv.Number, ticket.TicketNumber }, ct: ct);
+        await _audit.WriteAsync(actorId, "invoice.create", "Invoice", inv.Id.ToString(),
+            newValue: new { inv.Number, ticket.TicketNumber, QuoteNumber = acceptedQuote?.Number }, ct: ct);
         return await GetAsync(inv.Id, ct);
     }
 
@@ -240,16 +269,18 @@ public sealed class InvoiceService : IInvoiceService
         if (inv.Status is "Cancelled" or "Refunded")
             throw new ConflictAppException("Cannot record payment on this invoice.");
 
-        inv.Payments.Add(new Payment
+        var payment = new Payment
         {
+            InvoiceId = inv.Id,
             Method = string.IsNullOrWhiteSpace(request.Method) ? "Cash" : request.Method.Trim(),
             Amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero),
             Reference = request.Reference?.Trim(),
             RecordedById = actorId,
             IsDeposit = request.IsDeposit,
             PaidAt = DateTimeOffset.UtcNow
-        });
-        inv.AmountPaid = inv.Payments.Sum(p => p.Amount);
+        };
+        _db.Set<Payment>().Add(payment);
+        inv.AmountPaid = Math.Round(inv.AmountPaid + payment.Amount, 2, MidpointRounding.AwayFromZero);
         inv.Status = inv.AmountPaid >= inv.Total ? "Paid" : inv.AmountPaid > 0 ? "PartiallyPaid" : inv.Status;
         inv.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);

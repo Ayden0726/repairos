@@ -17,6 +17,7 @@ public sealed partial class QuoteBuilderPage : Page
     private readonly HashSet<ComboBox> _serviceSearchHooked = new();
     private bool _suppressPartFilter;
     private bool _suppressServiceFilter;
+    private bool _suppressBrandEvent;
 
     public QuoteBuilderPage()
     {
@@ -27,12 +28,19 @@ public sealed partial class QuoteBuilderPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         _picker.Changed += (_, _) => SyncPickerUi();
+        ViewModel.DeviceTypeChanged = async dt => await ApplyDeviceTypeAsync(dt);
         Loaded += async (_, _) =>
         {
             if (_loaded) return;
             _loaded = true;
             await ViewModel.InitAsync(_args);
             await _picker.RefreshAsync();
+            var catalogueType = string.Equals(ViewModel.SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : ViewModel.SelectedDeviceType;
+            await _picker.SetDeviceTypeAsync(catalogueType);
+            if (!string.IsNullOrWhiteSpace(ViewModel.DeviceBrand))
+                await _picker.SetBrandAsync(ViewModel.DeviceBrand);
             SyncPickerUi();
         };
     }
@@ -52,6 +60,68 @@ public sealed partial class QuoteBuilderPage : Page
         QuoteSvcSelectedBox.ItemsSource = _picker.SelectedRows;
         QuoteSvcStatusText.Text = _picker.Status ?? string.Empty;
         QuoteSvcErrorText.Text = _picker.Error ?? string.Empty;
+        QuoteSvcFilterHint.Text = _picker.DeviceTypeFilter is null
+            ? "Showing all services — pick a device type to narrow the catalogue."
+            : $"Showing {_picker.DeviceTypeFilter} services only.";
+
+        _suppressBrandEvent = true;
+        try
+        {
+            var brandText = QuoteBrandBox.Text;
+            var modelText = QuoteModelBox.Text;
+            QuoteBrandBox.ItemsSource = null;
+            QuoteBrandBox.ItemsSource = _picker.BrandNames;
+            QuoteModelBox.ItemsSource = null;
+            QuoteModelBox.ItemsSource = _picker.ModelNames;
+            if (!string.IsNullOrWhiteSpace(brandText)) QuoteBrandBox.Text = brandText;
+            else if (!string.IsNullOrWhiteSpace(ViewModel.DeviceBrand)) QuoteBrandBox.Text = ViewModel.DeviceBrand;
+            if (!string.IsNullOrWhiteSpace(modelText)) QuoteModelBox.Text = modelText;
+            else if (!string.IsNullOrWhiteSpace(ViewModel.DeviceModel)) QuoteModelBox.Text = ViewModel.DeviceModel;
+        }
+        finally { _suppressBrandEvent = false; }
+    }
+
+    private async Task ApplyDeviceTypeAsync(string? deviceTypeLabel)
+    {
+        var catalogueType = string.Equals(deviceTypeLabel, "Other", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : deviceTypeLabel;
+        await _picker.SetDeviceTypeAsync(catalogueType);
+        SyncPickerUi();
+    }
+
+    private async void QuoteDeviceType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        if (sender is ComboBox { SelectedItem: string dt })
+            await ApplyDeviceTypeAsync(dt);
+    }
+
+    private async void QuoteBrandBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressBrandEvent || !_loaded) return;
+        var brand = QuoteBrandBox.SelectedItem as string ?? QuoteBrandBox.Text;
+        if (!string.IsNullOrWhiteSpace(brand))
+            ViewModel.DeviceBrand = brand;
+        await _picker.SetBrandAsync(brand);
+        SyncPickerUi();
+    }
+
+    private async void QuoteBrandBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        var brand = QuoteBrandBox.Text;
+        if (!string.IsNullOrWhiteSpace(brand))
+            ViewModel.DeviceBrand = brand.Trim();
+        await _picker.SetBrandAsync(brand);
+        QuoteModelBox.ItemsSource = null;
+        QuoteModelBox.ItemsSource = _picker.ModelNames;
+    }
+
+    private void QuoteModelBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(QuoteModelBox.Text))
+            ViewModel.DeviceModel = QuoteModelBox.Text.Trim();
     }
 
     private void CustomerSearch_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -175,7 +245,7 @@ public sealed partial class QuoteBuilderPage : Page
     {
         var q = (combo.Text ?? string.Empty).Trim();
         if (combo.SelectedItem is ServicePricingDto selected &&
-            string.Equals(selected.Name, combo.Text, StringComparison.Ordinal))
+            string.Equals(selected.Name, combo.Text, StringComparison.OrdinalIgnoreCase))
             return;
 
         IEnumerable<ServicePricingDto> src = ViewModel.Services;
@@ -284,6 +354,11 @@ public sealed partial class QuoteBuilderPage : Page
 
     private async void AddCatalogueServices_Click(object sender, RoutedEventArgs e)
     {
+        if (!string.IsNullOrWhiteSpace(QuoteBrandBox.Text))
+            ViewModel.DeviceBrand = QuoteBrandBox.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(QuoteModelBox.Text))
+            ViewModel.DeviceModel = QuoteModelBox.Text.Trim();
+
         var selected = _picker.SelectedServices.ToList();
         if (selected.Count == 0) return;
         ViewModel.AddCatalogueServices(selected);

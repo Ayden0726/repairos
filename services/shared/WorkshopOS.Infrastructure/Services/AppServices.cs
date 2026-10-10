@@ -355,10 +355,12 @@ public sealed class SettingsService : ISettingsService
         // Keep POS settings.Enabled in sync when pos visibility changes.
         if (current.TryGetValue("pos", out var posVisible))
         {
-            var pos = await GetPosSettingsInternalAsync(ct);
-            if (pos.Enabled != posVisible)
+            var existingPos = await DbSeed.GetSettingAsync<PosSettingsStored?>(_db, SettingKeys.PosSettings, null, ct)
+                ?? new PosSettingsStored(false, "None", null, null, null, null, null, DefaultDiscountPresets());
+            if (existingPos.Enabled != posVisible)
             {
-                await DbSeed.SetSettingAsync(_db, SettingKeys.PosSettings, pos with { Enabled = posVisible }, actorId, ct);
+                await DbSeed.SetSettingAsync(_db, SettingKeys.PosSettings,
+                    existingPos with { Enabled = posVisible }, actorId, ct);
             }
         }
 
@@ -373,13 +375,15 @@ public sealed class SettingsService : ISettingsService
     {
         var provider = NormalizeProvider(request.Provider);
         var existing = await DbSeed.GetSettingAsync<PosSettingsStored?>(_db, SettingKeys.PosSettings, null, ct)
-            ?? new PosSettingsStored(false, "None", null, null, null, null, null);
+            ?? new PosSettingsStored(false, "None", null, null, null, null, null, DefaultDiscountPresets());
 
         var apiKey = existing.ApiKey;
         if (request.ClearApiKey)
             apiKey = null;
         else if (!string.IsNullOrWhiteSpace(request.ApiKey))
             apiKey = request.ApiKey.Trim();
+
+        var presets = NormalizeDiscountPresets(request.DiscountPresets ?? existing.DiscountPresets);
 
         var stored = new PosSettingsStored(
             request.Enabled,
@@ -388,7 +392,8 @@ public sealed class SettingsService : ISettingsService
             TrimOrNull(request.TerminalId),
             TrimOrNull(request.ProviderLocationId),
             apiKey,
-            TrimOrNull(request.ConnectionNotes));
+            TrimOrNull(request.ConnectionNotes),
+            presets);
 
         await DbSeed.SetSettingAsync(_db, SettingKeys.PosSettings, stored, actorId, ct);
 
@@ -410,15 +415,42 @@ public sealed class SettingsService : ISettingsService
         {
             var visibility = await DbSeed.GetSettingAsync(_db, SettingKeys.ModuleVisibility, new Dictionary<string, bool>(), ct);
             var enabled = visibility.TryGetValue("pos", out var v) && v;
-            return new PosSettingsDto(enabled, "None", null, null, null, false, null);
+            return new PosSettingsDto(enabled, "None", null, null, null, false, null, DefaultDiscountPresets());
         }
         return ToPosDto(stored);
     }
 
     private static PosSettingsDto ToPosDto(PosSettingsStored s) =>
         new(s.Enabled, s.Provider, s.MerchantId, s.TerminalId, s.ProviderLocationId,
-            !string.IsNullOrWhiteSpace(s.ApiKey), s.ConnectionNotes);
+            !string.IsNullOrWhiteSpace(s.ApiKey), s.ConnectionNotes,
+            NormalizeDiscountPresets(s.DiscountPresets));
 
+    internal static IReadOnlyList<PosDiscountPresetDto> DefaultDiscountPresets() =>
+    [
+        new("staff", "Staff", 10m, true),
+        new("family_friends", "Family & Friends", 15m, true),
+        new("loyalty", "Loyalty", 5m, true),
+        new("other", "Other (custom %)", 0m, true)
+    ];
+
+    private static IReadOnlyList<PosDiscountPresetDto> NormalizeDiscountPresets(IReadOnlyList<PosDiscountPresetDto>? presets)
+    {
+        if (presets is null || presets.Count == 0)
+            return DefaultDiscountPresets();
+
+        var cleaned = new List<PosDiscountPresetDto>();
+        foreach (var p in presets)
+        {
+            if (string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrWhiteSpace(p.Name)) continue;
+            var pct = Math.Clamp(p.Percent, 0m, 100m);
+            cleaned.Add(new PosDiscountPresetDto(
+                p.Key.Trim().ToLowerInvariant().Replace(' ', '_'),
+                p.Name.Trim(),
+                Math.Round(pct, 2, MidpointRounding.AwayFromZero),
+                p.IsActive));
+        }
+        return cleaned.Count == 0 ? DefaultDiscountPresets() : cleaned;
+    }
     private static string NormalizeProvider(string? provider)
     {
         var p = (provider ?? "None").Trim();
@@ -448,7 +480,8 @@ public sealed class SettingsService : ISettingsService
         string? TerminalId,
         string? ProviderLocationId,
         string? ApiKey,
-        string? ConnectionNotes);
+        string? ConnectionNotes,
+        IReadOnlyList<PosDiscountPresetDto>? DiscountPresets = null);
 }
 
 public sealed class RoleService : IRoleService

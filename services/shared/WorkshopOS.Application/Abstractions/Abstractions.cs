@@ -39,6 +39,7 @@ public interface IPosService
     Task<PosSaleDetailDto> GetSaleAsync(Guid id, CancellationToken ct = default);
     Task<PosSaleDetailDto> CreateSaleAsync(CreatePosSaleRequest request, Guid actorId, CancellationToken ct = default);
     Task<PosSaleDetailDto> VoidSaleAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<PosPayableRepairDto>> ListPayableRepairsAsync(string? q = null, CancellationToken ct = default);
 }
 
 public interface IRoleService

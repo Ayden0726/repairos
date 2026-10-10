@@ -45,7 +45,7 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem Header="Pricing" Tag="pricing">
+      <PivotItem x:Name="PricingPivot" Header="Pricing" Tag="pricing">
         <ScrollViewer Padding="0,16,0,0">
           <StackPanel Spacing="12" MaxWidth="640">
             <TextBlock Text="Automatic pricing" FontWeight="SemiBold" FontSize="16" />
@@ -95,7 +95,7 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem Header="Services" Tag="services">
+      <PivotItem x:Name="ServicesPivot" Header="Services" Tag="services">
         <ScrollViewer Padding="0,16,0,0">
           <StackPanel Spacing="12" MaxWidth="720">
             <TextBlock Text="Service catalogue admin" FontWeight="SemiBold" FontSize="16" />
@@ -149,7 +149,7 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem Header="Tax" Tag="tax">
+      <PivotItem x:Name="TaxPivot" Header="Tax" Tag="tax">
         <ScrollViewer Padding="0,16,0,0">
           <StackPanel Spacing="12" MaxWidth="520">
             <TextBlock Text="Business tax (GST)" FontWeight="SemiBold" FontSize="16" />
@@ -164,7 +164,7 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem Header="POS" Tag="pos">
+      <PivotItem x:Name="PosPivot" Header="POS" Tag="pos">
         <ScrollViewer Padding="0,16,0,0">
           <StackPanel Spacing="16" MaxWidth="640">
             <TextBlock Text="Point of sale" FontWeight="SemiBold" FontSize="16" />
@@ -188,6 +188,23 @@
             <PasswordBox x:Name="PosApiKeyBox" Header="API key (leave blank to keep existing)" />
             <CheckBox x:Name="PosClearApiKeyCheck" Content="Clear stored API key" />
             <TextBox x:Name="PosNotesBox" Header="Connection notes" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
+
+            <TextBlock Text="Discount presets" FontWeight="SemiBold" FontSize="16" Margin="0,8,0,0" />
+            <TextBlock Text="Shown on the POS register for staff, family/friends, loyalty, and other discounts. Percent is applied to the cart or repair balance."
+                       Opacity="0.7" TextWrapping="Wrap" />
+            <Grid ColumnSpacing="12" RowSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <NumberBox x:Name="PosDiscountStaffBox" Header="Staff %" Minimum="0" Maximum="100" SpinButtonPlacementMode="Compact" />
+              <NumberBox x:Name="PosDiscountFamilyBox" Grid.Column="1" Header="Family &amp; Friends %" Minimum="0" Maximum="100" SpinButtonPlacementMode="Compact" />
+              <NumberBox x:Name="PosDiscountLoyaltyBox" Grid.Row="1" Header="Loyalty %" Minimum="0" Maximum="100" SpinButtonPlacementMode="Compact" />
+              <NumberBox x:Name="PosDiscountOtherBox" Grid.Row="1" Grid.Column="1" Header="Other (custom) %" Minimum="0" Maximum="100" SpinButtonPlacementMode="Compact" />
+            </Grid>
+
             <Button Content="Save POS settings" Click="SavePos_Click" Style="{StaticResource AccentButtonStyle}" />
 
             <TextBlock Text="EFTPOS brands" FontWeight="SemiBold" FontSize="16" Margin="0,8,0,0" />
@@ -221,7 +238,7 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem Header="Users &amp; Roles" Tag="users">
+      <PivotItem x:Name="UsersPivot" Header="Users &amp; Roles" Tag="users">
         <ScrollViewer Padding="0,16,0,0">
           <StackPanel Spacing="20">
             <Grid ColumnSpacing="20">
@@ -326,7 +343,7 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem Header="Backups" Tag="backups">
+      <PivotItem x:Name="BackupsPivot" Header="Backups" Tag="backups">
         <Grid Padding="0,16,0,0" RowSpacing="12">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -347,7 +364,7 @@
           <ListView x:Name="BackupsList" Grid.Row="2" />
         </Grid>
       </PivotItem>
-      <PivotItem Header="Connection">
+      <PivotItem x:Name="ConnectionPivot" Header="Connection">
         <ScrollViewer Padding="0,16,0,0">
           <StackPanel Spacing="12" MaxWidth="640">
             <TextBlock Text="Server &amp; business" FontWeight="SemiBold" FontSize="16" />
@@ -370,8 +387,10 @@
                 <TextBlock x:Name="HealthErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button Content="Check health" Click="CheckHealth_Click" Style="{StaticResource AccentButtonStyle}" />
-                  <Button Content="Restart server services" Click="RestartServer_Click" />
+                  <Button x:Name="RestartServerBtn" Content="Restart server services" Click="RestartServer_Click" />
                 </StackPanel>
+                <TextBlock x:Name="RestartOwnerHint" Visibility="Collapsed" Opacity="0.7" TextWrapping="Wrap"
+                           Text="Only Owner or Administrator accounts can restart the server from the app." />
                 <TextBlock Text="Update &amp; restart (WSL / Linux server)" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <TextBox x:Name="RestartCommandsBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
                          MinHeight="120" FontFamily="Consolas" />

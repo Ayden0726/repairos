@@ -1,6 +1,6 @@
 # Windows Client Navigation (TechBench NQ)
 
-**Version 1.2.29+** — POS is admin-gated (off by default). Custom PC Builds removed from the product surface.
+**Version 1.2.30+** — POS is admin-gated (off by default); repair import, deposits, and discount presets. Custom PC Builds removed from the product surface.
 
 ## Shell chrome (minimal)
 

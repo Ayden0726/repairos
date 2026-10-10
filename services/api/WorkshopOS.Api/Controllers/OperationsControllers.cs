@@ -181,6 +181,11 @@ public sealed class PosController : ControllerBase
     [Authorize(Policy = "perm:pos.view")]
     public Task<IReadOnlyList<PosProviderInfoDto>> Providers(CancellationToken ct) => _pos.ListProvidersAsync(ct);
 
+    [HttpGet("repairs-payable")]
+    [Authorize(Policy = "perm:pos.view")]
+    public Task<IReadOnlyList<PosPayableRepairDto>> PayableRepairs([FromQuery] string? q, CancellationToken ct) =>
+        _pos.ListPayableRepairsAsync(q, ct);
+
     [HttpGet("sales")]
     [Authorize(Policy = "perm:pos.view")]
     public Task<IReadOnlyList<PosSaleListItemDto>> List(

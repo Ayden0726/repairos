@@ -67,13 +67,16 @@ public sealed partial class ShellPage : Page
         {
             var visible = keys
                 .Select(k => byKey.TryGetValue(k, out var m) ? m : null)
-                .Where(m => m is not null && m.Visible)
+                .Where(m => m is not null && m.Visible && ViewModel.CanSeeModule(m.Key))
                 .Cast<ModuleDto>()
                 .ToList();
 
             if (visible.Count == 0 && ViewModel.IsOffline)
             {
-                visible = keys.Select(k => new ModuleDto(k, title, TitleForKey(k), 1, true, true)).ToList();
+                visible = keys
+                    .Where(ViewModel.CanSeeModule)
+                    .Select(k => new ModuleDto(k, title, TitleForKey(k), 1, true, true))
+                    .ToList();
             }
 
             if (visible.Count == 0) continue;
@@ -165,6 +168,28 @@ public sealed partial class ShellPage : Page
 
     private void NavigateToModule(string key, int phase, bool implemented)
     {
+        if (key is "settings" or "users" or "backups")
+        {
+            if (!ViewModel.CanOpenSettings)
+            {
+                ContentFrame.Navigate(typeof(PlaceholderPage),
+                    new PlaceholderArgs(key, phase, "Your role cannot open Settings."));
+                return;
+            }
+        }
+        else if (!ViewModel.CanSeeModule(key) && key is not ("repairs_waiting_approval" or "repairs_waiting_parts" or "repairs_ready"))
+        {
+            ContentFrame.Navigate(typeof(PlaceholderPage),
+                new PlaceholderArgs(key, phase, "Your role cannot open this module."));
+            return;
+        }
+        else if (key.StartsWith("repairs_", StringComparison.OrdinalIgnoreCase) && !ViewModel.CanSeeModule("repairs"))
+        {
+            ContentFrame.Navigate(typeof(PlaceholderPage),
+                new PlaceholderArgs(key, phase, "Your role cannot open Repairs."));
+            return;
+        }
+
         if (!implemented)
         {
             ContentFrame.Navigate(typeof(PlaceholderPage), new PlaceholderArgs(key, phase));

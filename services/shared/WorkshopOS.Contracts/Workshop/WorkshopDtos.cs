@@ -127,7 +127,8 @@ public sealed record RepairDetailDto(
     DateTimeOffset? CompletedAt,
     IReadOnlyList<RepairEventDto> Timeline,
     IReadOnlyList<RepairNoteDto> Notes,
-    IReadOnlyList<RepairServiceLineDto>? ServiceLines = null);
+    IReadOnlyList<RepairServiceLineDto>? ServiceLines = null,
+    DeviceCategory DeviceCategory = DeviceCategory.Other);
 
 public sealed record RepairEventDto(Guid Id, string EventType, string Summary, string? OldValue, string? NewValue, DateTimeOffset CreatedAt, Guid? ActorUserId);
 public sealed record RepairNoteDto(Guid Id, string Body, bool IsInternal, string AuthorName, DateTimeOffset CreatedAt);

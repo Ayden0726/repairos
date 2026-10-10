@@ -21,16 +21,16 @@ Use **Developer PowerShell for VS**. From repo root.
 
 ```powershell
 # Portable zip
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.29 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.30 -SkipInstaller
 
 # Zip + Setup.exe (omit -SkipInstaller; needs Inno Setup 6)
-powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.29
+powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.30
 ```
 
 Expect: `WorkshopOS client build script v6`. Outputs in `packaging\dist\`:
 
-- `WorkshopOS-Client-win-x64-v1.2.29.zip` — portable
-- `WorkshopOS-Setup-1.2.29.exe` — upload this to the GitHub Release
+- `WorkshopOS-Client-win-x64-v1.2.30.zip` — portable
+- `WorkshopOS-Setup-1.2.30.exe` — upload this to the GitHub Release
 
 Server packaging: `../scripts/publish-server.sh` and `../scripts/install-server.sh`.  
 End-user install: [docs/INSTALL.md](../docs/INSTALL.md).

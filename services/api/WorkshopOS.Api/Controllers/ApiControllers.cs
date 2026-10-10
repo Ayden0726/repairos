@@ -246,13 +246,33 @@ public sealed class SystemController : ControllerBase
             dbOk ? "Healthy" : "Degraded",
             DateTimeOffset.UtcNow,
             UpdateCommands(),
-            RestartCommands());
+            RestartCommands(),
+            CanRestart: IsOwnerOrAdministrator());
+    }
+
+    /// <summary>Owner or Administrator only (IsOwner claim or role key).</summary>
+    private bool IsOwnerOrAdministrator()
+    {
+        if (User.HasClaim("is_owner", "true")) return true;
+        var role = User.FindFirstValue(ClaimTypes.Role)
+            ?? User.FindFirstValue("role")
+            ?? string.Empty;
+        return role.Equals("owner", StringComparison.OrdinalIgnoreCase)
+            || role.Equals("administrator", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpPost("restart")]
     [Authorize(Policy = "perm:settings.manage")]
     public async Task<ActionResult<RestartResultDto>> Restart(CancellationToken ct)
     {
+        if (!IsOwnerOrAdministrator())
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new RestartResultDto(
+                false,
+                "Only the Owner or an Administrator can restart the server from the app.",
+                RestartCommands().Concat(UpdateCommands()).ToArray()));
+        }
+
         if (!IsRestartAllowed() && !_config.GetValue("AllowProcessRestart", false))
         {
             return Ok(new RestartResultDto(

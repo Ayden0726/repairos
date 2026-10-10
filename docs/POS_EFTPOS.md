@@ -3,7 +3,7 @@
 WorkshopOS includes a **point-of-sale register** for counter sales (accessories, parts, quick labour).  
 **POS is off by default.** An administrator must enable it under **Settings → POS** (or Settings → Modules).
 
-Version **1.2.29+**.
+Version **1.2.30+**.
 
 ---
 

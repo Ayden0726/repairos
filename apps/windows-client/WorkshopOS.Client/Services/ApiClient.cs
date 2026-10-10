@@ -12,9 +12,13 @@ public interface IAppSettingsStore
     string Theme { get; set; }
     /// <summary>Launch WorkshopOS at Windows sign-in. Survives ClearConnection.</summary>
     bool StartWithWindows { get; set; }
+    /// <summary>Last sign-in email when RememberEmail is on. Survives ClearConnection.</summary>
+    string? RememberedEmail { get; set; }
+    /// <summary>When true, RememberedEmail is kept across sign-out / ClearConnection.</summary>
+    bool RememberEmail { get; set; }
     bool HasServerUrl { get; }
     void ClearTokens();
-    /// <summary>Clears connection persistence (JSON tokens/URL, WinRT LocalSettings, PasswordVault). Keeps Theme and StartWithWindows.</summary>
+    /// <summary>Clears connection persistence (JSON tokens/URL, WinRT LocalSettings, PasswordVault). Keeps Theme, StartWithWindows, and remembered email.</summary>
     void ClearConnection();
 }
 
@@ -47,6 +51,8 @@ public sealed class AppSettingsStore : IAppSettingsStore
         public string? RefreshToken { get; set; }
         public string Theme { get; set; } = "Dark";
         public bool StartWithWindows { get; set; }
+        public string? RememberedEmail { get; set; }
+        public bool RememberEmail { get; set; } = true;
     }
 
     public static string SettingsDirectory =>
@@ -112,6 +118,18 @@ public sealed class AppSettingsStore : IAppSettingsStore
         set { lock (Gate) { _data.StartWithWindows = value; Save(); } }
     }
 
+    public string? RememberedEmail
+    {
+        get { lock (Gate) return _data.RememberedEmail; }
+        set { lock (Gate) { _data.RememberedEmail = string.IsNullOrWhiteSpace(value) ? null : value.Trim(); Save(); } }
+    }
+
+    public bool RememberEmail
+    {
+        get { lock (Gate) return _data.RememberEmail; }
+        set { lock (Gate) { _data.RememberEmail = value; Save(); } }
+    }
+
     public bool HasServerUrl
     {
         get { lock (Gate) return !string.IsNullOrWhiteSpace(_data.ServerUrl); }
@@ -134,7 +152,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
         {
             var keepTheme = string.IsNullOrWhiteSpace(_data.Theme) ? "Dark" : _data.Theme;
             var keepStartup = _data.StartWithWindows;
-            _data = new SettingsDto { Theme = keepTheme, StartWithWindows = keepStartup };
+            var keepRemember = _data.RememberEmail;
+            var keepEmail = keepRemember ? _data.RememberedEmail : null;
+            _data = new SettingsDto
+            {
+                Theme = keepTheme,
+                StartWithWindows = keepStartup,
+                RememberEmail = keepRemember,
+                RememberedEmail = keepEmail
+            };
             try
             {
                 if (File.Exists(SettingsFilePath))
@@ -386,6 +412,10 @@ public sealed class ApiClient
             "api/auth/login", new(email, password), ct);
         _settings.AccessToken = auth.AccessToken;
         _settings.RefreshToken = auth.RefreshToken;
+        if (_settings.RememberEmail)
+            _settings.RememberedEmail = email;
+        else
+            _settings.RememberedEmail = null;
         _session.User = auth.User;
         return auth;
     }

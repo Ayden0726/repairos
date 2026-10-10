@@ -27,7 +27,7 @@ Phase 1 enforces the keys that exist in code. Additional keys are reserved for l
 - `backups.manage`
 - `integrations.manage`
 
-### POS (1.2.29+)
+### POS (1.2.29+; repair payoffs / discounts 1.2.30+)
 
 - `pos.view` — view sales and provider catalogue
 - `pos.sell` — complete counter sales

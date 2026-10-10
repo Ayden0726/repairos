@@ -330,11 +330,18 @@ pull_ff_or_warn() {
   if git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"; then
     ok "pulled latest $BRANCH"
   else
-    warn "git pull --ff-only failed (divergent local commits or dirty tree)."
-    echo "      Inspect:  cd \"$INSTALL_DIR\" && git status && git log --oneline -5"
-    echo "      Force to remote (DESTROYS local commits):"
-    echo "        git fetch origin && git reset --hard origin/$BRANCH"
-    echo "      Continuing with current tree..."
+    warn "git pull --ff-only failed (divergent local commits). Resetting to origin/$BRANCH."
+    # Shop installs should match GitHub. docker/.env is gitignored and kept.
+    if git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"; then
+      ok "reset to origin/$BRANCH"
+    else
+      fail "Could not reset $INSTALL_DIR to origin/$BRANCH. Run: cd \"$INSTALL_DIR\" && git fetch origin && git reset --hard origin/$BRANCH"
+    fi
+  fi
+  # Hard fail early if the embedded catalogue seed is still missing (common gitignore mistake).
+  local catalogue="$INSTALL_DIR/services/shared/WorkshopOS.Infrastructure/Data/service-catalogue.v1.json"
+  if [[ ! -f "$catalogue" ]]; then
+    fail "Missing $catalogue — GitHub main is incomplete. Re-push that file, then re-run."
   fi
 }
 

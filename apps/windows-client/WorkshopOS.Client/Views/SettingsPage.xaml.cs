@@ -45,6 +45,7 @@ public sealed partial class SettingsPage : Page
 
     private async void SettingsPage_Loaded(object sender, RoutedEventArgs e)
     {
+        ApplyRoleVisibility();
         var settings = App.Services.GetRequiredService<IAppSettingsStore>();
         SelectThemeCombo(settings.Theme);
         _themeComboReady = true;
@@ -565,6 +566,7 @@ public sealed partial class SettingsPage : Page
             PosApiKeyBox.Password = string.Empty;
             PosClearApiKeyCheck.IsChecked = false;
             PosNotesBox.Text = pos.ConnectionNotes ?? string.Empty;
+            ApplyPosDiscountPresetBoxes(pos.DiscountPresets);
             PosStatusText.Text = pos.Enabled
                 ? $"POS enabled · provider {pos.Provider}" + (pos.ApiKeyConfigured ? " · API key stored" : " · no API key")
                 : "POS disabled — enable to show the register in the sidebar.";
@@ -616,7 +618,8 @@ public sealed partial class SettingsPage : Page
                 NullIfBlank(PosLocationIdBox.Text),
                 string.IsNullOrWhiteSpace(PosApiKeyBox.Password) ? null : PosApiKeyBox.Password,
                 PosClearApiKeyCheck.IsChecked == true,
-                NullIfBlank(PosNotesBox.Text));
+                NullIfBlank(PosNotesBox.Text),
+                BuildPosDiscountPresetsFromBoxes());
             var saved = await api.PutAsync<UpdatePosSettingsRequest, PosSettingsDto>("api/settings/pos", request);
             await LoadPosAsync();
             PosStatusText.Text = saved.Enabled
@@ -650,6 +653,27 @@ public sealed partial class SettingsPage : Page
 
     private static string? NullIfBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void ApplyPosDiscountPresetBoxes(IReadOnlyList<PosDiscountPresetDto>? presets)
+    {
+        decimal Pct(string key, decimal fallback)
+        {
+            var match = presets?.FirstOrDefault(p => p.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+            return match?.Percent ?? fallback;
+        }
+        PosDiscountStaffBox.Value = (double)Pct("staff", 10m);
+        PosDiscountFamilyBox.Value = (double)Pct("family_friends", 15m);
+        PosDiscountLoyaltyBox.Value = (double)Pct("loyalty", 5m);
+        PosDiscountOtherBox.Value = (double)Pct("other", 0m);
+    }
+
+    private IReadOnlyList<PosDiscountPresetDto> BuildPosDiscountPresetsFromBoxes() =>
+    [
+        new("staff", "Staff", ReadMoney(PosDiscountStaffBox, 10m), true),
+        new("family_friends", "Family & Friends", ReadMoney(PosDiscountFamilyBox, 15m), true),
+        new("loyalty", "Loyalty", ReadMoney(PosDiscountLoyaltyBox, 5m), true),
+        new("other", "Other (custom %)", ReadMoney(PosDiscountOtherBox, 0m), true)
+    ];
 
     private async void SaveTax_Click(object sender, RoutedEventArgs e)
     {
@@ -945,7 +969,8 @@ public sealed partial class SettingsPage : Page
                 $"Status {health.Status} · API {version} · DB {(health.Database ? "ok" : "down")} · " +
                 $"client min {minClient} · server UTC {health.ServerTimeUtc:u}" +
                 (info is null ? "\n(system/info unavailable — server may need update)" : "") +
-                (info?.RestartAllowed == true ? "\nHTTP restart enabled (ALLOW_PROCESS_RESTART)." : "\nHTTP restart disabled — use the copyable commands below.");
+                (info?.RestartAllowed == true ? "\nHTTP restart enabled (ALLOW_PROCESS_RESTART)." : "\nHTTP restart disabled — use the copyable commands below.") +
+                (info?.CanRestart == true ? "\nYour account may restart the server." : "\nRestart from the app requires Owner or Administrator.");
 
             if (info?.UpdateCommands is { Count: > 0 })
             {
@@ -961,9 +986,59 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private void ApplyRoleVisibility()
+    {
+        var session = App.Services.GetRequiredService<AuthSession>();
+        var user = session.User;
+        bool Has(string key) =>
+            user is not null &&
+            (user.IsOwner || user.Permissions.Any(p => string.Equals(p, key, StringComparison.OrdinalIgnoreCase)));
+
+        var canRestart = user is not null &&
+            (user.IsOwner
+             || string.Equals(user.RoleKey, "owner", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(user.RoleKey, "administrator", StringComparison.OrdinalIgnoreCase));
+
+        RestartServerBtn.Visibility = canRestart ? Visibility.Visible : Visibility.Collapsed;
+        RestartOwnerHint.Visibility = canRestart ? Visibility.Collapsed : Visibility.Visible;
+
+        PricingPivot.Visibility = Has("pricing.view") || Has("pricing.edit_settings") ? Visibility.Visible : Visibility.Collapsed;
+        ServicesPivot.Visibility = Has("pricing.manage_catalogue") || Has("pricing.view") ? Visibility.Visible : Visibility.Collapsed;
+        TaxPivot.Visibility = Has("settings.manage") || Has("settings.view") ? Visibility.Visible : Visibility.Collapsed;
+        PosPivot.Visibility = Has("pos.manage") || Has("pos.view") ? Visibility.Visible : Visibility.Collapsed;
+        UsersPivot.Visibility = Has("staff.view") || Has("roles.manage") ? Visibility.Visible : Visibility.Collapsed;
+        BackupsPivot.Visibility = Has("backups.manage") ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionPivot.Visibility = Has("settings.view") || Has("settings.manage") || canRestart
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
     private async void RestartServer_Click(object sender, RoutedEventArgs e)
     {
         HealthErrorText.Text = string.Empty;
+        var session = App.Services.GetRequiredService<AuthSession>();
+        var user = session.User;
+        var canRestart = user is not null &&
+            (user.IsOwner
+             || string.Equals(user.RoleKey, "owner", StringComparison.OrdinalIgnoreCase)
+             || string.Equals(user.RoleKey, "administrator", StringComparison.OrdinalIgnoreCase));
+        if (!canRestart)
+        {
+            HealthErrorText.Text = "Only Owner or Administrator can restart the server.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "Restart server?",
+            Content = "This restarts WorkshopOS API services. Clients may disconnect for a few seconds.",
+            PrimaryButtonText = "Restart",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
         try
         {
             var api = App.Services.GetRequiredService<ApiClient>();

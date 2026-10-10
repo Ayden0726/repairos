@@ -79,12 +79,19 @@
                 <TextBox Grid.Column="1" Header="Email" Text="{x:Bind ViewModel.NewEmail, Mode=TwoWay}" />
               </Grid>
             </StackPanel>
+            <ComboBox Header="Device type" HorizontalAlignment="Stretch"
+                      ItemsSource="{x:Bind ViewModel.DeviceTypes, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedDeviceType, Mode=TwoWay}"
+                      SelectionChanged="QuoteDeviceType_SelectionChanged" />
             <Grid ColumnSpacing="8">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
-              <TextBox Header="Brand" Text="{x:Bind ViewModel.DeviceBrand, Mode=TwoWay}" />
-              <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.DeviceModel, Mode=TwoWay}" />
+              <ComboBox x:Name="QuoteBrandBox" Header="Brand" HorizontalAlignment="Stretch"
+                        IsEditable="True" SelectionChanged="QuoteBrandBox_SelectionChanged"
+                        LostFocus="QuoteBrandBox_LostFocus" />
+              <ComboBox x:Name="QuoteModelBox" Grid.Column="1" Header="Model" HorizontalAlignment="Stretch"
+                        IsEditable="True" LostFocus="QuoteModelBox_LostFocus" />
               <TextBox Grid.Column="2" Header="Serial" Text="{x:Bind ViewModel.DeviceSerial, Mode=TwoWay}" />
             </Grid>
             <TextBox Header="Issue" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
@@ -98,13 +105,16 @@
           <StackPanel Spacing="10">
             <TextBlock Text="Catalogue services" FontWeight="SemiBold"
                        Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+            <TextBlock x:Name="QuoteSvcFilterHint"
+                       Text="Services filter by device type (Phone, Tablet, Laptop, PC)."
+                       Opacity="0.7" TextWrapping="Wrap" FontSize="12" />
             <!-- Inline (no UserControl / DataTemplate / NumberBox / x:Bind on picker) -->
             <TextBox x:Name="QuoteSvcSearchBox" Header="Search services"
                      PlaceholderText="Type screen, SSD, battery…"
                      TextChanged="QuoteSvcSearchBox_TextChanged" />
-            <ComboBox x:Name="QuoteSvcCategoryBox" Header="Category" DisplayMemberPath="Name"
+            <ComboBox x:Name="QuoteSvcCategoryBox" Header="Category (for this device)" DisplayMemberPath="Name"
                       HorizontalAlignment="Stretch" SelectionChanged="QuoteSvcCategoryBox_SelectionChanged" />
-            <ComboBox x:Name="QuoteSvcServicesBox" Header="Services" DisplayMemberPath="TitleLine"
+            <ComboBox x:Name="QuoteSvcServicesBox" Header="Matching services" DisplayMemberPath="TitleLine"
                       HorizontalAlignment="Stretch" />
             <Button Content="Add selected service" Click="QuoteSvcAdd_Click"
                     Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />

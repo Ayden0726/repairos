@@ -2,7 +2,7 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Current version: 1.2.29+**
+**Current version: 1.2.30+**
 
 ## What it is
 
@@ -71,8 +71,42 @@ Full guide (clean install, troubleshooting, ports): **[docs/INSTALL.md](docs/INS
 
 ## Install the Windows client
 
+### Sync GitHub + build client zip + Setup.exe (one command)
+
+**Developer PowerShell for VS 2022.** Needs agent sync on port **28765**, GitHub auth, [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), and [Inno Setup 6](https://jrsoftware.org/isdl.php) for the installer.
+
+```powershell
+$r='C:\Users\ayden\src\repairos'; $z="$env:TEMP\repairos-github-sync.zip"
+New-Item -ItemType Directory -Force -Path $r | Out-Null
+Invoke-WebRequest -Uri 'http://127.0.0.1:28765/repairos-github-sync.zip' -OutFile $z
+Expand-Archive -Path $z -DestinationPath $r -Force
+powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1"
+```
+
+Outputs:
+
+- Pushes overlay to `https://github.com/Ayden0726/repairos` (`main`)
+- `packaging\dist\WorkshopOS-Client-win-x64-v1.2.30.zip`
+- `packaging\dist\WorkshopOS-Setup-1.2.30.exe` (needs Inno Setup 6)
+- Extracts + launches `Desktop\WorkshopOS-Client-1.2.30\WorkshopOS.Client.exe`
+
+Skip GitHub push or installer if needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1" -SkipGitHubPush
+powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1" -SkipInstaller
+```
+
+### Build client only (no GitHub push)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\install-client-windows.ps1 -WithInstaller
+```
+
+### Shop PCs (prebuilt installer)
+
 1. Go to **[GitHub Releases](https://github.com/Ayden0726/repairos/releases)**
-2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.16.exe`)
+2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.30.exe`)
 3. Run the installer on each Windows 10/11 **x64** PC
 4. Enter the pairing code from `/connect`, or tap **Find on this network**
 

@@ -30,6 +30,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <StackPanel Spacing="8">
           <TextBlock Text="Stock" FontWeight="SemiBold" />
@@ -58,6 +59,40 @@
             </DataTemplate>
           </ListView.ItemTemplate>
         </ListView>
+        <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0">
+          <TextBlock Text="Import repair" FontWeight="SemiBold" />
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Header="Ticket / customer" Text="{x:Bind ViewModel.RepairQuery, Mode=TwoWay}"
+                     PlaceholderText="REP-… or name" />
+            <Button Grid.Column="1" Content="Find" VerticalAlignment="Bottom"
+                    Command="{x:Bind ViewModel.SearchRepairsCommand}" />
+          </Grid>
+          <ListView ItemsSource="{x:Bind ViewModel.PayableRepairs, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedRepair, Mode=TwoWay}"
+                    MaxHeight="160">
+            <ListView.ItemTemplate>
+              <DataTemplate x:DataType="ops:PosPayableRepairDto">
+                <StackPanel Padding="2,6" Spacing="2">
+                  <TextBlock>
+                    <Run Text="{x:Bind TicketNumber}" FontWeight="Bold" />
+                    <Run Text=" · " /><Run Text="{x:Bind CustomerName}" />
+                  </TextBlock>
+                  <TextBlock FontSize="12" Opacity="0.7">
+                    <Run Text="bal $" /><Run Text="{x:Bind Balance}" />
+                    <Run Text=" · " /><Run Text="{x:Bind StatusName}" />
+                  </TextBlock>
+                </StackPanel>
+              </DataTemplate>
+            </ListView.ItemTemplate>
+          </ListView>
+          <TextBlock Text="{x:Bind ViewModel.SelectedRepairLabel, Mode=OneWay}"
+                     Opacity="0.8" TextWrapping="Wrap" FontSize="12" />
+          <Button Content="Clear repair" HorizontalAlignment="Stretch"
+                  Command="{x:Bind ViewModel.ClearRepairCommand}" />
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -116,6 +151,19 @@
           <ComboBox Header="Payment method" HorizontalAlignment="Stretch"
                     ItemsSource="{x:Bind ViewModel.PaymentMethods, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.PaymentMethod, Mode=TwoWay}" />
+          <ComboBox Header="Discount" HorizontalAlignment="Stretch"
+                    ItemsSource="{x:Bind ViewModel.DiscountOptions, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedDiscount, Mode=TwoWay}"
+                    DisplayMemberPath="Display" />
+          <TextBox Header="Custom discount %"
+                   Text="{x:Bind ViewModel.CustomDiscountPercent, Mode=TwoWay}"
+                   PlaceholderText="Overrides preset when set" />
+          <ComboBox Header="Pay mode (repairs)" HorizontalAlignment="Stretch"
+                    ItemsSource="{x:Bind ViewModel.PayModes, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.PayMode, Mode=TwoWay}" />
+          <TextBox Header="Deposit amount"
+                   Text="{x:Bind ViewModel.DepositAmount, Mode=TwoWay}"
+                   PlaceholderText="Required for deposit" />
           <TextBox Header="EFTPOS / provider reference"
                    PlaceholderText="Approval code or RRN"
                    Text="{x:Bind ViewModel.ProviderReference, Mode=TwoWay}" />

@@ -513,13 +513,19 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.PaymentProvider).HasMaxLength(40).IsRequired();
             e.Property(x => x.ProviderReference).HasMaxLength(200);
             e.Property(x => x.ProviderStatus).HasMaxLength(32).IsRequired();
+            e.Property(x => x.DiscountLabel).HasMaxLength(120);
             e.Property(x => x.Subtotal).HasPrecision(12, 2);
             e.Property(x => x.GstAmount).HasPrecision(12, 2);
             e.Property(x => x.Total).HasPrecision(12, 2);
             e.Property(x => x.AmountPaid).HasPrecision(12, 2);
+            e.Property(x => x.DiscountPercent).HasPrecision(8, 2);
+            e.Property(x => x.DiscountAmount).HasPrecision(12, 2);
             e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.RepairTicketId);
             e.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId);
             e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
+            e.HasOne(x => x.RepairTicket).WithMany().HasForeignKey(x => x.RepairTicketId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<PosSaleLine>(e =>

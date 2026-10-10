@@ -15,12 +15,14 @@ public sealed class PosService : IPosService
     private readonly WorkshopDbContext _db;
     private readonly IAuditService _audit;
     private readonly ISettingsService _settings;
+    private readonly IInvoiceService _invoices;
 
-    public PosService(WorkshopDbContext db, IAuditService audit, ISettingsService settings)
+    public PosService(WorkshopDbContext db, IAuditService audit, ISettingsService settings, IInvoiceService invoices)
     {
         _db = db;
         _audit = audit;
         _settings = settings;
+        _invoices = invoices;
     }
 
     public Task<IReadOnlyList<PosProviderInfoDto>> ListProvidersAsync(CancellationToken ct = default)
@@ -99,8 +101,65 @@ public sealed class PosService : IPosService
         return await q.OrderByDescending(s => s.CreatedAt)
             .Select(s => new PosSaleListItemDto(
                 s.Id, s.Number, s.Customer.DisplayName, s.Status, s.PaymentMethod, s.PaymentProvider,
-                s.Total, s.CreatedAt, s.InvoiceId))
+                s.Total, s.CreatedAt, s.InvoiceId, s.RepairTicketId, s.IsDeposit))
             .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<PosPayableRepairDto>> ListPayableRepairsAsync(
+        string? q = null, CancellationToken ct = default)
+    {
+        await EnsurePosEnabledAsync(ct);
+        var term = q?.Trim().ToLowerInvariant();
+
+        var tickets = await _db.RepairTickets.AsNoTracking()
+            .Include(t => t.Customer)
+            .Include(t => t.Device)
+            .Include(t => t.Status)
+            .Where(t => t.ArchivedAt == null
+                        && t.Status.Key != "cancelled"
+                        && t.Status.Key != "completed"
+                        && t.Status.Key != "collected")
+            .OrderByDescending(t => t.CreatedAt)
+            .Take(200)
+            .ToListAsync(ct);
+
+        if (!string.IsNullOrEmpty(term))
+        {
+            tickets = tickets.Where(t =>
+                t.TicketNumber.ToLowerInvariant().Contains(term) ||
+                t.Customer.DisplayName.ToLowerInvariant().Contains(term) ||
+                (t.Device != null && ($"{t.Device.Brand} {t.Device.Model}").ToLowerInvariant().Contains(term))).ToList();
+        }
+
+        var ticketIds = tickets.Select(t => t.Id).ToList();
+        var invoices = await _db.Invoices.AsNoTracking()
+            .Where(i => i.ArchivedAt == null && i.RepairTicketId != null && ticketIds.Contains(i.RepairTicketId.Value)
+                        && i.Status != "Cancelled" && i.Status != "Refunded")
+            .ToListAsync(ct);
+        var invByTicket = invoices
+            .GroupBy(i => i.RepairTicketId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.CreatedAt).First());
+
+        var result = new List<PosPayableRepairDto>();
+        foreach (var t in tickets)
+        {
+            invByTicket.TryGetValue(t.Id, out var inv);
+            var total = inv?.Total ?? t.EstimatedPrice ?? 0m;
+            var paid = inv?.AmountPaid ?? 0m;
+            var balance = Math.Max(0m, total - paid);
+            // Include tickets with balance, or those with estimate/quote but no invoice yet
+            if (balance <= 0 && inv is not null) continue;
+            if (balance <= 0 && (t.EstimatedPrice is null or <= 0)) continue;
+
+            var deviceLabel = t.Device is null ? null : $"{t.Device.Brand} {t.Device.Model}".Trim();
+            result.Add(new PosPayableRepairDto(
+                t.Id, t.TicketNumber, t.Customer.DisplayName, deviceLabel, t.Status.Name,
+                inv?.Id, inv?.Number, total, paid,
+                balance > 0 ? balance : total,
+                t.EstimatedPrice));
+        }
+
+        return result.OrderByDescending(r => r.Balance).Take(80).ToList();
     }
 
     public async Task<PosSaleDetailDto> GetSaleAsync(Guid id, CancellationToken ct = default)
@@ -108,6 +167,7 @@ public sealed class PosService : IPosService
         await EnsurePosEnabledAsync(ct);
         var sale = await _db.PosSales.AsNoTracking()
             .Include(s => s.Customer).Include(s => s.Lines).Include(s => s.Invoice)
+            .Include(s => s.RepairTicket)
             .FirstOrDefaultAsync(s => s.Id == id && s.ArchivedAt == null, ct)
             ?? throw new AppException("not_found", "POS sale was not found.", 404);
         return Map(sale);
@@ -116,8 +176,11 @@ public sealed class PosService : IPosService
     public async Task<PosSaleDetailDto> CreateSaleAsync(CreatePosSaleRequest request, Guid actorId, CancellationToken ct = default)
     {
         var posSettings = await EnsurePosEnabledAsync(ct);
-        if (request.Lines is null || request.Lines.Count == 0)
-            throw new ValidationAppException("Add at least one line to the sale.");
+        var hasLines = request.Lines is { Count: > 0 };
+        var hasRepair = request.RepairTicketId is Guid;
+
+        if (!hasLines && !hasRepair)
+            throw new ValidationAppException("Add cart lines or import a repair ticket.");
 
         var method = NormalizePaymentMethod(request.PaymentMethod);
         var provider = posSettings.Provider;
@@ -126,105 +189,294 @@ public sealed class PosService : IPosService
         else if (provider is "None" && method is "Eftpos" or "Card")
             provider = "ManualEftpos";
 
+        var (discountPercent, discountLabel) = ResolveDiscount(request, posSettings);
+
+        // --- Retail cart lines ---
         var prepared = new List<(Guid? ItemId, InventoryItem? Item, string Description, string? Sku, decimal Qty, decimal UnitPrice, decimal LineTotal)>();
-        var sort = 0;
-        foreach (var line in request.Lines)
+        if (hasLines)
         {
-            if (line.Quantity <= 0)
-                throw new ValidationAppException("Line quantity must be positive.");
-
-            InventoryItem? item = null;
-            string description;
-            string? sku = null;
-            decimal unitPrice;
-
-            if (line.InventoryItemId is Guid itemId)
+            foreach (var line in request.Lines!)
             {
-                item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ArchivedAt == null, ct)
-                    ?? throw new AppException("not_found", "Inventory item was not found.", 404);
-                var available = item.QuantityOnHand - item.QuantityReserved;
-                if (available < (int)Math.Ceiling(line.Quantity))
-                    throw new ValidationAppException($"Not enough stock for {item.Sku} (available {available}).");
-                description = string.IsNullOrWhiteSpace(line.Description) ? item.Name : line.Description.Trim();
-                sku = item.Sku;
-                unitPrice = line.UnitPrice ?? item.SellPrice;
+                if (line.Quantity <= 0)
+                    throw new ValidationAppException("Line quantity must be positive.");
+
+                InventoryItem? item = null;
+                string description;
+                string? sku = null;
+                decimal unitPrice;
+
+                if (line.InventoryItemId is Guid itemId)
+                {
+                    item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ArchivedAt == null, ct)
+                        ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+                    var available = item.QuantityOnHand - item.QuantityReserved;
+                    if (available < (int)Math.Ceiling(line.Quantity))
+                        throw new ValidationAppException($"Not enough stock for {item.Sku} (available {available}).");
+                    description = string.IsNullOrWhiteSpace(line.Description) ? item.Name : line.Description.Trim();
+                    sku = item.Sku;
+                    unitPrice = line.UnitPrice ?? item.SellPrice;
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(line.Description))
+                        throw new ValidationAppException("Custom lines need a description.");
+                    if (line.UnitPrice is null)
+                        throw new ValidationAppException("Custom lines need a unit price.");
+                    description = line.Description.Trim();
+                    unitPrice = line.UnitPrice.Value;
+                }
+
+                if (unitPrice < 0) throw new ValidationAppException("Unit price cannot be negative.");
+                var lineTotal = PricingCalculator.RoundMoney(line.Quantity * unitPrice);
+                prepared.Add((item?.Id, item, description, sku, line.Quantity, PricingCalculator.RoundMoney(unitPrice), lineTotal));
+            }
+        }
+
+        var cartGross = prepared.Sum(p => p.LineTotal);
+        var cartDiscount = discountPercent > 0
+            ? PricingCalculator.RoundMoney(cartGross * discountPercent / 100m)
+            : 0m;
+        var cartNet = Math.Max(0m, cartGross - cartDiscount);
+
+        // --- Repair invoice / payment ---
+        Invoice? repairInvoice = null;
+        RepairTicket? repairTicket = null;
+        decimal repairPayAmount = 0m;
+        decimal repairDiscountAmount = 0m;
+        var isDeposit = request.IsDeposit;
+
+        if (hasRepair)
+        {
+            var ticketId = request.RepairTicketId!.Value;
+            repairTicket = await _db.RepairTickets
+                .Include(t => t.Customer)
+                .FirstOrDefaultAsync(t => t.Id == ticketId && t.ArchivedAt == null, ct)
+                ?? throw new AppException("not_found", "Repair ticket was not found.", 404);
+
+            // Ensure invoice exists on this DbContext (avoid cross-service SaveChanges races).
+            repairInvoice = await EnsureRepairInvoiceAsync(repairTicket, actorId, ct);
+            var balance = Math.Max(0m, repairInvoice.Total - repairInvoice.AmountPaid);
+            if (balance <= 0)
+                throw new ValidationAppException($"Ticket {repairTicket.TicketNumber} is already paid in full.");
+
+            // Apply discount by reducing invoice totals so the ticket can close at $0 balance.
+            // Partial AmountToPay (deposit) skips reduction — discount is for final payoff.
+            var applyingBalanceDiscount = discountPercent > 0 && request.AmountToPay is null;
+            if (applyingBalanceDiscount)
+            {
+                repairDiscountAmount = PricingCalculator.RoundMoney(balance * discountPercent / 100m);
+                if (repairDiscountAmount > 0)
+                {
+                    var newInclusive = Math.Max(0m, PricingCalculator.RoundMoney(repairInvoice.Total - repairDiscountAmount));
+                    var (invSub, invGst, invTotal) = MoneyGst.FromInclusiveTotal(newInclusive);
+                    repairInvoice.Subtotal = invSub;
+                    repairInvoice.GstAmount = invGst;
+                    repairInvoice.Total = invTotal;
+                    repairInvoice.UpdatedAt = DateTimeOffset.UtcNow;
+                    balance = Math.Max(0m, repairInvoice.Total - repairInvoice.AmountPaid);
+                }
+            }
+
+            if (request.AmountToPay is decimal pay)
+            {
+                repairPayAmount = PricingCalculator.RoundMoney(pay);
+                if (repairPayAmount <= 0)
+                    throw new ValidationAppException("Payment amount must be positive.");
+                if (repairPayAmount > balance + 0.01m)
+                    throw new ValidationAppException($"Amount exceeds balance (${balance:0.00}).");
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(line.Description))
-                    throw new ValidationAppException("Custom lines need a description.");
-                if (line.UnitPrice is null)
-                    throw new ValidationAppException("Custom lines need a unit price.");
-                description = line.Description.Trim();
-                unitPrice = line.UnitPrice.Value;
+                repairPayAmount = balance;
             }
 
-            if (unitPrice < 0) throw new ValidationAppException("Unit price cannot be negative.");
-            var lineTotal = PricingCalculator.RoundMoney(line.Quantity * unitPrice);
-            prepared.Add((item?.Id, item, description, sku, line.Quantity, PricingCalculator.RoundMoney(unitPrice), lineTotal));
-            sort++;
+            // If paying less than balance, treat as deposit unless staff said otherwise
+            if (repairPayAmount + 0.01m < balance)
+                isDeposit = true;
         }
 
-        var inclusiveTotal = prepared.Sum(p => p.LineTotal);
-        if (inclusiveTotal <= 0) throw new ValidationAppException("Sale total must be greater than zero.");
+        var chargeTotal = PricingCalculator.RoundMoney(cartNet + repairPayAmount);
+        if (chargeTotal <= 0)
+            throw new ValidationAppException("Sale total must be greater than zero.");
+
+        var discountAmount = PricingCalculator.RoundMoney(cartDiscount + repairDiscountAmount);
 
         var business = await _settings.GetBusinessAsync(ct);
         var rate = business.GstRegistered ? (business.GstRate <= 0 ? 0.10m : business.GstRate) : 0m;
+
+        // For POS sale record: GST split of the amount actually charged now
         var (sub, gst, total) = business.GstInclusive || !business.GstRegistered
-            ? MoneyGst.FromInclusiveTotal(inclusiveTotal, rate)
-            : MoneyGst.FromExclusiveTotal(inclusiveTotal, rate);
+            ? MoneyGst.FromInclusiveTotal(chargeTotal, rate)
+            : MoneyGst.FromExclusiveTotal(chargeTotal, rate);
 
         var providerResult = await ResolveProviderPaymentAsync(posSettings, method, provider, total, request.ProviderReference, ct);
 
-        var customer = await ResolveCustomerAsync(request.CustomerId, ct);
-        var invNumber = await DocumentNumbering.NextAsync(_db, "INV", ct);
-        var posNumber = await DocumentNumbering.NextAsync(_db, "POS", ct);
+        Customer customer;
+        if (repairTicket is not null)
+            customer = repairTicket.Customer;
+        else
+            customer = await ResolveCustomerAsync(request.CustomerId, ct);
 
-        var invoice = new Invoice
-        {
-            Number = invNumber,
-            CustomerId = customer.Id,
-            Status = "Paid",
-            CreatedById = actorId,
-            Subtotal = sub,
-            GstAmount = gst,
-            Total = total,
-            AmountPaid = total,
-            IssuedAt = DateTimeOffset.UtcNow,
-            DueAt = DateTimeOffset.UtcNow
-        };
+        // Snapshot ids before clearing the tracker / recording payment on a fresh graph.
+        var customerId = customer.Id;
+        var repairId = repairTicket?.Id;
+        var repairNumber = repairTicket?.TicketNumber;
+        var stockDeltas = prepared
+            .Where(p => p.Item is not null)
+            .Select(p => (ItemId: p.Item!.Id, Qty: p.Qty))
+            .ToList();
 
-        var i = 0;
-        foreach (var p in prepared)
+        Guid invoiceId;
+        string invoiceNumber;
+
+        if (repairInvoice is not null && !hasLines)
         {
-            invoice.Lines.Add(new InvoiceLine
+            // Persist new invoice / discount totals, then record payment on a clean tracker.
+            await _db.SaveChangesAsync(ct);
+
+            invoiceId = repairInvoice.Id;
+            _db.ChangeTracker.Clear();
+            var paid = await _invoices.RecordPaymentAsync(invoiceId,
+                new RecordPaymentRequest(method, repairPayAmount, providerResult.Reference, isDeposit),
+                actorId, ct);
+            invoiceNumber = paid.Number;
+        }
+        else if (repairInvoice is not null && hasLines)
+        {
+            await _db.SaveChangesAsync(ct);
+
+            invoiceId = repairInvoice.Id;
+            _db.ChangeTracker.Clear();
+            if (repairPayAmount > 0)
             {
-                Type = p.ItemId.HasValue ? "PART" : "SERVICE",
-                Description = p.Sku is null ? p.Description : $"{p.Sku} — {p.Description}",
-                Quantity = p.Qty,
-                UnitPrice = p.UnitPrice,
-                SortOrder = i++
+                await _invoices.RecordPaymentAsync(invoiceId,
+                    new RecordPaymentRequest(method, repairPayAmount, providerResult.Reference, isDeposit),
+                    actorId, ct);
+            }
+
+            var (cartSub, cartGst, cartTotal) = business.GstInclusive || !business.GstRegistered
+                ? MoneyGst.FromInclusiveTotal(cartNet, rate)
+                : MoneyGst.FromExclusiveTotal(cartNet, rate);
+
+            var invNumber = await DocumentNumbering.NextAsync(_db, "INV", ct);
+            var cartInvoice = new Invoice
+            {
+                Number = invNumber,
+                CustomerId = customerId,
+                Status = "Paid",
+                CreatedById = actorId,
+                Subtotal = cartSub,
+                GstAmount = cartGst,
+                Total = cartTotal,
+                AmountPaid = cartTotal,
+                IssuedAt = DateTimeOffset.UtcNow,
+                DueAt = DateTimeOffset.UtcNow
+            };
+            var i = 0;
+            foreach (var p in prepared)
+            {
+                cartInvoice.Lines.Add(new InvoiceLine
+                {
+                    Type = p.ItemId.HasValue ? "PART" : "SERVICE",
+                    Description = p.Sku is null ? p.Description : $"{p.Sku} — {p.Description}",
+                    Quantity = p.Qty,
+                    UnitPrice = p.UnitPrice,
+                    SortOrder = i++
+                });
+            }
+            if (cartDiscount > 0)
+            {
+                cartInvoice.Lines.Add(new InvoiceLine
+                {
+                    Type = "DISCOUNT",
+                    Description = discountLabel ?? $"Discount {discountPercent:0.##}%",
+                    Quantity = 1,
+                    UnitPrice = -cartDiscount,
+                    SortOrder = i
+                });
+            }
+            cartInvoice.Payments.Add(new Payment
+            {
+                Method = method,
+                Amount = cartTotal,
+                Reference = providerResult.Reference,
+                RecordedById = actorId,
+                IsDeposit = false,
+                PaidAt = DateTimeOffset.UtcNow
             });
+            _db.Invoices.Add(cartInvoice);
+            await _db.SaveChangesAsync(ct);
+            // PosSale links to the cart invoice for combined sales.
+            invoiceId = cartInvoice.Id;
+            invoiceNumber = cartInvoice.Number;
+            _db.ChangeTracker.Clear();
+        }
+        else
+        {
+            // Retail only
+            var invNumber = await DocumentNumbering.NextAsync(_db, "INV", ct);
+            var retailInvoice = new Invoice
+            {
+                Number = invNumber,
+                CustomerId = customerId,
+                Status = "Paid",
+                CreatedById = actorId,
+                Subtotal = sub,
+                GstAmount = gst,
+                Total = total,
+                AmountPaid = total,
+                IssuedAt = DateTimeOffset.UtcNow,
+                DueAt = DateTimeOffset.UtcNow
+            };
+            var i = 0;
+            foreach (var p in prepared)
+            {
+                retailInvoice.Lines.Add(new InvoiceLine
+                {
+                    Type = p.ItemId.HasValue ? "PART" : "SERVICE",
+                    Description = p.Sku is null ? p.Description : $"{p.Sku} — {p.Description}",
+                    Quantity = p.Qty,
+                    UnitPrice = p.UnitPrice,
+                    SortOrder = i++
+                });
+            }
+            if (cartDiscount > 0)
+            {
+                retailInvoice.Lines.Add(new InvoiceLine
+                {
+                    Type = "DISCOUNT",
+                    Description = discountLabel ?? $"Discount {discountPercent:0.##}%",
+                    Quantity = 1,
+                    UnitPrice = -cartDiscount,
+                    SortOrder = i
+                });
+            }
+            retailInvoice.Payments.Add(new Payment
+            {
+                Method = method,
+                Amount = total,
+                Reference = providerResult.Reference,
+                RecordedById = actorId,
+                IsDeposit = false,
+                PaidAt = DateTimeOffset.UtcNow
+            });
+            _db.Invoices.Add(retailInvoice);
+            await _db.SaveChangesAsync(ct);
+            invoiceId = retailInvoice.Id;
+            invoiceNumber = retailInvoice.Number;
+            _db.ChangeTracker.Clear();
         }
 
-        invoice.Payments.Add(new Payment
-        {
-            Method = method,
-            Amount = total,
-            Reference = providerResult.Reference,
-            RecordedById = actorId,
-            IsDeposit = false,
-            PaidAt = DateTimeOffset.UtcNow
-        });
+        _db.ChangeTracker.Clear();
 
-        _db.Invoices.Add(invoice);
-
+        var posNumber = await DocumentNumbering.NextAsync(_db, "POS", ct);
         var sale = new PosSale
         {
             Number = posNumber,
-            Invoice = invoice,
-            CustomerId = customer.Id,
+            InvoiceId = invoiceId,
+            CustomerId = customerId,
             CreatedById = actorId,
+            RepairTicketId = repairId,
             Status = "Completed",
             PaymentMethod = method,
             PaymentProvider = providerResult.Provider,
@@ -234,10 +486,14 @@ public sealed class PosService : IPosService
             GstAmount = gst,
             Total = total,
             AmountPaid = total,
+            DiscountLabel = discountLabel,
+            DiscountPercent = discountPercent,
+            DiscountAmount = discountAmount,
+            IsDeposit = isDeposit && repairId is not null,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim()
         };
 
-        i = 0;
+        var li = 0;
         foreach (var p in prepared)
         {
             sale.Lines.Add(new PosSaleLine
@@ -248,31 +504,55 @@ public sealed class PosService : IPosService
                 Quantity = p.Qty,
                 UnitPrice = p.UnitPrice,
                 LineTotal = p.LineTotal,
-                SortOrder = i++
+                SortOrder = li++
             });
+        }
 
-            if (p.Item is not null)
+        foreach (var delta in stockDeltas)
+        {
+            var item = await _db.InventoryItems.FirstAsync(i => i.Id == delta.ItemId, ct);
+            var qtyInt = (int)Math.Round(delta.Qty, MidpointRounding.AwayFromZero);
+            if (qtyInt < 1) qtyInt = 1;
+            item.QuantityOnHand -= qtyInt;
+            item.UpdatedAt = DateTimeOffset.UtcNow;
+            _db.InventoryTransactions.Add(new InventoryTransaction
             {
-                var qtyInt = (int)Math.Round(p.Qty, MidpointRounding.AwayFromZero);
-                if (qtyInt < 1) qtyInt = 1;
-                p.Item.QuantityOnHand -= qtyInt;
-                p.Item.UpdatedAt = DateTimeOffset.UtcNow;
-                _db.InventoryTransactions.Add(new InventoryTransaction
-                {
-                    ItemId = p.Item.Id,
-                    Type = "Sale",
-                    QuantityDelta = -qtyInt,
-                    Reason = $"POS {posNumber}",
-                    ActorUserId = actorId
-                });
-            }
+                ItemId = item.Id,
+                Type = "Sale",
+                QuantityDelta = -qtyInt,
+                Reason = $"POS {posNumber}",
+                ActorUserId = actorId
+            });
+        }
+
+        if (repairId is not null && repairPayAmount > 0)
+        {
+            sale.Lines.Add(new PosSaleLine
+            {
+                Description = isDeposit
+                    ? $"Deposit — {repairNumber}"
+                    : $"Repair — {repairNumber}",
+                Quantity = 1,
+                UnitPrice = repairPayAmount,
+                LineTotal = repairPayAmount,
+                SortOrder = li
+            });
         }
 
         _db.PosSales.Add(sale);
-        customer.LastVisitAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "pos.sale.create", "PosSale", sale.Id.ToString(),
-            newValue: new { PosNumber = sale.Number, InvoiceNumber = invoice.Number, sale.Total, sale.PaymentMethod, sale.PaymentProvider }, ct: ct);
+            newValue: new
+            {
+                PosNumber = sale.Number,
+                InvoiceNumber = invoiceNumber,
+                sale.Total,
+                sale.PaymentMethod,
+                sale.PaymentProvider,
+                sale.RepairTicketId,
+                sale.IsDeposit,
+                sale.DiscountPercent
+            }, ct: ct);
 
         return await GetSaleAsync(sale.Id, ct);
     }
@@ -306,15 +586,107 @@ public sealed class PosService : IPosService
 
         sale.Status = "Voided";
         sale.UpdatedAt = DateTimeOffset.UtcNow;
-        if (sale.Invoice is not null)
+        if (sale.Invoice is not null && sale.RepairTicketId is null)
         {
             sale.Invoice.Status = "Cancelled";
             sale.Invoice.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        else if (sale.Invoice is not null && sale.RepairTicketId is not null)
+        {
+            // Reverse the payment amount that was recorded for this POS sale
+            var payAmount = sale.AmountPaid;
+            if (payAmount > 0)
+            {
+                sale.Invoice.AmountPaid = Math.Max(0, sale.Invoice.AmountPaid - payAmount);
+                sale.Invoice.Status = sale.Invoice.AmountPaid <= 0 ? "Unpaid"
+                    : sale.Invoice.AmountPaid >= sale.Invoice.Total ? "Paid" : "PartiallyPaid";
+                sale.Invoice.UpdatedAt = DateTimeOffset.UtcNow;
+            }
         }
 
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "pos.sale.void", "PosSale", sale.Id.ToString(), newValue: new { sale.Number }, ct: ct);
         return await GetSaleAsync(id, ct);
+    }
+
+    private async Task<Invoice> EnsureRepairInvoiceAsync(RepairTicket ticket, Guid actorId, CancellationToken ct)
+    {
+        var existing = await _db.Invoices
+            .FirstOrDefaultAsync(i => i.RepairTicketId == ticket.Id && i.ArchivedAt == null
+                                      && i.Status != "Cancelled" && i.Status != "Refunded", ct);
+        if (existing is not null)
+            return existing;
+
+        var acceptedQuote = await _db.Quotes.AsNoTracking()
+            .Where(q => q.RepairTicketId == ticket.Id && q.ArchivedAt == null
+                        && (q.Status == "Accepted" || q.Status == "Converted"))
+            .OrderByDescending(q => q.AcceptedAt ?? q.UpdatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var labourInclusive = acceptedQuote?.AcceptedTotal
+            ?? (acceptedQuote is not null && acceptedQuote.Total > 0 ? acceptedQuote.Total : (decimal?)null)
+            ?? ticket.EstimatedPrice
+            ?? 0m;
+        if (labourInclusive <= 0)
+            throw new ValidationAppException("Repair has no estimated price or accepted quote to invoice.");
+
+        var (sub, gst, total) = MoneyGst.FromInclusiveTotal(labourInclusive);
+        var number = await DocumentNumbering.NextAsync(_db, "INV", ct);
+        var inv = new Invoice
+        {
+            Number = number,
+            CustomerId = ticket.CustomerId,
+            RepairTicketId = ticket.Id,
+            QuoteId = acceptedQuote?.Id,
+            Status = "Unpaid",
+            CreatedById = actorId,
+            Subtotal = sub,
+            GstAmount = gst,
+            Total = total,
+            AmountPaid = 0,
+            IssuedAt = DateTimeOffset.UtcNow,
+            DueAt = DateTimeOffset.UtcNow.AddDays(7)
+        };
+        var lineDesc = acceptedQuote is not null
+            ? $"Repair {ticket.TicketNumber} — quote {acceptedQuote.Number}"
+            : $"Labour — {ticket.TicketNumber}";
+        inv.Lines.Add(new InvoiceLine
+        {
+            Type = acceptedQuote is not null ? "SERVICE" : "LABOUR",
+            Description = lineDesc,
+            Quantity = 1,
+            UnitPrice = labourInclusive,
+            SortOrder = 0
+        });
+        _db.Invoices.Add(inv);
+        // Defer SaveChanges to the caller so POS sale + payment land in one flush.
+        return inv;
+    }
+
+    private static (decimal Percent, string? Label) ResolveDiscount(CreatePosSaleRequest request, PosSettingsDto settings)
+    {
+        if (request.DiscountPercent is decimal custom && custom > 0)
+        {
+            var pct = Math.Clamp(custom, 0m, 100m);
+            var label = string.IsNullOrWhiteSpace(request.DiscountLabel)
+                ? $"{pct:0.##}% discount"
+                : request.DiscountLabel.Trim();
+            return (pct, label);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.DiscountPresetKey))
+        {
+            var key = request.DiscountPresetKey.Trim().ToLowerInvariant();
+            var preset = settings.DiscountPresets.FirstOrDefault(p =>
+                p.IsActive && string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (preset is null)
+                throw new ValidationAppException($"Unknown discount preset '{request.DiscountPresetKey}'.");
+            if (preset.Percent <= 0 && key is "other")
+                throw new ValidationAppException("Enter a custom discount percent for Other.");
+            return (preset.Percent, preset.Name);
+        }
+
+        return (0m, null);
     }
 
     private async Task<PosSettingsDto> EnsurePosEnabledAsync(CancellationToken ct)
@@ -367,6 +739,7 @@ public sealed class PosService : IPosService
         PosSettingsDto settings, string method, string provider, decimal amount, string? userReference, CancellationToken ct)
     {
         _ = ct;
+        _ = amount;
         var reference = string.IsNullOrWhiteSpace(userReference) ? null : userReference.Trim();
 
         if (method == "Cash" || provider == "None")
@@ -379,7 +752,6 @@ public sealed class PosService : IPosService
             return Task.FromResult<(string, string, string?)>(("ManualEftpos", "Manual", reference));
         }
 
-        // Integrated providers: require config; accept staff reference until live SDK webhooks are wired.
         if (!settings.ApiKeyConfigured && string.IsNullOrWhiteSpace(settings.MerchantId) && string.IsNullOrWhiteSpace(settings.TerminalId))
         {
             throw new ValidationAppException(
@@ -389,14 +761,20 @@ public sealed class PosService : IPosService
         if (string.IsNullOrWhiteSpace(reference))
             reference = $"{provider.ToUpperInvariant()}-{Guid.NewGuid():N}"[..20];
 
-        // Credentials present: record as Completed with provider reference (live terminal push is adapter-ready).
         return Task.FromResult<(string, string, string?)>((provider, "Completed", reference));
     }
 
-    private static PosSaleDetailDto Map(PosSale s) => new(
-        s.Id, s.Number, s.InvoiceId, s.Invoice.Number, s.CustomerId, s.Customer.DisplayName,
-        s.Status, s.PaymentMethod, s.PaymentProvider, s.ProviderReference, s.ProviderStatus,
-        s.Subtotal, s.GstAmount, s.Total, s.AmountPaid, s.Notes, s.CreatedAt,
-        s.Lines.OrderBy(l => l.SortOrder).Select(l => new PosSaleLineDto(
-            l.Id, l.InventoryItemId, l.Description, l.Sku, l.Quantity, l.UnitPrice, l.LineTotal)).ToList());
+    private static PosSaleDetailDto Map(PosSale s)
+    {
+        var inv = s.Invoice;
+        var invBalance = inv is null ? 0m : Math.Max(0m, inv.Total - inv.AmountPaid);
+        return new(
+            s.Id, s.Number, s.InvoiceId, inv?.Number ?? string.Empty, s.CustomerId, s.Customer.DisplayName,
+            s.Status, s.PaymentMethod, s.PaymentProvider, s.ProviderReference, s.ProviderStatus,
+            s.Subtotal, s.GstAmount, s.Total, s.AmountPaid, s.Notes, s.CreatedAt,
+            s.Lines.OrderBy(l => l.SortOrder).Select(l => new PosSaleLineDto(
+                l.Id, l.InventoryItemId, l.Description, l.Sku, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
+            s.RepairTicketId, s.RepairTicket?.TicketNumber,
+            s.DiscountLabel, s.DiscountPercent, s.DiscountAmount, s.IsDeposit, invBalance);
+    }
 }

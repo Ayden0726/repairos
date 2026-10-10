@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.30 — 2026-10-09
+
+### Added
+- **POS repair payoffs**: import open repair tickets (`GET /api/pos/repairs-payable`), pay full balance or a deposit
+- **POS discounts**: Staff / Family & Friends / Loyalty / Other presets (configurable under Settings → POS)
+- PosSale stores `RepairTicketId`, discount label/percent/amount, and `IsDeposit`
+- Migration `PosSaleRepairDiscount` (repair + discount columns on `pos_sales`)
+- New-ticket / quote builder filters catalogue by device type (Phone / Tablet / Laptop / PC)
+
+### Changed
+- API / client version `1.2.30` (ClientMinVersion `1.2.30`)
+- Repair invoice creation prefers accepted quote total when present
+
 ## 1.2.29 — 2026-10-08
 
 ### Added

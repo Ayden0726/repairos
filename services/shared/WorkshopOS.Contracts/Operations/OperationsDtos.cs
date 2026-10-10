@@ -319,6 +319,12 @@ public sealed record SystemHealthDetailDto(string Status, bool Database, bool Wo
 
 // --- POS ---
 
+public sealed record PosDiscountPresetDto(
+    string Key,
+    string Name,
+    decimal Percent,
+    bool IsActive = true);
+
 public sealed record PosSettingsDto(
     bool Enabled,
     string Provider,
@@ -326,7 +332,8 @@ public sealed record PosSettingsDto(
     string? TerminalId,
     string? ProviderLocationId,
     bool ApiKeyConfigured,
-    string? ConnectionNotes);
+    string? ConnectionNotes,
+    IReadOnlyList<PosDiscountPresetDto> DiscountPresets);
 
 public sealed record UpdatePosSettingsRequest(
     bool Enabled,
@@ -336,7 +343,8 @@ public sealed record UpdatePosSettingsRequest(
     string? ProviderLocationId,
     string? ApiKey,
     bool ClearApiKey,
-    string? ConnectionNotes);
+    string? ConnectionNotes,
+    IReadOnlyList<PosDiscountPresetDto>? DiscountPresets = null);
 
 public sealed record UpdateModuleVisibilityRequest(IReadOnlyDictionary<string, bool> Visibility);
 
@@ -355,12 +363,22 @@ public sealed record PosSaleLineInputDto(
     decimal Quantity,
     decimal? UnitPrice);
 
+/// <summary>
+/// Retail cart and/or repair payoff. When RepairTicketId is set, Lines may be empty
+/// (invoice is created/loaded from the ticket). AmountToPay + IsDeposit control deposit vs full pay.
+/// </summary>
 public sealed record CreatePosSaleRequest(
     Guid? CustomerId,
     string PaymentMethod,
     string? ProviderReference,
     string? Notes,
-    IReadOnlyList<PosSaleLineInputDto> Lines);
+    IReadOnlyList<PosSaleLineInputDto> Lines,
+    Guid? RepairTicketId = null,
+    decimal? AmountToPay = null,
+    bool IsDeposit = false,
+    string? DiscountPresetKey = null,
+    decimal? DiscountPercent = null,
+    string? DiscountLabel = null);
 
 public sealed record PosSaleLineDto(
     Guid Id,
@@ -380,7 +398,9 @@ public sealed record PosSaleListItemDto(
     string PaymentProvider,
     decimal Total,
     DateTimeOffset CreatedAt,
-    Guid InvoiceId);
+    Guid InvoiceId,
+    Guid? RepairTicketId,
+    bool IsDeposit);
 
 public sealed record PosSaleDetailDto(
     Guid Id,
@@ -400,4 +420,25 @@ public sealed record PosSaleDetailDto(
     decimal AmountPaid,
     string? Notes,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<PosSaleLineDto> Lines);
+    IReadOnlyList<PosSaleLineDto> Lines,
+    Guid? RepairTicketId,
+    string? RepairTicketNumber,
+    string? DiscountLabel,
+    decimal DiscountPercent,
+    decimal DiscountAmount,
+    bool IsDeposit,
+    decimal InvoiceBalance);
+
+/// <summary>Open repair with remaining balance for POS import.</summary>
+public sealed record PosPayableRepairDto(
+    Guid RepairTicketId,
+    string TicketNumber,
+    string CustomerName,
+    string? DeviceLabel,
+    string StatusName,
+    Guid? InvoiceId,
+    string? InvoiceNumber,
+    decimal InvoiceTotal,
+    decimal AmountPaid,
+    decimal Balance,
+    decimal? EstimatedPrice);

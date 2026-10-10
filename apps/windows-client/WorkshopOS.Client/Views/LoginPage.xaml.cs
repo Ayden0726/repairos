@@ -17,7 +17,14 @@ public sealed partial class LoginPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.OnLoggedIn = () => Frame.Navigate(typeof(ShellPage));
-        Loaded += (_, _) => SyncThemeToggle();
+        Loaded += (_, _) =>
+        {
+            SyncThemeToggle();
+            if (ViewModel.HasPrefillEmail)
+                PasswordBox.Focus(FocusState.Programmatic);
+            else
+                EmailBox.Focus(FocusState.Programmatic);
+        };
     }
 
     private void Password_PasswordChanged(object sender, RoutedEventArgs e)

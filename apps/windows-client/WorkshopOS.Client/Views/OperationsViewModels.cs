@@ -640,27 +640,46 @@ public sealed class PosCartLine
     public string QtyPriceLabel => $"{Quantity:0.##} × ${UnitPrice:0.00} = ${Quantity * UnitPrice:0.00}";
 }
 
+public sealed class PosDiscountOption
+{
+    public string? Key { get; init; }
+    public string Name { get; init; } = "None";
+    public decimal Percent { get; init; }
+    public string Display => Key is null ? "None" : $"{Name} ({Percent:0.##}%)";
+}
+
 public partial class PosViewModel : ObservableObject
 {
     private readonly ApiClient _api;
     private IReadOnlyList<InventoryListItemDto> _allProducts = Array.Empty<InventoryListItemDto>();
+    private IReadOnlyList<PosDiscountPresetDto> _presets = Array.Empty<PosDiscountPresetDto>();
 
     public ObservableCollection<InventoryListItemDto> Products { get; } = new();
     public ObservableCollection<PosCartLine> Cart { get; } = new();
     public ObservableCollection<PosSaleListItemDto> Sales { get; } = new();
+    public ObservableCollection<PosPayableRepairDto> PayableRepairs { get; } = new();
     public ObservableCollection<string> PaymentMethods { get; } = new(["Cash", "Eftpos", "Card", "BankTransfer", "Other"]);
+    public ObservableCollection<string> PayModes { get; } = new(["Full", "Deposit"]);
+    public ObservableCollection<PosDiscountOption> DiscountOptions { get; } = new();
 
     [ObservableProperty] private string _productQuery = string.Empty;
+    [ObservableProperty] private string _repairQuery = string.Empty;
     [ObservableProperty] private string _customDescription = string.Empty;
     [ObservableProperty] private string _customPrice = "0";
     [ObservableProperty] private string _customQty = "1";
     [ObservableProperty] private string _paymentMethod = "Cash";
+    [ObservableProperty] private string _payMode = "Full";
+    [ObservableProperty] private string _depositAmount = string.Empty;
+    [ObservableProperty] private string _customDiscountPercent = string.Empty;
     [ObservableProperty] private string _providerReference = string.Empty;
     [ObservableProperty] private string _notes = string.Empty;
     [ObservableProperty] private string _cartTotalLabel = "Total $0.00";
+    [ObservableProperty] private string _selectedRepairLabel = "No repair selected — retail cart mode.";
     [ObservableProperty] private string _statusMessage = "Loading POS…";
     [ObservableProperty] private string _providerHint = string.Empty;
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private PosPayableRepairDto? _selectedRepair;
+    [ObservableProperty] private PosDiscountOption? _selectedDiscount;
 
     public PosViewModel(ApiClient api) => _api = api;
 
@@ -676,6 +695,8 @@ public partial class PosViewModel : ObservableObject
                 StatusMessage = "POS is disabled. Ask an admin to enable it under Settings → POS.";
                 return;
             }
+            _presets = settings.DiscountPresets ?? Array.Empty<PosDiscountPresetDto>();
+            ReloadDiscountOptions();
             ProviderHint = settings.Provider switch
             {
                 "ManualEftpos" => "Manual EFTPOS: process the card on your terminal, then enter the approval/RRN.",
@@ -686,6 +707,7 @@ public partial class PosViewModel : ObservableObject
                 _ => "Cash or record-only mode. Change provider under Settings → POS."
             };
             StatusMessage = $"POS ready · provider {settings.Provider}";
+            await SearchRepairsAsync();
         }
         catch (Exception ex)
         {
@@ -694,7 +716,35 @@ public partial class PosViewModel : ObservableObject
         }
     }
 
+    private void ReloadDiscountOptions()
+    {
+        DiscountOptions.Clear();
+        DiscountOptions.Add(new PosDiscountOption { Key = null, Name = "None", Percent = 0 });
+        foreach (var p in _presets.Where(p => p.IsActive).OrderBy(p => p.Name))
+            DiscountOptions.Add(new PosDiscountOption { Key = p.Key, Name = p.Name, Percent = p.Percent });
+        SelectedDiscount = DiscountOptions.FirstOrDefault();
+    }
+
     partial void OnProductQueryChanged(string value) => ApplyProductFilter();
+
+    partial void OnSelectedRepairChanged(PosPayableRepairDto? value)
+    {
+        if (value is null)
+        {
+            SelectedRepairLabel = "No repair selected — retail cart mode.";
+            RecalcTotal();
+            return;
+        }
+        SelectedRepairLabel =
+            $"{value.TicketNumber} · {value.CustomerName} · balance ${value.Balance:0.00}" +
+            (string.IsNullOrWhiteSpace(value.DeviceLabel) ? "" : $" · {value.DeviceLabel}");
+        RecalcTotal();
+    }
+
+    partial void OnSelectedDiscountChanged(PosDiscountOption? value) => RecalcTotal();
+    partial void OnCustomDiscountPercentChanged(string value) => RecalcTotal();
+    partial void OnPayModeChanged(string value) => RecalcTotal();
+    partial void OnDepositAmountChanged(string value) => RecalcTotal();
 
     [RelayCommand]
     private async Task RefreshProductsAsync()
@@ -706,6 +756,31 @@ public partial class PosViewModel : ObservableObject
             ApplyProductFilter();
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task SearchRepairsAsync()
+    {
+        Error = null;
+        try
+        {
+            var q = string.IsNullOrWhiteSpace(RepairQuery) ? "" : $"?q={Uri.EscapeDataString(RepairQuery.Trim())}";
+            var list = await _api.GetAsync<IReadOnlyList<PosPayableRepairDto>>($"api/pos/repairs-payable{q}");
+            PayableRepairs.Clear();
+            foreach (var r in list) PayableRepairs.Add(r);
+            if (SelectedRepair is not null && PayableRepairs.All(r => r.RepairTicketId != SelectedRepair.RepairTicketId))
+                SelectedRepair = null;
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private void ClearRepair()
+    {
+        SelectedRepair = null;
+        PayableRepairs.Clear();
+        PayMode = "Full";
+        DepositAmount = string.Empty;
     }
 
     private void ApplyProductFilter()
@@ -723,12 +798,16 @@ public partial class PosViewModel : ObservableObject
 
     public void AddProduct(InventoryListItemDto item)
     {
+        if (SelectedRepair is not null)
+        {
+            Error = "Clear the imported repair before adding retail stock lines.";
+            return;
+        }
         var existing = Cart.FirstOrDefault(c => c.InventoryItemId == item.Id);
         if (existing is not null)
         {
             existing.Quantity += 1;
             RecalcTotal();
-            // Force ListView refresh of label
             var idx = Cart.IndexOf(existing);
             Cart.RemoveAt(idx);
             Cart.Insert(idx, new PosCartLine
@@ -763,6 +842,11 @@ public partial class PosViewModel : ObservableObject
     private void AddCustomLine()
     {
         Error = null;
+        if (SelectedRepair is not null)
+        {
+            Error = "Clear the imported repair before adding retail lines.";
+            return;
+        }
         if (string.IsNullOrWhiteSpace(CustomDescription))
         {
             Error = "Custom line needs a description.";
@@ -797,36 +881,127 @@ public partial class PosViewModel : ObservableObject
         RecalcTotal();
     }
 
+    private decimal ResolveDiscountPercent()
+    {
+        if (decimal.TryParse(CustomDiscountPercent, out var custom) && custom >= 0)
+            return Math.Clamp(custom, 0m, 100m);
+        return SelectedDiscount?.Percent ?? 0m;
+    }
+
     private void RecalcTotal()
     {
-        var total = Cart.Sum(c => c.Quantity * c.UnitPrice);
-        CartTotalLabel = $"Total ${total:0.00}";
+        var discountPct = ResolveDiscountPercent();
+        if (SelectedRepair is not null)
+        {
+            var bal = SelectedRepair.Balance;
+            var disc = Math.Round(bal * (discountPct / 100m), 2, MidpointRounding.AwayFromZero);
+            var due = Math.Max(0m, bal - disc);
+            if (string.Equals(PayMode, "Deposit", StringComparison.OrdinalIgnoreCase)
+                && decimal.TryParse(DepositAmount, out var dep) && dep > 0)
+            {
+                CartTotalLabel = $"Repair deposit ${dep:0.00} (bal ${due:0.00} after {discountPct:0.##}% off)";
+            }
+            else
+            {
+                CartTotalLabel = discountPct > 0
+                    ? $"Repair due ${due:0.00} (−{discountPct:0.##}% / −${disc:0.00})"
+                    : $"Repair due ${due:0.00}";
+            }
+            return;
+        }
+
+        var gross = Cart.Sum(c => c.Quantity * c.UnitPrice);
+        var discount = Math.Round(gross * (discountPct / 100m), 2, MidpointRounding.AwayFromZero);
+        var total = Math.Max(0m, gross - discount);
+        CartTotalLabel = discountPct > 0
+            ? $"Total ${total:0.00} (−{discountPct:0.##}% / −${discount:0.00})"
+            : $"Total ${total:0.00}";
     }
 
     [RelayCommand]
     private async Task CompleteSaleAsync()
     {
         Error = null;
-        if (Cart.Count == 0)
+        var isRepair = SelectedRepair is not null;
+        if (!isRepair && Cart.Count == 0)
         {
             Error = "Cart is empty.";
             return;
         }
+
         try
         {
+            var discountPct = ResolveDiscountPercent();
+            string? presetKey = SelectedDiscount?.Key;
+            decimal? discountPercent = null;
+            string? discountLabel = SelectedDiscount?.Name;
+            if (decimal.TryParse(CustomDiscountPercent, out var customPct) && customPct >= 0)
+            {
+                discountPercent = Math.Clamp(customPct, 0m, 100m);
+                if (presetKey is null || !string.Equals(SelectedDiscount?.Name, "Other (custom %)", StringComparison.OrdinalIgnoreCase)
+                    && discountPercent != SelectedDiscount?.Percent)
+                {
+                    // Prefer explicit custom %; keep preset key if Other selected.
+                    if (presetKey is null)
+                        discountLabel = discountPercent > 0 ? $"Discount {discountPercent:0.##}%" : null;
+                }
+            }
+            else if (presetKey is not null)
+            {
+                discountPercent = SelectedDiscount!.Percent;
+            }
+
+            if (discountPct <= 0)
+            {
+                presetKey = null;
+                discountPercent = null;
+                discountLabel = null;
+            }
+
+            var isDeposit = isRepair && string.Equals(PayMode, "Deposit", StringComparison.OrdinalIgnoreCase);
+            decimal? amountToPay = null;
+            if (isDeposit)
+            {
+                if (!decimal.TryParse(DepositAmount, out var dep) || dep <= 0)
+                {
+                    Error = "Enter a deposit amount.";
+                    return;
+                }
+                amountToPay = dep;
+            }
+
             var request = new CreatePosSaleRequest(
                 null,
                 PaymentMethod,
                 string.IsNullOrWhiteSpace(ProviderReference) ? null : ProviderReference.Trim(),
                 string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim(),
-                Cart.Select(c => new PosSaleLineInputDto(c.InventoryItemId, c.Description, c.Quantity, c.UnitPrice)).ToList());
+                isRepair
+                    ? Array.Empty<PosSaleLineInputDto>()
+                    : Cart.Select(c => new PosSaleLineInputDto(c.InventoryItemId, c.Description, c.Quantity, c.UnitPrice)).ToList(),
+                isRepair ? SelectedRepair!.RepairTicketId : null,
+                amountToPay,
+                isDeposit,
+                presetKey,
+                discountPercent,
+                discountLabel);
+
             var sale = await _api.PostAsync<CreatePosSaleRequest, PosSaleDetailDto>("api/pos/sales", request);
-            StatusMessage = $"Sale {sale.Number} · invoice {sale.InvoiceNumber} · ${sale.Total:0.00} ({sale.PaymentMethod})";
+            var discNote = sale.DiscountAmount > 0 ? $" · −${sale.DiscountAmount:0.00} disc" : "";
+            var depNote = sale.IsDeposit ? " · deposit" : "";
+            var repairNote = sale.RepairTicketNumber is not null ? $" · {sale.RepairTicketNumber}" : "";
+            StatusMessage =
+                $"Sale {sale.Number} · invoice {sale.InvoiceNumber}{repairNote} · ${sale.Total:0.00} ({sale.PaymentMethod}){discNote}{depNote}";
             Cart.Clear();
             ProviderReference = Notes = string.Empty;
+            CustomDiscountPercent = string.Empty;
+            DepositAmount = string.Empty;
+            PayMode = "Full";
+            SelectedDiscount = DiscountOptions.FirstOrDefault();
+            SelectedRepair = null;
             RecalcTotal();
             await RefreshProductsAsync();
             await RefreshSalesAsync();
+            await SearchRepairsAsync();
         }
         catch (Exception ex) { Error = ex.Message; }
     }
@@ -844,7 +1019,6 @@ public partial class PosViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            // Disabled POS returns 403 — surface once
             if (Error is null) Error = ex.Message;
         }
     }

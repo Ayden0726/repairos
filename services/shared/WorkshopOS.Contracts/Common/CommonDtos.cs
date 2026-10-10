@@ -3,9 +3,9 @@ namespace WorkshopOS.Contracts.Common;
 public static class ProductVersions
 {
     /// <summary>Informational API / product version shipped with this tree.</summary>
-    public const string Api = "1.2.29";
-    /// <summary>Minimum Windows client recommended for current API surface (POS + module gates).</summary>
-    public const string ClientMinimum = "1.2.29";
+    public const string Api = "1.2.30";
+    /// <summary>Minimum Windows client recommended for current API surface (POS repair payoffs + discounts).</summary>
+    public const string ClientMinimum = "1.2.30";
 }
 
 public sealed record HealthDto(
@@ -27,7 +27,9 @@ public sealed record SystemInfoDto(
     string Status,
     DateTimeOffset ServerTimeUtc,
     IReadOnlyList<string> UpdateCommands,
-    IReadOnlyList<string> RestartCommands);
+    IReadOnlyList<string> RestartCommands,
+    /// <summary>True when the caller is Owner or Administrator (may restart if RestartAllowed).</summary>
+    bool CanRestart = false);
 
 public sealed record RestartResultDto(
     bool Restarted,

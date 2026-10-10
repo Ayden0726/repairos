@@ -160,6 +160,10 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _deviceBrand = string.Empty;
     [ObservableProperty] private string _deviceModel = string.Empty;
     [ObservableProperty] private string _deviceSerial = string.Empty;
+    /// <summary>Catalogue device type: Phone, Tablet, Laptop, PC, Other.</summary>
+    [ObservableProperty] private string _selectedDeviceType = "Phone";
+    public ObservableCollection<string> DeviceTypes { get; } = new(["Phone", "Tablet", "Laptop", "PC", "Other"]);
+    public Action<string>? DeviceTypeChanged { get; set; }
     [ObservableProperty] private string _issue = string.Empty;
     [ObservableProperty] private string _customerNotes = string.Empty;
     [ObservableProperty] private string _internalNotes = string.Empty;
@@ -249,6 +253,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
         if (!_applyingJobDefaults) MarkupOverridden = true;
     }
 
+    partial void OnSelectedDeviceTypeChanged(string value) =>
+        DeviceTypeChanged?.Invoke(value);
+
     private void UpdatePermissionFlags()
     {
         var perms = _session.User?.Permissions ?? Array.Empty<string>();
@@ -298,6 +305,8 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 DeviceBrand = ExtractBrand(repair.DeviceLabel);
                 DeviceModel = ExtractModel(repair.DeviceLabel);
                 Issue = repair.ReportedIssue ?? string.Empty;
+                SelectedDeviceType = ServiceCataloguePickerSession.ToCatalogueDeviceType(repair.DeviceCategory)
+                    ?? "Other";
             }
             else if (args?.CustomerId is Guid)
             {
@@ -406,6 +415,17 @@ public partial class QuoteBuilderViewModel : ObservableObject
         DeviceBrand = q.DeviceBrand ?? string.Empty;
         DeviceModel = q.DeviceModel ?? string.Empty;
         DeviceSerial = q.DeviceSerial ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(q.DeviceCategory))
+        {
+            SelectedDeviceType = q.DeviceCategory.Trim() switch
+            {
+                "Phone" or "phone" => "Phone",
+                "Tablet" or "tablet" => "Tablet",
+                "Laptop" or "laptop" or "Mac" => "Laptop",
+                "PC" or "pc" or "Desktop" or "GamingPc" => "PC",
+                _ => "Other"
+            };
+        }
         Issue = q.Issue ?? string.Empty;
         CustomerNotes = q.CustomerNotes ?? string.Empty;
         InternalNotes = q.InternalNotes ?? string.Empty;
@@ -723,17 +743,21 @@ public partial class QuoteBuilderViewModel : ObservableObject
             var markup = (decimal)JobMarkupPercent;
             if (QuoteId is Guid id)
             {
+                var deviceCat = string.Equals(SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
+                    ? null : SelectedDeviceType;
                 var updated = await _api.PutAsync<UpdateQuoteRequest, QuoteDetailDto>($"api/quotes/{id}",
                     new UpdateQuoteRequest(Issue, CustomerNotes, InternalNotes, DeviceBrand, DeviceModel, DeviceSerial,
-                        null, null, lines, "Save", labour, markup));
+                        deviceCat, null, lines, "Save", labour, markup));
                 await LoadQuoteAsync(updated.Id);
                 StatusMessage = "Quote saved.";
             }
             else
             {
+                var deviceCat = string.Equals(SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
+                    ? null : SelectedDeviceType;
                 var created = await _api.PostAsync<CreateQuoteRequest, QuoteDetailDto>("api/quotes",
                     new CreateQuoteRequest(customerId, RepairTicketId, Issue, CustomerNotes, InternalNotes,
-                        DeviceBrand, DeviceModel, DeviceSerial, null, DefaultValidityDays, lines,
+                        DeviceBrand, DeviceModel, DeviceSerial, deviceCat, DefaultValidityDays, lines,
                         null, labour, markup));
                 await LoadQuoteAsync(created.Id);
                 StatusMessage = $"Created {created.Number}";

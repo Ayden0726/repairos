@@ -21,10 +21,12 @@
       </Grid>
       <TextBlock Text="{x:Bind ViewModel.Hint, Mode=OneWay}"
                  Foreground="{ThemeResource WorkshopTextSecondaryBrush}" TextWrapping="Wrap" />
-      <TextBox Header="Email" Text="{x:Bind ViewModel.Email, Mode=TwoWay}"
+      <TextBox x:Name="EmailBox" Header="Email" Text="{x:Bind ViewModel.Email, Mode=TwoWay}"
                KeyDown="LoginField_KeyDown" />
-      <PasswordBox Header="Password" PasswordChanged="Password_PasswordChanged"
+      <PasswordBox x:Name="PasswordBox" Header="Password" PasswordChanged="Password_PasswordChanged"
                    KeyDown="LoginField_KeyDown" />
+      <CheckBox Content="Remember email on this PC"
+                IsChecked="{x:Bind ViewModel.RememberEmail, Mode=TwoWay}" />
       <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
                  Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
       <Button Content="Sign in" Command="{x:Bind ViewModel.LoginCommand}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />

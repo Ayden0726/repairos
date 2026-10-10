@@ -9,6 +9,8 @@ public class PosSale : SoftDeleteEntity
     public Guid CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;
     public Guid CreatedById { get; set; }
+    public Guid? RepairTicketId { get; set; }
+    public RepairTicket? RepairTicket { get; set; }
     public string Status { get; set; } = "Completed"; // Completed, Voided
     public string PaymentMethod { get; set; } = "Cash"; // Cash, Eftpos, Card, BankTransfer, Other
     public string PaymentProvider { get; set; } = "None"; // None, ManualEftpos, Tyro, Square, StripeTerminal, Linkly
@@ -18,6 +20,10 @@ public class PosSale : SoftDeleteEntity
     public decimal GstAmount { get; set; }
     public decimal Total { get; set; }
     public decimal AmountPaid { get; set; }
+    public string? DiscountLabel { get; set; }
+    public decimal DiscountPercent { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public bool IsDeposit { get; set; }
     public string? Notes { get; set; }
     public ICollection<PosSaleLine> Lines { get; set; } = new List<PosSaleLine>();
 }
