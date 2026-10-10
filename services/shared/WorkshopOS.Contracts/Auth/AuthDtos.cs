@@ -42,7 +42,8 @@ public sealed record UserDto(
     bool IsOwner,
     IReadOnlyList<string> Permissions,
     string Theme,
-    BusinessProfileDto? Business);
+    BusinessProfileDto? Business,
+    bool MustResetPassword = false);
 
 public sealed record BusinessProfileDto(
     string Name,

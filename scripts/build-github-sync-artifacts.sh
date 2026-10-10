@@ -38,7 +38,7 @@ rm -f "$FLAT"
 
 BUNDLE="$OUT/repairos-main.bundle"
 rm -f "$BUNDLE"
-git -C "$ROOT" bundle create "$BUNDLE" main
+git -C "$ROOT" bundle create "$BUNDLE" HEAD
 
 cp -f "$ZIP" "$FLAT" "$BUNDLE" "$SERVE/"
 # Prefer flat zip as the canonical download name on the HTTP server
@@ -50,7 +50,7 @@ cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
-Agent main tip: $(git -C "$ROOT" rev-parse HEAD)  (client 1.2.30 — POS repair payoffs, deposits, discount presets)
+Agent tip: $(git -C "$ROOT" rev-parse HEAD)  (client 1.2.32 — device catalogue 721 phones, staff temp passwords, ticket parts, POS)
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to GitHub.
@@ -84,16 +84,16 @@ PowerShell (ASCII-safe):
   git add -A
   git status
   # Expect: Version 1.2.25 + WindowsStartupService.cs + searchable Service ComboBoxes
-  git commit -m "Client 1.2.25: Calendar month/week bookings + schedule API"
+  git commit -m "Client 1.2.32: Calendar month/week bookings + schedule API"
   git remote set-url origin https://github.com/Ayden0726/repairos.git
   git push -u origin main
 
 Windows client rebuild (after overlay + delete above):
 
-  powershell -ExecutionPolicy Bypass -File .\\scripts\\rebuild-client-1.2.25.ps1
+  powershell -ExecutionPolicy Bypass -File .\\scripts\\rebuild-client-1.2.32.ps1
 
   # or manually:
-  # powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.25
+  # powershell -ExecutionPolicy Bypass -File .\\packaging\\build-client.ps1 -Configuration Release -Version 1.2.32
 
 Then update SERVER (WSL):
 
@@ -112,7 +112,7 @@ WSL / bash:
   rm -f apps/windows-client/WorkshopOS.Client/Views/ServicePickerControl.xaml \\
         apps/windows-client/WorkshopOS.Client/Views/ServicePickerControl.xaml.cs
   rm -rf apps/windows-client/WorkshopOS.Client/obj apps/windows-client/WorkshopOS.Client/bin
-  git add -A && git commit -m "Client 1.2.25: Calendar month/week bookings + schedule API"
+  git add -A && git commit -m "Client 1.2.32: Calendar month/week bookings + schedule API"
   git push -u origin main
   chmod +x scripts/*.sh
   ./scripts/restart-workshopos.sh --update
@@ -131,12 +131,12 @@ OPTION B: git bundle
   git push origin main
 
 ────────────────────────────────────────────────────────────
-Key changes in this sync (1.2.25)
+Key changes in this sync (1.2.32)
 ────────────────────────────────────────────────────────────
   FIX Calendar blank grid: bookings list hardened + UTC query dates
   Client shows real API error detail; grid still renders on failure
-  Client / API / ClientMinVersion = 1.2.25
-  scripts/rebuild-client-1.2.25.ps1
+  Client / API / ClientMinVersion = 1.2.32
+  scripts/rebuild-client-1.2.32.ps1
 EOF
 cp -f "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" "$SERVE/"
 ls -lh "$OUT/repairos-github-sync.zip" "$OUT/repairos-main.bundle" "$SERVE/repairos-github-sync.zip"

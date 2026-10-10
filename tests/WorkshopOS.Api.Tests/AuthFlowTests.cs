@@ -102,6 +102,16 @@ public sealed class PasswordRulesTests
         var result = WorkshopOS.Application.Common.PasswordRules.Validate(password);
         (result is null).Should().Be(ok);
     }
+
+    [Fact]
+    public void GenerateTemporary_Passes_Strength_Rules()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            var pwd = WorkshopOS.Application.Common.PasswordRules.GenerateTemporary();
+            WorkshopOS.Application.Common.PasswordRules.Validate(pwd).Should().BeNull(pwd);
+        }
+    }
 }
 
 [CollectionDefinition("api")]

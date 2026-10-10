@@ -470,11 +470,13 @@ public sealed class ApiClient
                 path.Contains("/api/bookings", StringComparison.OrdinalIgnoreCase) ||
                 path.Contains("/api/roles", StringComparison.OrdinalIgnoreCase) ||
                 path.Contains("/api/users", StringComparison.OrdinalIgnoreCase) ||
-                path.Contains("/api/system", StringComparison.OrdinalIgnoreCase))
+                path.Contains("/api/system", StringComparison.OrdinalIgnoreCase) ||
+                path.Contains("/api/pos", StringComparison.OrdinalIgnoreCase))
             {
                 message =
                     "Server outdated — missing " + path
-                    + ". Force-update server: git fetch origin && git reset --hard origin/main && ./scripts/restart-workshopos.sh --update, then reconnect. "
+                    + ". In WSL: cd ~/workshopos && chmod +x scripts/*.sh && ./scripts/get-workshopos.sh --update"
+                    + " (or unzip the agent sync zip then ./scripts/restart-workshopos.sh --update). Confirm /api/health shows ApiVersion 1.2.32+, then reconnect. "
                     + message;
             }
             else if (string.IsNullOrWhiteSpace(body) || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))

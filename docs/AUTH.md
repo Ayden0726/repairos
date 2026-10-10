@@ -44,11 +44,12 @@ Minimum 10 characters, at least one upper, one lower, one digit.
 
 ### In-app reset / change (no email magic-link)
 
-- **Owner/Admin** with `staff.manage`: **Settings → Users & Roles** → select a staff user → **Reset password…** (sets a new password; revokes that user’s refresh tokens).
-- **Any signed-in user**: **Settings → App** → **Change password…** (current password + new; revokes other sessions for that user).
+- **Owner/Admin** with `staff.manage`: **Settings → Users & Roles** → create account (optional password; blank = auto-generate) or **Reset password…**. Response includes a one-time temporary password; the staff user must change it at first login (`MustResetPassword`).
+- **Any signed-in user**: **Settings → App** → **Change password…** (current password + new; revokes other sessions for that user). Forced change dialog appears after login when `MustResetPassword` is true.
 - API:
-  - `PUT /api/users/{id}/password` — body `{ "newPassword": "..." }` — requires `staff.manage` (or owner)
-  - `PUT /api/auth/password` — body `{ "currentPassword": "...", "newPassword": "..." }` — authenticated self-service
+  - `POST /api/users` — body may omit `password`; response `{ user, temporaryPassword }`
+  - `PUT /api/users/{id}/password` — body `{ "newPassword": "..." }` optional (auto-generates); response `{ user, temporaryPassword }` — requires `staff.manage` (or owner)
+  - `PUT /api/auth/password` — body `{ "currentPassword": "...", "newPassword": "..." }` — authenticated self-service (clears `MustResetPassword`)
 
 ### Emergency owner reset (server access)
 

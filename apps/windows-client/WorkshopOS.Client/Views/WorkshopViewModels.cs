@@ -243,6 +243,7 @@ public partial class NewRepairViewModel : ObservableObject
     public List<Guid> SelectedServiceIds { get; set; } = new();
     public string? ServiceNotes { get; set; }
     public string? ServicePartsNotes { get; set; }
+    public List<RepairPartSelectionDto> SelectedParts { get; set; } = new();
 
     public DeviceCategory SelectedDeviceCategory => SelectedDeviceType switch
     {
@@ -423,7 +424,8 @@ public partial class NewRepairViewModel : ObservableObject
                 null,
                 SelectedServiceIds.Count == 0 ? null : SelectedServiceIds,
                 SelectedServiceIds.Count == 0 ? null : SelectedServiceIds.Select(id =>
-                    new RepairServiceSelectionDto(id, ServiceNotes, string.IsNullOrWhiteSpace(ServicePartsNotes) ? null : ServicePartsNotes)).ToList()));
+                    new RepairServiceSelectionDto(id, ServiceNotes, string.IsNullOrWhiteSpace(ServicePartsNotes) ? null : ServicePartsNotes)).ToList(),
+                SelectedParts.Count == 0 ? null : SelectedParts));
             Created?.Invoke(repair.Id);
         }
         catch (Exception ex) { Error = ex.Message; }

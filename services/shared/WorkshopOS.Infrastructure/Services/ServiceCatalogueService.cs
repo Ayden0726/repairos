@@ -425,8 +425,96 @@ public sealed class ServiceCatalogueService : IServiceCatalogueService
             var dt = deviceType.Trim().ToLowerInvariant();
             q = q.Where(m => m.DeviceType != null && m.DeviceType.ToLower() == dt);
         }
-        var rows = await q.OrderBy(m => m.SortOrder).ThenBy(m => m.Name).ToListAsync(ct);
-        return rows.Select(m => new DeviceModelDto(m.Id, m.BrandId, m.Brand.Name, m.Name, m.DeviceType, m.SortOrder)).ToList();
+        var rows = await q.OrderBy(m => m.SortOrder).ThenBy(m => m.Name)
+            .Take(brandId is null && string.IsNullOrWhiteSpace(brandName) ? 120 : 2000)
+            .ToListAsync(ct);
+        return rows.Select(ToModelDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<DeviceModelDto>> SearchModelsAsync(
+        string? q, string? deviceType = null, string? brandName = null, string? series = null, int take = 40, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, 100);
+        var query = _db.DeviceModels.AsNoTracking().Include(m => m.Brand).Where(m => m.ArchivedAt == null);
+        if (!string.IsNullOrWhiteSpace(deviceType))
+        {
+            var dt = deviceType.Trim().ToLowerInvariant();
+            query = query.Where(m => m.DeviceType != null && m.DeviceType.ToLower() == dt);
+        }
+        if (!string.IsNullOrWhiteSpace(brandName))
+        {
+            var bn = brandName.Trim().ToLowerInvariant();
+            query = query.Where(m => m.Brand.Name.ToLower() == bn);
+        }
+        if (!string.IsNullOrWhiteSpace(series))
+        {
+            var ser = series.Trim().ToLowerInvariant();
+            query = query.Where(m => m.Series != null && m.Series.ToLower() == ser);
+        }
+
+        var needle = (q ?? string.Empty).Trim();
+        if (needle.Length == 0)
+        {
+            var popular = await query.OrderBy(m => m.SortOrder).ThenBy(m => m.Name).Take(take).ToListAsync(ct);
+            return popular.Select(ToModelDto).ToList();
+        }
+
+        var candidates = await query.OrderBy(m => m.SortOrder).ThenBy(m => m.Name).Take(4000).ToListAsync(ct);
+        var terms = Tokenize(needle);
+        return candidates
+            .Select(m => (Model: m, Score: ScoreModel(m, terms, needle)))
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Model.SortOrder)
+            .ThenBy(x => x.Model.Name)
+            .Take(take)
+            .Select(x => ToModelDto(x.Model))
+            .ToList();
+    }
+
+    private static DeviceModelDto ToModelDto(DeviceModel m) =>
+        new(m.Id, m.BrandId, m.Brand.Name, m.Name, m.DeviceType, m.SortOrder,
+            m.Series, SplitCsv(m.Aliases), m.ReleaseYear, m.IsVerified);
+
+    private static IReadOnlyList<string>? SplitCsv(string? csv)
+    {
+        if (string.IsNullOrWhiteSpace(csv)) return null;
+        var parts = csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 0 ? null : parts;
+    }
+
+    private static int ScoreModel(DeviceModel m, List<string> terms, string raw)
+    {
+        var brand = m.Brand.Name;
+        var aliases = m.Aliases ?? string.Empty;
+        var hay = $"{brand} {m.Name} {m.Series} {aliases}".ToLowerInvariant();
+        var score = 0;
+
+        if (string.Equals(m.Name, raw, StringComparison.OrdinalIgnoreCase)) score += 200;
+        else if (m.Name.Contains(raw, StringComparison.OrdinalIgnoreCase)) score += 80;
+        if (aliases.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Any(a => string.Equals(a, raw, StringComparison.OrdinalIgnoreCase)))
+            score += 160;
+        else if (aliases.Contains(raw, StringComparison.OrdinalIgnoreCase)) score += 70;
+
+        var rawLower = raw.ToLowerInvariant();
+        var compact = new string(rawLower.Where(c => !char.IsWhiteSpace(c) && c != '-' && c != '(' && c != ')').ToArray());
+        var nameCompact = new string((brand + m.Name).ToLowerInvariant().Where(c => !char.IsWhiteSpace(c) && c != '-' && c != '(' && c != ')').ToArray());
+        if (compact.Length >= 3 && nameCompact.Contains(compact, StringComparison.Ordinal)) score += 50;
+        var aliasCompact = new string(aliases.ToLowerInvariant().Where(c => !char.IsWhiteSpace(c) && c != ',').ToArray());
+        if (compact.Length >= 3 && aliasCompact.Contains(compact, StringComparison.Ordinal)) score += 90;
+
+        foreach (var t in terms)
+        {
+            if (m.Name.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 30;
+            else if (brand.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 20;
+            else if (m.Series != null && m.Series.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 18;
+            else if (aliases.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 25;
+            else if (FuzzyContains(hay, t)) score += 8;
+            else return 0;
+        }
+        if (m.IsVerified) score += 2;
+        return score;
     }
 
     private async Task<CatalogueImportResultDto> ImportSeedAsync(SeedDocument seed, bool force, Guid? actorId, CancellationToken ct)
@@ -500,6 +588,12 @@ public sealed class ServiceCatalogueService : IServiceCatalogueService
                 models.Add(existing);
             }
             existing.DeviceType = m.DeviceType;
+            existing.Series = NullIfBlank(m.Series);
+            existing.Aliases = m.Aliases is { Length: > 0 }
+                ? string.Join(',', m.Aliases.Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+                : null;
+            existing.ReleaseYear = m.ReleaseYear;
+            existing.IsVerified = m.Verified;
             existing.SortOrder = m.SortOrder;
             existing.IsSystem = true;
             existing.UpdatedAt = DateTimeOffset.UtcNow;
@@ -766,6 +860,10 @@ public sealed class ServiceCatalogueService : IServiceCatalogueService
         public string Name { get; set; } = "";
         public string? DeviceType { get; set; }
         public int SortOrder { get; set; }
+        public string? Series { get; set; }
+        public string[]? Aliases { get; set; }
+        public int? ReleaseYear { get; set; }
+        public bool Verified { get; set; } = true;
     }
     private sealed class SeedService
     {

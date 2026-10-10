@@ -135,5 +135,16 @@ public sealed class CatalogueController : ControllerBase
         CancellationToken ct = default) =>
         _catalogue.ListModelsAsync(brandId, deviceType, brand, ct);
 
+    [HttpGet("models/search")]
+    [Authorize(Policy = "perm:pricing.view")]
+    public Task<IReadOnlyList<DeviceModelDto>> SearchModels(
+        [FromQuery] string? q = null,
+        [FromQuery] string? deviceType = null,
+        [FromQuery] string? brand = null,
+        [FromQuery] string? series = null,
+        [FromQuery] int take = 40,
+        CancellationToken ct = default) =>
+        _catalogue.SearchModelsAsync(q, deviceType, brand, series, take, ct);
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

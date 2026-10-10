@@ -290,10 +290,12 @@
                   <TextBlock Text="New account" FontWeight="SemiBold" FontSize="16" />
                   <TextBox x:Name="NewDisplayNameBox" Header="Display name" />
                   <TextBox x:Name="NewEmailBox" Header="Email" />
-                  <PasswordBox x:Name="NewPasswordBox" Header="Password (min 10, upper/lower/digit)" />
+                  <PasswordBox x:Name="NewPasswordBox" Header="Temp password (optional — leave blank to auto-generate)" />
                   <TextBox x:Name="NewPhoneBox" Header="Phone (optional)" />
                   <ComboBox x:Name="NewRoleCombo" Header="Role" DisplayMemberPath="DisplayLabel"
                             HorizontalAlignment="Stretch" PlaceholderText="Select a role" />
+                  <TextBlock Text="New staff get a temporary password and must change it at first login."
+                             FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
                   <TextBlock x:Name="RolesHintText" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
                   <Button x:Name="CreateUserButton" Content="Create account" Click="CreateUser_Click"
                           Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />

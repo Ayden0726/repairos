@@ -64,6 +64,9 @@ public sealed partial class QuoteBuilderPage : Page
             ? "Showing all services — pick a device type to narrow the catalogue."
             : $"Showing {_picker.DeviceTypeFilter} services only.";
 
+        QuoteDeviceSearchResultsBox.ItemsSource = null;
+        QuoteDeviceSearchResultsBox.ItemsSource = _picker.ModelSearchResults;
+
         _suppressBrandEvent = true;
         try
         {
@@ -73,12 +76,34 @@ public sealed partial class QuoteBuilderPage : Page
             QuoteBrandBox.ItemsSource = _picker.BrandNames;
             QuoteModelBox.ItemsSource = null;
             QuoteModelBox.ItemsSource = _picker.ModelNames;
-            if (!string.IsNullOrWhiteSpace(brandText)) QuoteBrandBox.Text = brandText;
+            if (!string.IsNullOrWhiteSpace(_picker.SelectedBrandName))
+                QuoteBrandBox.Text = _picker.SelectedBrandName;
+            else if (!string.IsNullOrWhiteSpace(brandText)) QuoteBrandBox.Text = brandText;
             else if (!string.IsNullOrWhiteSpace(ViewModel.DeviceBrand)) QuoteBrandBox.Text = ViewModel.DeviceBrand;
-            if (!string.IsNullOrWhiteSpace(modelText)) QuoteModelBox.Text = modelText;
+            if (!string.IsNullOrWhiteSpace(_picker.SelectedModelName))
+                QuoteModelBox.Text = _picker.SelectedModelName;
+            else if (!string.IsNullOrWhiteSpace(modelText)) QuoteModelBox.Text = modelText;
             else if (!string.IsNullOrWhiteSpace(ViewModel.DeviceModel)) QuoteModelBox.Text = ViewModel.DeviceModel;
         }
         finally { _suppressBrandEvent = false; }
+    }
+
+    private async void QuoteDeviceSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        await _picker.SearchModelsDebouncedAsync(QuoteDeviceSearchBox.Text);
+        QuoteDeviceSearchResultsBox.ItemsSource = null;
+        QuoteDeviceSearchResultsBox.ItemsSource = _picker.ModelSearchResults;
+    }
+
+    private async void QuoteDeviceSearchResultsBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        if (QuoteDeviceSearchResultsBox.SelectedItem is not DeviceModelPickRow row) return;
+        await _picker.ApplyModelPickAsync(row);
+        ViewModel.DeviceBrand = row.BrandName;
+        ViewModel.DeviceModel = row.Name;
+        SyncPickerUi();
     }
 
     private async Task ApplyDeviceTypeAsync(string? deviceTypeLabel)

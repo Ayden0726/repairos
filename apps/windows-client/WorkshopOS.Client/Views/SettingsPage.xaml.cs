@@ -790,6 +790,8 @@ public sealed partial class SettingsPage : Page
                 NewEmailBox.Text = string.Empty;
                 NewPasswordBox.Password = string.Empty;
                 NewPhoneBox.Text = string.Empty;
+                if (!string.IsNullOrWhiteSpace(Users.LastTemporaryPassword))
+                    await ShowTemporaryPasswordAsync("Temporary password", Users.LastTemporaryPassword);
             }
             await RefreshUsersUiAsync();
             UsersStatusText.Text = Users.Status ?? UsersStatusText.Text;
@@ -800,6 +802,23 @@ public sealed partial class SettingsPage : Page
         {
             CreateUserButton.IsEnabled = true;
         }
+    }
+
+    private async Task ShowTemporaryPasswordAsync(string title, string temporaryPassword)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = new TextBlock
+            {
+                Text = $"Give this password to the staff member. They must change it when they first sign in.\n\n{temporaryPassword}",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            },
+            CloseButtonText = "Done",
+            XamlRoot = XamlRoot
+        };
+        await dialog.ShowAsync();
     }
 
     private async void SaveUser_Click(object sender, RoutedEventArgs e)
@@ -819,12 +838,12 @@ public sealed partial class SettingsPage : Page
         if (Users.SelectedUser is null) return;
         UsersErrorText.Text = string.Empty;
 
-        var newBox = new PasswordBox { Header = "New password (min 10, upper/lower/digit)", Width = 320 };
-        var confirmBox = new PasswordBox { Header = "Confirm new password", Width = 320 };
+        var newBox = new PasswordBox { Header = "Temp password (optional — leave blank to auto-generate)", Width = 320 };
+        var confirmBox = new PasswordBox { Header = "Confirm (if you typed one)", Width = 320 };
         var panel = new StackPanel { Spacing = 12 };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Set a new password for {Users.SelectedUser.DisplayName} ({Users.SelectedUser.Email}).",
+            Text = $"Issue a temporary password for {Users.SelectedUser.DisplayName} ({Users.SelectedUser.Email}). They must change it at next login.",
             TextWrapping = TextWrapping.Wrap
         });
         panel.Children.Add(newBox);
@@ -844,16 +863,18 @@ public sealed partial class SettingsPage : Page
 
         var pwd = newBox.Password ?? string.Empty;
         var confirm = confirmBox.Password ?? string.Empty;
-        if (!string.Equals(pwd, confirm, StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(pwd) && !string.Equals(pwd, confirm, StringComparison.Ordinal))
         {
             UsersErrorText.Text = "New password and confirmation do not match.";
             return;
         }
 
-        await Users.ResetPasswordCommand.ExecuteAsync(pwd);
+        await Users.ResetPasswordCommand.ExecuteAsync(string.IsNullOrWhiteSpace(pwd) ? null : pwd);
         UsersStatusText.Text = Users.Status ?? UsersStatusText.Text;
         if (!string.IsNullOrWhiteSpace(Users.Error))
             UsersErrorText.Text = Users.Error;
+        else if (!string.IsNullOrWhiteSpace(Users.LastTemporaryPassword))
+            await ShowTemporaryPasswordAsync("Temporary password", Users.LastTemporaryPassword);
     }
 
     private async void ChangeOwnPassword_Click(object sender, RoutedEventArgs e)

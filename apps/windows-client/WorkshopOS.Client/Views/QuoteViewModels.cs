@@ -579,12 +579,11 @@ public partial class QuoteBuilderViewModel : ObservableObject
             && Lines[0].ServicePricingId is null)
             Lines.Clear();
 
-        decimal labour = 0m;
+        // Multi-service jobs: one labour/service fee for the ticket + parts on their own lines.
         CatalogueServiceDto? first = null;
         foreach (var svc in services)
         {
             first ??= svc;
-            labour += svc.DefaultLabourFee + svc.ServiceFee;
             var line = new QuoteLineDraft
             {
                 Type = "SERVICE",
@@ -595,7 +594,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
             Lines.Add(line);
         }
         if (first is not null && !LabourOverridden)
-            SetJobLabourFromSettings((double)labour);
+            SetJobLabourFromSettings((double)(first.DefaultLabourFee + first.ServiceFee));
         if (first?.DefaultPartMarkupPercent is decimal m && !MarkupOverridden)
             SetJobMarkupFromSettings((double)m);
         if (string.IsNullOrWhiteSpace(Issue))

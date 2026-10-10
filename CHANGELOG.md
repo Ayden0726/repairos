@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.32 — 2026-10-10
+
+### Added
+- **Device model database**: seed catalogue `v2-device-catalogue-500` with **721 phone** and **19 tablet** marketing-name records across 30 phone brands (Apple, Samsung, Google, Motorola, OPPO, Xiaomi/Redmi/POCO, OnePlus, Huawei, HONOR, vivo, realme, Nokia/HMD, Sony, ASUS, Nothing, ZTE/nubia/RedMagic, plus AU-common lines)
+- Device model fields: `Series`, `Aliases`, `ReleaseYear`, `IsVerified` (migration `DeviceModelCatalogueFields`)
+- Server-side model search `GET /api/catalogue/models/search` (aliases, abbreviations like `13 PM` / `S22U`, known codes like `SM-S908` / `A2484`)
+- New Ticket + Quote Builder: searchable device model picker; brand dropdown loads models; **Unknown / Other Device** always available
+- Specs and unverified inventable model numbers are intentionally omitted — only marketing names + known aliases/codes
+
+### Changed
+- API / client version `1.2.32` (ClientMinVersion `1.2.32`)
+
+## 1.2.31 — 2026-10-10
+
+### Added
+- **Staff temp passwords**: creating or resetting a staff account issues a temporary password; `MustResetPassword` forces a change dialog at first login
+- **Ticket inventory parts**: New Ticket can search stock and attach required parts (`SelectedParts` on `POST /api/repairs`)
+- Create-staff API returns `{ user, temporaryPassword }`; reset-password returns the same shape
+
+### Changed
+- Multi-service tickets/quotes charge the labour/service fee **once** (first service) plus parts — no longer sums labour per service line
+- POS 404 guidance points at server update + `/api/health` ApiVersion; `get-workshopos.sh` auto `chmod +x scripts/*.sh`
+- API / client version `1.2.31` (ClientMinVersion `1.2.31`)
+
 ## 1.2.30 — 2026-10-09
 
 ### Added

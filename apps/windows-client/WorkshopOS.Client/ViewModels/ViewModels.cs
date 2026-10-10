@@ -320,7 +320,7 @@ public partial class LoginViewModel : ObservableObject
         }
     }
 
-    public Action? OnLoggedIn { get; set; }
+    public Func<Task>? OnLoggedIn { get; set; }
     /// <summary>True when email was prefilled so the login page can focus the password box.</summary>
     public bool HasPrefillEmail => !string.IsNullOrWhiteSpace(Email);
 
@@ -335,7 +335,8 @@ public partial class LoginViewModel : ObservableObject
         {
             _settings.RememberEmail = RememberEmail;
             await _api.LoginAsync(Email.Trim(), Password);
-            OnLoggedIn?.Invoke();
+            if (OnLoggedIn is not null)
+                await OnLoggedIn();
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { IsBusy = false; }

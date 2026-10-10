@@ -42,4 +42,28 @@ public static class PasswordRules
             return "Password must include upper, lower and a number.";
         return null;
     }
+
+    /// <summary>Readable temporary password that always passes <see cref="Validate"/>.</summary>
+    public static string GenerateTemporary()
+    {
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string lower = "abcdefghijkmnopqrstuvwxyz";
+        const string digits = "23456789";
+        var bytes = new byte[12];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        var chars = new char[12];
+        chars[0] = upper[bytes[0] % upper.Length];
+        chars[1] = lower[bytes[1] % lower.Length];
+        chars[2] = digits[bytes[2] % digits.Length];
+        var all = upper + lower + digits;
+        for (var i = 3; i < chars.Length; i++)
+            chars[i] = all[bytes[i] % all.Length];
+        // shuffle so required chars are not always prefix
+        for (var i = chars.Length - 1; i > 0; i--)
+        {
+            var j = bytes[i % bytes.Length] % (i + 1);
+            (chars[i], chars[j]) = (chars[j], chars[i]);
+        }
+        return new string(chars) + "!";
+    }
 }

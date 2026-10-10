@@ -274,7 +274,8 @@ public sealed class AuthService : IAuthService
             : user.Role.Permissions.Select(p => p.PermissionKey).Distinct().ToList();
 
     private static UserDto ToUserDto(AppUser user, IReadOnlyList<string> perms, BusinessProfileDto? business) =>
-        new(user.Id, user.Email, user.DisplayName, user.Role.Key, user.Role.Name, user.IsOwner, perms, user.Theme, business);
+        new(user.Id, user.Email, user.DisplayName, user.Role.Key, user.Role.Name, user.IsOwner, perms, user.Theme, business,
+            user.MustResetPassword);
 }
 
 public sealed class SettingsService : ISettingsService
@@ -627,7 +628,7 @@ public sealed class StaffService : IStaffService
         return users.Select(ToDto).ToList();
     }
 
-    public async Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task<CreateStaffUserResponse> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
     {
         var email = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
         var display = (request.DisplayName ?? string.Empty).Trim();
@@ -638,7 +639,10 @@ public sealed class StaffService : IStaffService
         if (string.IsNullOrWhiteSpace(roleKey) || roleKey == "owner")
             throw new ValidationAppException("Choose a role other than Owner. The shop owner is created during setup.");
 
-        var problem = PasswordRules.Validate(request.Password);
+        var temporaryPassword = string.IsNullOrWhiteSpace(request.Password)
+            ? PasswordRules.GenerateTemporary()
+            : request.Password.Trim();
+        var problem = PasswordRules.Validate(temporaryPassword);
         if (problem is not null) throw new ValidationAppException(problem);
 
         if (await _db.Users.AnyAsync(u => u.NormalizedEmail == email.ToUpperInvariant() && u.ArchivedAt == null, ct))
@@ -665,13 +669,15 @@ public sealed class StaffService : IStaffService
             Role = role,
             LocationId = locationId,
             IsOwner = false,
-            Status = UserStatus.Active
+            Status = UserStatus.Active,
+            MustResetPassword = true
         };
-        user.PasswordHash = _tokens.HashPassword(user, request.Password);
+        user.PasswordHash = _tokens.HashPassword(user, temporaryPassword);
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(actorId, "staff.create", "User", user.Id.ToString(), newValue: new { user.Email, role.Key }, ct: ct);
-        return ToDto(user);
+        await _audit.WriteAsync(actorId, "staff.create", "User", user.Id.ToString(),
+            newValue: new { user.Email, role.Key, mustResetPassword = true }, ct: ct);
+        return new CreateStaffUserResponse(ToDto(user), temporaryPassword);
     }
 
     public async Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
@@ -712,17 +718,20 @@ public sealed class StaffService : IStaffService
         return ToDto(user);
     }
 
-    public async Task ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task<CreateStaffUserResponse> ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default)
     {
         var user = await _db.Users.Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.Id == id && u.ArchivedAt == null, ct)
             ?? throw new ValidationAppException("User was not found.");
 
-        var problem = PasswordRules.Validate(request.NewPassword);
+        var temporaryPassword = string.IsNullOrWhiteSpace(request.NewPassword)
+            ? PasswordRules.GenerateTemporary()
+            : request.NewPassword.Trim();
+        var problem = PasswordRules.Validate(temporaryPassword);
         if (problem is not null) throw new ValidationAppException(problem);
 
-        user.PasswordHash = _tokens.HashPassword(user, request.NewPassword);
-        user.MustResetPassword = false;
+        user.PasswordHash = _tokens.HashPassword(user, temporaryPassword);
+        user.MustResetPassword = true;
         user.UpdatedAt = DateTimeOffset.UtcNow;
 
         var active = await _db.RefreshTokens.Where(t => t.UserId == user.Id && t.RevokedAt == null).ToListAsync(ct);
@@ -730,12 +739,13 @@ public sealed class StaffService : IStaffService
 
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "staff.password_reset", "User", user.Id.ToString(),
-            newValue: new { user.Email }, ct: ct);
+            newValue: new { user.Email, mustResetPassword = true }, ct: ct);
+        return new CreateStaffUserResponse(ToDto(user), temporaryPassword);
     }
 
     private static StaffUserDto ToDto(AppUser user) =>
         new(user.Id, user.Email, user.DisplayName, user.Phone, user.Role.Key, user.Role.Name,
-            user.Status.ToString(), user.IsOwner, user.LastLoginAt, user.CreatedAt);
+            user.Status.ToString(), user.IsOwner, user.LastLoginAt, user.CreatedAt, user.MustResetPassword);
 }
 
 public sealed class SearchService : ISearchService

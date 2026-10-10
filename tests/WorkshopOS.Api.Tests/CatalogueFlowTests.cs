@@ -61,7 +61,23 @@ public sealed class CatalogueFlowTests
         repair.ServiceLines.Should().NotBeNull();
         repair.ServiceLines!.Should().HaveCount(2);
         repair.ServiceLines.Should().Contain(l => l.Code == "PHONE-SCREEN-REPLACE");
-        repair.EstimatedPrice.Should().Be(phoneScreen.DefaultLabourFee + pcSsd.DefaultLabourFee);
+        // Multi-service: labour/service fee once (first service) — not summed across lines.
+        var expectedLabourOnce = phoneScreen.DefaultLabourFee + phoneScreen.ServiceFee;
+        repair.EstimatedPrice.Should().Be(expectedLabourOnce);
+        repair.ServiceLines.OrderBy(l => l.SortOrder).First().LabourFee.Should().Be(expectedLabourOnce);
+        repair.ServiceLines.OrderBy(l => l.SortOrder).Skip(1).First().LabourFee.Should().Be(0m);
+
+        var part = await PostJson<InventoryListItemDto>("/api/inventory", new UpsertInventoryRequest(
+            null, "SCR-OEM-13", null, "iPhone 13 OLED", "Parts", 80m, 189m, 5, 1, 2, null, null));
+        var repairWithParts = await PostJson<RepairDetailDto>("/api/repairs", new CreateRepairRequest(
+            customer.Id, null, null, null, null,
+            "Screen with OEM part", null, null, null, null, true,
+            true, false, false, false, null, null, null, null,
+            DeviceCategory.Phone, "Apple", "iPhone 13", null, null,
+            new[] { phoneScreen.Id }, null,
+            [new RepairPartSelectionDto(part.Id, 1)]));
+        repairWithParts.EstimatedPrice.Should().Be(expectedLabourOnce + part.SellPrice);
+        repairWithParts.ServiceLines!.First().PartsJson.Should().Contain(part.Sku);
 
         var line = repair.ServiceLines.First();
         var completed = await PostJson<RepairDetailDto>(
@@ -96,8 +112,33 @@ public sealed class CatalogueFlowTests
 
         var brands = await _client.GetFromJsonAsync<DeviceBrandDto[]>("/api/catalogue/brands?deviceType=Phone");
         brands.Should().Contain(b => b.Name == "Apple");
+        brands.Should().Contain(b => b.Name == "Samsung");
+        brands.Should().Contain(b => b.Name == "Google");
         var models = await _client.GetFromJsonAsync<DeviceModelDto[]>("/api/catalogue/models?brand=Apple&deviceType=Phone");
         models.Should().Contain(m => m.Name.Contains("iPhone 13"));
+        models!.Length.Should().BeGreaterThanOrEqualTo(40);
+
+        var search13pm = await _client.GetFromJsonAsync<DeviceModelDto[]>(
+            "/api/catalogue/models/search?q=" + Uri.EscapeDataString("iPhone 13 PM") + "&deviceType=Phone");
+        search13pm.Should().Contain(m => m.Name == "iPhone 13 Pro Max");
+
+        var searchS22u = await _client.GetFromJsonAsync<DeviceModelDto[]>(
+            "/api/catalogue/models/search?q=" + Uri.EscapeDataString("S22U") + "&deviceType=Phone");
+        searchS22u.Should().Contain(m => m.Name == "Galaxy S22 Ultra");
+
+        var searchCode = await _client.GetFromJsonAsync<DeviceModelDto[]>(
+            "/api/catalogue/models/search?q=" + Uri.EscapeDataString("SM-S908") + "&deviceType=Phone");
+        searchCode.Should().Contain(m => m.Name == "Galaxy S22 Ultra");
+
+        var searchPixel = await _client.GetFromJsonAsync<DeviceModelDto[]>(
+            "/api/catalogue/models/search?q=" + Uri.EscapeDataString("Pixel 8 Pro") + "&deviceType=Phone");
+        searchPixel.Should().Contain(m => m.Name == "Pixel 8 Pro" && m.BrandName == "Google");
+
+        var applePhones = await _client.GetFromJsonAsync<DeviceModelDto[]>(
+            "/api/catalogue/models?brand=Apple&deviceType=Phone");
+        var samsungPhones = await _client.GetFromJsonAsync<DeviceModelDto[]>(
+            "/api/catalogue/models?brand=Samsung&deviceType=Phone");
+        (applePhones!.Length + samsungPhones!.Length).Should().BeGreaterThan(100);
     }
 
     private async Task EnsureSetupAndLoginAsync()

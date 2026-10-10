@@ -53,9 +53,9 @@ public interface IRoleService
 public interface IStaffService
 {
     Task<IReadOnlyList<StaffUserDto>> ListAsync(CancellationToken ct = default);
-    Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
+    Task<CreateStaffUserResponse> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
     Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
-    Task ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default);
+    Task<CreateStaffUserResponse> ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default);
 }
 
 public interface ISearchService
@@ -153,6 +153,7 @@ public interface IServiceCatalogueService
     Task DeleteBundleAsync(Guid id, Guid actorId, CancellationToken ct = default);
     Task<IReadOnlyList<DeviceBrandDto>> ListBrandsAsync(string? deviceType = null, CancellationToken ct = default);
     Task<IReadOnlyList<DeviceModelDto>> ListModelsAsync(Guid? brandId = null, string? deviceType = null, string? brandName = null, CancellationToken ct = default);
+    Task<IReadOnlyList<DeviceModelDto>> SearchModelsAsync(string? q, string? deviceType = null, string? brandName = null, string? series = null, int take = 40, CancellationToken ct = default);
 }
 
 public interface IInvoiceService

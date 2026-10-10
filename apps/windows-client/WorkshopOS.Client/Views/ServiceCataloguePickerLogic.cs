@@ -43,12 +43,16 @@ public sealed class ServiceCataloguePickerSession
     public ObservableCollection<CatalogueServiceRow> SelectedRows { get; } = new();
     public ObservableCollection<string> BrandNames { get; } = new();
     public ObservableCollection<string> ModelNames { get; } = new();
+    /// <summary>WinUI-safe rows for device model search results (DisplayMemberPath = Display).</summary>
+    public ObservableCollection<DeviceModelPickRow> ModelSearchResults { get; } = new();
 
     public string? Status { get; private set; }
     public string? Error { get; private set; }
     public string? SelectedCategoryKey { get; private set; }
     /// <summary>Catalogue device type: Phone, Tablet, Laptop, PC — or null for all.</summary>
     public string? DeviceTypeFilter { get; private set; }
+    public string? SelectedBrandName => _selectedBrandName;
+    public string? SelectedModelName { get; private set; }
 
     public event EventHandler? Changed;
 
@@ -137,8 +141,69 @@ public sealed class ServiceCataloguePickerSession
     public async Task SetBrandAsync(string? brandName)
     {
         _selectedBrandName = string.IsNullOrWhiteSpace(brandName) ? null : brandName.Trim();
+        SelectedModelName = null;
         await LoadModelsAsync(_selectedBrandName);
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SetModelName(string? modelName)
+    {
+        SelectedModelName = string.IsNullOrWhiteSpace(modelName) ? null : modelName.Trim();
+    }
+
+    /// <summary>Apply a catalogue search hit to brand + model fields.</summary>
+    public async Task ApplyModelPickAsync(DeviceModelPickRow? row)
+    {
+        if (row is null) return;
+        _selectedBrandName = row.BrandName;
+        SelectedModelName = row.Name;
+        if (!BrandNames.Contains(row.BrandName))
+            BrandNames.Add(row.BrandName);
+        await LoadModelsAsync(_selectedBrandName);
+        if (!ModelNames.Contains(row.Name))
+            ModelNames.Insert(0, row.Name);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public async Task SearchModelsDebouncedAsync(string? query)
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+        try
+        {
+            await Task.Delay(220, token);
+            await SearchModelsAsync(query);
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    public async Task SearchModelsAsync(string? query)
+    {
+        try
+        {
+            var parts = new List<string> { "take=40" };
+            if (!string.IsNullOrWhiteSpace(query))
+                parts.Add("q=" + Uri.EscapeDataString(query.Trim()));
+            if (!string.IsNullOrWhiteSpace(DeviceTypeFilter))
+                parts.Add("deviceType=" + Uri.EscapeDataString(DeviceTypeFilter));
+            if (!string.IsNullOrWhiteSpace(_selectedBrandName))
+                parts.Add("brand=" + Uri.EscapeDataString(_selectedBrandName));
+            var list = await _api.GetAsync<DeviceModelDto[]>("api/catalogue/models/search?" + string.Join('&', parts));
+            ModelSearchResults.Clear();
+            foreach (var m in list)
+                ModelSearchResults.Add(new DeviceModelPickRow(m));
+            Status = string.IsNullOrWhiteSpace(query)
+                ? $"{list.Length} popular model(s)"
+                : $"{list.Length} model match(es)";
+            Error = null;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public void SetCategory(CatalogueCategoryDto? cat)
@@ -268,20 +333,29 @@ public sealed class ServiceCataloguePickerSession
     {
         try
         {
-            var parts = new List<string>();
+            if (string.IsNullOrWhiteSpace(brandName))
+            {
+                ModelNames.Clear();
+                ModelNames.Add("Unknown / Other Device");
+                return;
+            }
+
+            var parts = new List<string> { "brand=" + Uri.EscapeDataString(brandName) };
             if (!string.IsNullOrWhiteSpace(DeviceTypeFilter))
                 parts.Add("deviceType=" + Uri.EscapeDataString(DeviceTypeFilter));
-            if (!string.IsNullOrWhiteSpace(brandName))
-                parts.Add("brand=" + Uri.EscapeDataString(brandName));
-            var path = "api/catalogue/models" + (parts.Count == 0 ? "" : "?" + string.Join('&', parts));
+            var path = "api/catalogue/models?" + string.Join('&', parts);
             var models = await _api.GetAsync<DeviceModelDto[]>(path);
             ModelNames.Clear();
             foreach (var m in models.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
                 ModelNames.Add(m.Name);
+            if (ModelNames.Count == 0 ||
+                !ModelNames.Any(n => n.Contains("Unknown", StringComparison.OrdinalIgnoreCase)))
+                ModelNames.Add("Unknown / Other Device");
         }
         catch
         {
             ModelNames.Clear();
+            ModelNames.Add("Unknown / Other Device");
         }
     }
 
@@ -291,4 +365,32 @@ public sealed class ServiceCataloguePickerSession
         foreach (var s in SelectedServices)
             SelectedRows.Add(new CatalogueServiceRow(s));
     }
+}
+
+/// <summary>WinUI-safe device model search row (string DisplayMemberPath only).</summary>
+public sealed class DeviceModelPickRow
+{
+    public DeviceModelPickRow(DeviceModelDto model)
+    {
+        Model = model;
+        BrandName = model.BrandName ?? string.Empty;
+        Name = model.Name ?? string.Empty;
+        Series = model.Series ?? string.Empty;
+        DeviceType = model.DeviceType ?? string.Empty;
+        VerifiedText = model.IsVerified ? "Verified" : "Unverified";
+        YearText = model.ReleaseYear is int y ? y.ToString(CultureInfo.InvariantCulture) : string.Empty;
+        var aliasHint = model.Aliases is { Count: > 0 } ? " · " + string.Join(", ", model.Aliases.Take(3)) : string.Empty;
+        Display = string.IsNullOrWhiteSpace(Series)
+            ? $"{BrandName} {Name}{aliasHint}"
+            : $"{BrandName} · {Name}{aliasHint}";
+    }
+
+    public DeviceModelDto Model { get; }
+    public string BrandName { get; }
+    public string Name { get; }
+    public string Series { get; }
+    public string DeviceType { get; }
+    public string VerifiedText { get; }
+    public string YearText { get; }
+    public string Display { get; }
 }

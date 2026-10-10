@@ -26,7 +26,7 @@
 #>
 param(
   [string]$Repo = 'C:\Users\ayden\src\repairos',
-  [string]$Version = '1.2.30',
+  [string]$Version = '1.2.32',
   [string]$Branch = 'main',
   [string]$GitHubUrl = 'https://github.com/Ayden0726/repairos.git',
   [string]$AgentSyncUrl = 'http://127.0.0.1:28765/repairos-github-sync.zip',

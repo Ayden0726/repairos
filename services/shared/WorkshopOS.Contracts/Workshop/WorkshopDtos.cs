@@ -154,6 +154,12 @@ public sealed record RepairServiceSelectionDto(
     string? PartsJson = null,
     decimal? LabourOverride = null);
 
+/// <summary>Inventory part linked at ticket intake (search → select).</summary>
+public sealed record RepairPartSelectionDto(
+    Guid InventoryItemId,
+    int Quantity = 1,
+    string? Notes = null);
+
 public sealed record CreateRepairRequest(
     Guid CustomerId,
     Guid? DeviceId,
@@ -181,7 +187,8 @@ public sealed record CreateRepairRequest(
     string? NewDeviceSerial,
     string? NewDeviceImei,
     IReadOnlyList<Guid>? ServicePricingIds = null,
-    IReadOnlyList<RepairServiceSelectionDto>? SelectedServices = null);
+    IReadOnlyList<RepairServiceSelectionDto>? SelectedServices = null,
+    IReadOnlyList<RepairPartSelectionDto>? SelectedParts = null);
 
 public sealed record CompleteRepairServiceLineRequest(bool IsCompleted = true);
 

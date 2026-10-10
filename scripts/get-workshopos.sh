@@ -429,8 +429,13 @@ if [[ "$DO_UPDATE" -eq 1 ]]; then
   echo "  Mode:    --update (pull + rebuild)"
 fi
 echo ""
-echo "  Tip: if you cloned the repo and scripts fail with Permission denied:"
-echo "       chmod +x scripts/*.sh"
+# Zip overlays and some clones drop +x — fix before anything else so --update never hits Permission denied.
+if [[ -d "$INSTALL_DIR/scripts" ]]; then
+  chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
+fi
+if [[ -f "$0" ]] && [[ ! -x "$0" ]]; then
+  chmod +x "$0" 2>/dev/null || true
+fi
 note_chmod
 
 if [[ "$SKIP_DEPS" -eq 0 ]]; then

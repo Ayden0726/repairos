@@ -438,10 +438,14 @@ public sealed class WorkshopDbContext : DbContext
         {
             e.ToTable("device_models");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
             e.Property(x => x.DeviceType).HasMaxLength(64);
+            e.Property(x => x.Series).HasMaxLength(120);
+            e.Property(x => x.Aliases).HasMaxLength(1000);
             e.HasIndex(x => new { x.BrandId, x.Name }).IsUnique();
             e.HasIndex(x => x.SortOrder);
+            e.HasIndex(x => x.Series);
+            e.HasIndex(x => x.DeviceType);
             e.HasOne(x => x.Brand).WithMany(b => b.Models).HasForeignKey(x => x.BrandId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

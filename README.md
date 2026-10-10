@@ -2,7 +2,7 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Current version: 1.2.30+**
+**Current version: 1.2.32+**
 
 ## What it is
 
@@ -86,9 +86,9 @@ powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-cli
 Outputs:
 
 - Pushes overlay to `https://github.com/Ayden0726/repairos` (`main`)
-- `packaging\dist\WorkshopOS-Client-win-x64-v1.2.30.zip`
-- `packaging\dist\WorkshopOS-Setup-1.2.30.exe` (needs Inno Setup 6)
-- Extracts + launches `Desktop\WorkshopOS-Client-1.2.30\WorkshopOS.Client.exe`
+- `packaging\dist\WorkshopOS-Client-win-x64-v1.2.31.zip`
+- `packaging\dist\WorkshopOS-Setup-1.2.31.exe` (needs Inno Setup 6)
+- Extracts + launches `Desktop\WorkshopOS-Client-1.2.31\WorkshopOS.Client.exe`
 
 Skip GitHub push or installer if needed:
 
@@ -106,7 +106,7 @@ powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\ins
 ### Shop PCs (prebuilt installer)
 
 1. Go to **[GitHub Releases](https://github.com/Ayden0726/repairos/releases)**
-2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.30.exe`)
+2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.31.exe`)
 3. Run the installer on each Windows 10/11 **x64** PC
 4. Enter the pairing code from `/connect`, or tap **Find on this network**
 

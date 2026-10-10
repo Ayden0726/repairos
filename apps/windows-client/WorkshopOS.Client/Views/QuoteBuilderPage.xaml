@@ -83,6 +83,12 @@
                       ItemsSource="{x:Bind ViewModel.DeviceTypes, Mode=OneWay}"
                       SelectedItem="{x:Bind ViewModel.SelectedDeviceType, Mode=TwoWay}"
                       SelectionChanged="QuoteDeviceType_SelectionChanged" />
+            <TextBox x:Name="QuoteDeviceSearchBox" Header="Search device model"
+                     PlaceholderText="iPhone 13 PM, S22U, SM-S908, Pixel 8 Pro…"
+                     TextChanged="QuoteDeviceSearchBox_TextChanged" />
+            <ComboBox x:Name="QuoteDeviceSearchResultsBox" Header="Matching models"
+                      DisplayMemberPath="Display" HorizontalAlignment="Stretch"
+                      SelectionChanged="QuoteDeviceSearchResultsBox_SelectionChanged" />
             <Grid ColumnSpacing="8">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
