@@ -35,6 +35,15 @@ public sealed partial class SettingsPage : Page
         Users = App.Services.GetRequiredService<UsersViewModel>();
         Backups = new BackupsViewModel(App.Services.GetRequiredService<ApiClient>());
         InitializeComponent();
+        var info = typeof(App).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(info))
+        {
+            var plus = info.IndexOf('+');
+            ClientVersionText.Text = "Client " + (plus > 0 ? info[..plus] : info);
+        }
         Loaded += SettingsPage_Loaded;
     }
 

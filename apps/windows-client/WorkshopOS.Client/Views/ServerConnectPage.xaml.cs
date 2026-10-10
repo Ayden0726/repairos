@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -15,8 +16,21 @@ public sealed partial class ServerConnectPage : Page
         ViewModel = App.Services.GetRequiredService<ServerConnectViewModel>();
         InitializeComponent();
         DataContext = ViewModel;
+        BuildBanner.Text = "Client " + ClientBuildLabel();
         ViewModel.Navigate = route => Frame.Navigate(route == "setup" ? typeof(SetupPage) : typeof(LoginPage));
         Loaded += (_, _) => SyncThemeToggle();
+    }
+
+    private static string ClientBuildLabel()
+    {
+        var asm = typeof(App).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(info))
+        {
+            var plus = info.IndexOf('+');
+            return plus > 0 ? info[..plus] : info;
+        }
+        return asm.GetName().Version?.ToString(3) ?? "unknown";
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
