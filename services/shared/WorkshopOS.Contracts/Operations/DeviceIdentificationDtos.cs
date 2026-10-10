@@ -94,3 +94,10 @@ public sealed record ImeiValidateResultDto(
     string? Tac,
     string? Message,
     IReadOnlyList<ImeiDuplicateHitDto>? Duplicates);
+
+public sealed record DeviceIdentificationTestResultDto(
+    bool Success,
+    string Message,
+    bool ApiKeyConfigured,
+    bool ApiKeyDecryptable,
+    int? HttpStatus);

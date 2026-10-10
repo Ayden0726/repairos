@@ -86,13 +86,6 @@
                     ItemsSource="{x:Bind ViewModel.DeviceTypes, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedDeviceType, Mode=TwoWay}"
                     SelectionChanged="DeviceType_SelectionChanged" />
-          <TextBox x:Name="DeviceSearchBox" Header="Search device model"
-                   PlaceholderText="iPhone 13 PM, S22U, SM-S908, Pixel 8 Pro…"
-                   TextChanged="DeviceSearchBox_TextChanged" />
-          <ComboBox x:Name="DeviceSearchResultsBox" Header="Matching models"
-                    DisplayMemberPath="Display" HorizontalAlignment="Stretch"
-                    PlaceholderText="Pick a match — or choose brand/model below"
-                    SelectionChanged="DeviceSearchResultsBox_SelectionChanged" />
           <TextBlock Text="IMEI lookup" FontWeight="SemiBold" FontSize="16"
                      Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
           <TextBlock Text="Scan or type a 15-digit IMEI, then Lookup Device. Manual brand/model entry still works when there is no IMEI or the API is offline."

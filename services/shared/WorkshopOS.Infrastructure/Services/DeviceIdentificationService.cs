@@ -42,8 +42,17 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
     public async Task<DeviceIdentificationSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {
         var stored = await LoadStoredAsync(ct);
-        var today = DateTimeOffset.UtcNow.Date;
-        var lookupsToday = await _db.ImeiLookupLogs.CountAsync(l => l.CreatedAt >= today, ct);
+        var lookupsToday = 0;
+        try
+        {
+            var today = DateTimeOffset.UtcNow.Date;
+            lookupsToday = await _db.ImeiLookupLogs.CountAsync(l => l.CreatedAt >= today, ct);
+        }
+        catch (Exception ex)
+        {
+            // Settings must still load if lookup-log table is mid-migration.
+            _log.LogWarning(ex, "Could not count IMEI lookups today");
+        }
         return ToDto(stored, lookupsToday);
     }
 
@@ -55,7 +64,17 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
         if (request.ClearApiKey)
             apiKeyEnc = null;
         else if (!string.IsNullOrWhiteSpace(request.ApiKey))
-            apiKeyEnc = _secrets.Encrypt(request.ApiKey.Trim());
+        {
+            try
+            {
+                apiKeyEnc = _secrets.Encrypt(request.ApiKey.Trim());
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to encrypt IMEI API key");
+                throw new ValidationAppException("Could not encrypt the API key on the server. Check Jwt:SigningKey is set (32+ chars).");
+            }
+        }
 
         var provider = string.IsNullOrWhiteSpace(request.Provider)
             ? ProviderImeiInfo
@@ -71,9 +90,9 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
             BasicLookupEnabled = request.BasicLookupEnabled,
             AdvancedLookupEnabled = request.AdvancedLookupEnabled,
             BasicServiceId = request.BasicServiceId < 0 ? 0 : request.BasicServiceId,
-            AdvancedServiceId = request.AdvancedServiceId,
+            AdvancedServiceId = request.AdvancedServiceId is > 0 ? request.AdvancedServiceId : null,
             CacheEnabled = request.CacheEnabled,
-            CacheTtlDays = Math.Clamp(request.CacheTtlDays, 1, 3650),
+            CacheTtlDays = Math.Clamp(request.CacheTtlDays <= 0 ? 90 : request.CacheTtlDays, 1, 3650),
             DailyLookupLimit = Math.Clamp(request.DailyLookupLimit, 0, 100_000),
             EstimatedBasicCost = request.EstimatedBasicCost,
             EstimatedAdvancedCost = request.EstimatedAdvancedCost,
@@ -81,13 +100,21 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
         };
 
         await DbSeed.SetSettingAsync(_db, SettingKeys.DeviceIdentification, stored, actorId, ct);
+
+        // Re-read from DB so we never report "saved" unless jsonb round-trips.
+        var verified = await LoadStoredAsync(ct);
+        if (!string.IsNullOrWhiteSpace(apiKeyEnc) &&
+            string.IsNullOrWhiteSpace(verified.ApiKeyEncrypted))
+            throw new AppException("save_failed", "API key did not persist. Re-save Device ID settings.", 500);
+
         await _audit.WriteAsync(actorId, "settings.device_identification.update", "Setting",
             SettingKeys.DeviceIdentification,
             newValue: new
             {
                 stored.Enabled,
                 stored.Provider,
-                ApiKeyConfigured = !string.IsNullOrWhiteSpace(stored.ApiKeyEncrypted),
+                ApiKeyConfigured = !string.IsNullOrWhiteSpace(verified.ApiKeyEncrypted),
+                ApiKeyUpdated = !string.IsNullOrWhiteSpace(request.ApiKey) && !request.ClearApiKey,
                 stored.BasicLookupEnabled,
                 stored.AdvancedLookupEnabled,
                 stored.BasicServiceId,
@@ -99,6 +126,43 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
             ct: ct);
 
         return await GetSettingsAsync(ct);
+    }
+
+    public async Task<DeviceIdentificationTestResultDto> TestConnectionAsync(CancellationToken ct = default)
+    {
+        var stored = await LoadStoredAsync(ct);
+        var configured = !string.IsNullOrWhiteSpace(stored.ApiKeyEncrypted);
+        if (!configured)
+            return new DeviceIdentificationTestResultDto(false, "No API key stored. Paste your IMEI.info key and Save first.", false, false, null);
+
+        var apiKey = TryDecryptKey(stored.ApiKeyEncrypted);
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return new DeviceIdentificationTestResultDto(false,
+                "API key is stored but could not be decrypted. Re-paste the key and Save again (server encryption key may have changed).",
+                true, false, null);
+
+        try
+        {
+            var client = _httpFactory.CreateClient("imei.info");
+            var url = $"https://dash.imei.info/api/account/account/?API_KEY={Uri.EscapeDataString(apiKey)}";
+            using var response = await client.GetAsync(url, ct);
+            var code = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode)
+                return new DeviceIdentificationTestResultDto(true,
+                    "Connected to IMEI.info — API key works.", true, true, code);
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                return new DeviceIdentificationTestResultDto(false,
+                    "IMEI.info rejected the API key (401/403). Check the key in your IMEI.info dashboard.", true, true, code);
+            return new DeviceIdentificationTestResultDto(false,
+                $"IMEI.info returned HTTP {code}. Key is stored; provider may be unavailable.", true, true, code);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "IMEI.info account test failed");
+            return new DeviceIdentificationTestResultDto(false,
+                "Could not reach IMEI.info from the server (network/DNS/firewall). Key is stored; outbound HTTPS to dash.imei.info must be allowed.",
+                true, true, null);
+        }
     }
 
     public async Task<ImeiValidateResultDto> ValidateAsync(ImeiValidateRequest request, CancellationToken ct = default)
@@ -168,9 +232,13 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             var local = await TryLocalCatalogueMatchAsync(null, null, tac, ct);
-            await LogLookupAsync(normalized, tac, settings.Provider, null, request.Advanced, false, true, "api_not_configured", "Manual", null, actorId, ct);
+            var noKey = string.IsNullOrWhiteSpace(settings.ApiKeyEncrypted);
+            await LogLookupAsync(normalized, tac, settings.Provider, null, request.Advanced, false, true,
+                noKey ? "api_not_configured" : "api_key_decrypt_failed", "Manual", null, actorId, ct);
             return ManualFallback(settings, masked, tac, duplicates, local,
-                "IMEI.info API key is not configured. Device intake continues with manual brand/model entry. Add the key in Settings → Device ID.");
+                noKey
+                    ? "IMEI.info API key is not configured. Device intake continues with manual brand/model entry. Add the key in Settings → Device ID."
+                    : "IMEI API key is stored but could not be decrypted. Re-paste the key in Settings → Device ID and Save.");
         }
 
         var serviceId = request.Advanced

@@ -92,9 +92,6 @@ public sealed partial class NewRepairPage : Page
             ? "Showing all services — pick Phone, Tablet, Laptop, or PC to narrow the list."
             : $"Showing {_picker.DeviceTypeFilter} services only — brands, models, and categories match this device.";
 
-        DeviceSearchResultsBox.ItemsSource = null;
-        DeviceSearchResultsBox.ItemsSource = _picker.ModelSearchResults;
-
         _suppressBrandEvent = true;
         try
         {
@@ -114,24 +111,6 @@ public sealed partial class NewRepairPage : Page
             else if (!string.IsNullOrWhiteSpace(ViewModel.Model)) ModelBox.Text = ViewModel.Model;
         }
         finally { _suppressBrandEvent = false; }
-    }
-
-    private async void DeviceSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (!_loaded) return;
-        await _picker.SearchModelsDebouncedAsync(DeviceSearchBox.Text);
-        DeviceSearchResultsBox.ItemsSource = null;
-        DeviceSearchResultsBox.ItemsSource = _picker.ModelSearchResults;
-    }
-
-    private async void DeviceSearchResultsBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!_loaded) return;
-        if (DeviceSearchResultsBox.SelectedItem is not DeviceModelPickRow row) return;
-        await _picker.ApplyModelPickAsync(row);
-        ViewModel.Brand = row.BrandName;
-        ViewModel.Model = row.Name;
-        SyncPickerUi();
     }
 
     private async Task ApplyDeviceTypeAsync(string? deviceTypeLabel)

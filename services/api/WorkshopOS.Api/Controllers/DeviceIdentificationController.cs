@@ -24,6 +24,11 @@ public sealed class DeviceIdentificationController : ControllerBase
         [FromBody] UpdateDeviceIdentificationSettingsRequest request, CancellationToken ct) =>
         _svc.UpdateSettingsAsync(request, UserId(), ct);
 
+    [HttpPost("test")]
+    [Authorize(Policy = "perm:settings.manage")]
+    public Task<DeviceIdentificationTestResultDto> Test(CancellationToken ct) =>
+        _svc.TestConnectionAsync(ct);
+
     [HttpPost("validate")]
     [Authorize(Policy = "perm:tickets.create")]
     public Task<ImeiValidateResultDto> Validate([FromBody] ImeiValidateRequest request, CancellationToken ct) =>

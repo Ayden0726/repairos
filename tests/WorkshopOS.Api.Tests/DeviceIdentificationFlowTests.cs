@@ -125,6 +125,38 @@ public sealed class DeviceIdentificationFlowTests
         dto.ErrorCode.Should().Be("advanced_disabled");
     }
 
+    [Fact]
+    public async Task ApiKey_Save_Keep_Clear_And_Test()
+    {
+        await _factory.ResetDatabaseAsync();
+        await EnsureSetupAndLoginAsync();
+
+        var withKey = await _client.PutAsJsonAsync("/api/device-identification/settings",
+            new UpdateDeviceIdentificationSettingsRequest(
+                true, "imei.info", "test-imei-api-key-value", false, true, false, 0, null, true, 90, 200, 0.02m, null, "with key"));
+        withKey.EnsureSuccessStatusCode();
+        var keyDto = await withKey.Content.ReadFromJsonAsync<DeviceIdentificationSettingsDto>();
+        keyDto!.ApiKeyConfigured.Should().BeTrue();
+
+        var keep = await _client.PutAsJsonAsync("/api/device-identification/settings",
+            new UpdateDeviceIdentificationSettingsRequest(
+                true, "imei.info", null, false, true, false, 0, null, true, 90, 200, 0.02m, null, "kept key"));
+        keep.EnsureSuccessStatusCode();
+        (await keep.Content.ReadFromJsonAsync<DeviceIdentificationSettingsDto>())!.ApiKeyConfigured.Should().BeTrue();
+
+        var test = await _client.PostAsync("/api/device-identification/test", null);
+        test.EnsureSuccessStatusCode();
+        var testDto = await test.Content.ReadFromJsonAsync<DeviceIdentificationTestResultDto>();
+        testDto!.ApiKeyConfigured.Should().BeTrue();
+        testDto.ApiKeyDecryptable.Should().BeTrue();
+
+        var clear = await _client.PutAsJsonAsync("/api/device-identification/settings",
+            new UpdateDeviceIdentificationSettingsRequest(
+                true, "imei.info", null, true, true, false, 0, null, true, 90, 200, 0.02m, null, null));
+        clear.EnsureSuccessStatusCode();
+        (await clear.Content.ReadFromJsonAsync<DeviceIdentificationSettingsDto>())!.ApiKeyConfigured.Should().BeFalse();
+    }
+
     private async Task EnsureSetupAndLoginAsync()
     {
         var setup = new SetupRequest(
