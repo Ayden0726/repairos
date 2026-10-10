@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IPricingSettingsService, PricingSettingsService>();
         services.AddScoped<IServiceCatalogueService, ServiceCatalogueService>();
+        services.AddScoped<IDeviceIdentificationService, DeviceIdentificationService>();
         services.AddScoped<IQuoteService, QuoteService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IPosService, PosService>();
@@ -62,6 +63,11 @@ public static class DependencyInjection
         services.AddScoped<INotificationOutboxProcessor, NotificationOutboxProcessor>();
         services.AddHttpClient("ollama");
         services.AddHttpClient("woocommerce");
+        services.AddHttpClient("imei.info", c =>
+        {
+            c.Timeout = TimeSpan.FromSeconds(12);
+            c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        });
 
         var jwt = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)

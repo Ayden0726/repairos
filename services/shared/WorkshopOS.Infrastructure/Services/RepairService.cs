@@ -93,7 +93,22 @@ public sealed class RepairService : IRepairService
                 Brand = request.NewDeviceBrand.Trim(),
                 Model = request.NewDeviceModel.Trim(),
                 Serial = string.IsNullOrWhiteSpace(request.NewDeviceSerial) ? null : request.NewDeviceSerial.Trim(),
-                Imei = string.IsNullOrWhiteSpace(request.NewDeviceImei) ? null : request.NewDeviceImei.Trim()
+                Imei = string.IsNullOrWhiteSpace(request.NewDeviceImei) ? null : request.NewDeviceImei.Trim(),
+                Colour = string.IsNullOrWhiteSpace(request.NewDeviceColour) ? null : request.NewDeviceColour.Trim(),
+                StorageCapacity = string.IsNullOrWhiteSpace(request.NewDeviceStorage) ? null : request.NewDeviceStorage.Trim(),
+                Manufacturer = string.IsNullOrWhiteSpace(request.NewDeviceManufacturer) ? null : request.NewDeviceManufacturer.Trim(),
+                ModelNumber = string.IsNullOrWhiteSpace(request.NewDeviceModelNumber) ? null : request.NewDeviceModelNumber.Trim(),
+                Notes = string.IsNullOrWhiteSpace(request.NewDeviceNotes) ? null : request.NewDeviceNotes.Trim(),
+                DisplaySpec = string.IsNullOrWhiteSpace(request.NewDeviceDisplaySpec) ? null : request.NewDeviceDisplaySpec.Trim(),
+                Processor = string.IsNullOrWhiteSpace(request.NewDeviceProcessor) ? null : request.NewDeviceProcessor.Trim(),
+                Chipset = string.IsNullOrWhiteSpace(request.NewDeviceChipset) ? null : request.NewDeviceChipset.Trim(),
+                BatteryCapacity = string.IsNullOrWhiteSpace(request.NewDeviceBatteryCapacity) ? null : request.NewDeviceBatteryCapacity.Trim(),
+                NetworkCapabilities = string.IsNullOrWhiteSpace(request.NewDeviceNetwork) ? null : request.NewDeviceNetwork.Trim(),
+                Ram = string.IsNullOrWhiteSpace(request.NewDeviceRam) ? null : request.NewDeviceRam.Trim(),
+                IdentificationStatus = string.IsNullOrWhiteSpace(request.NewDeviceIdentificationStatus) ? null : request.NewDeviceIdentificationStatus.Trim(),
+                IdentificationProvider = string.IsNullOrWhiteSpace(request.NewDeviceIdentificationProvider) ? null : request.NewDeviceIdentificationProvider.Trim(),
+                IdentificationVerifiedAt = request.NewDeviceIdentificationVerifiedAt,
+                IdentificationJson = string.IsNullOrWhiteSpace(request.NewDeviceIdentificationJson) ? null : request.NewDeviceIdentificationJson
             };
             _db.Devices.Add(device);
             await _db.SaveChangesAsync(ct);
@@ -254,17 +269,38 @@ public sealed class RepairService : IRepairService
         if (selectedParts is null || selectedParts.Count == 0)
             return new PartsPayload(null, 0m);
 
-        var ids = selectedParts.Select(p => p.InventoryItemId).Distinct().ToList();
-        var items = await _db.InventoryItems.AsNoTracking()
-            .Where(i => ids.Contains(i.Id) && i.ArchivedAt == null)
-            .ToDictionaryAsync(i => i.Id, ct);
+        var ids = selectedParts.Where(p => p.InventoryItemId is Guid).Select(p => p.InventoryItemId!.Value).Distinct().ToList();
+        var items = ids.Count == 0
+            ? new Dictionary<Guid, InventoryItem>()
+            : await _db.InventoryItems.AsNoTracking()
+                .Where(i => ids.Contains(i.Id) && i.ArchivedAt == null)
+                .ToDictionaryAsync(i => i.Id, ct);
 
         var rows = new List<object>();
         decimal sellTotal = 0m;
         foreach (var part in selectedParts)
         {
-            if (!items.TryGetValue(part.InventoryItemId, out var item)) continue;
             var qty = part.Quantity < 1 ? 1 : part.Quantity;
+            if (part.InventoryItemId is null)
+            {
+                var customName = string.IsNullOrWhiteSpace(part.CustomName) ? "Custom part" : part.CustomName.Trim();
+                var customSell = part.CustomSellPrice ?? 0m;
+                sellTotal += customSell * qty;
+                rows.Add(new
+                {
+                    inventoryItemId = (Guid?)null,
+                    sku = "CUSTOM",
+                    name = customName,
+                    quantity = qty,
+                    unitCost = 0m,
+                    unitSell = customSell,
+                    lineSell = customSell * qty,
+                    isCustom = true,
+                    notes = part.Notes
+                });
+                continue;
+            }
+            if (!items.TryGetValue(part.InventoryItemId.Value, out var item)) continue;
             sellTotal += item.SellPrice * qty;
             rows.Add(new
             {

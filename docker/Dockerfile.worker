@@ -4,7 +4,8 @@ COPY . .
 RUN dotnet restore WorkshopOS.sln
 RUN dotnet publish services/worker/WorkshopOS.Worker/WorkshopOS.Worker.csproj -c Release -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0
+# Worker hosts ASP.NET Core DI / EF bits — needs the aspnet shared framework, not runtime-only.
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "WorkshopOS.Worker.dll"]

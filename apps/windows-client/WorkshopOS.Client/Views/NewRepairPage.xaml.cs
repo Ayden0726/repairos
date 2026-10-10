@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -11,11 +13,12 @@ namespace WorkshopOS.Client.Views;
 
 public sealed class TicketPartPick
 {
-    public required Guid InventoryItemId { get; init; }
+    public Guid? InventoryItemId { get; init; }
     public required string Sku { get; init; }
     public required string Name { get; init; }
     public required decimal SellPrice { get; init; }
     public int Quantity { get; set; } = 1;
+    public bool IsCustom { get; init; }
     public string Display => Quantity > 1
         ? $"{Sku} · {Name} ×{Quantity} · ${SellPrice * Quantity:0.00}"
         : $"{Sku} · {Name} · ${SellPrice:0.00}";
@@ -81,8 +84,8 @@ public sealed partial class NewRepairPage : Page
         }
         SvcServicesBox.ItemsSource = null;
         SvcServicesBox.ItemsSource = _picker.Services;
-        SvcSelectedBox.ItemsSource = null;
-        SvcSelectedBox.ItemsSource = _picker.SelectedRows;
+        SvcSelectedList.ItemsSource = null;
+        SvcSelectedList.ItemsSource = _picker.SelectedRows;
         SvcStatusText.Text = _picker.Status ?? string.Empty;
         SvcErrorText.Text = _picker.Error ?? string.Empty;
         SvcFilterHint.Text = _picker.DeviceTypeFilter is null
@@ -186,6 +189,96 @@ public sealed partial class NewRepairPage : Page
         }
     }
 
+    private async void ImeiBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        // Barcode scanners typically end with Enter.
+        if (e.Key == VirtualKey.Enter)
+        {
+            e.Handled = true;
+            await RunImeiLookupAsync(advanced: false);
+        }
+    }
+
+    private async void ImeiLookup_Click(object sender, RoutedEventArgs e) =>
+        await RunImeiLookupAsync(advanced: false);
+
+    private async void ImeiAdvancedLookup_Click(object sender, RoutedEventArgs e) =>
+        await RunImeiLookupAsync(advanced: true);
+
+    private async Task RunImeiLookupAsync(bool advanced)
+    {
+        ViewModel.Imei = ImeiBox.Text?.Trim() ?? string.Empty;
+        var result = await ViewModel.LookupImeiAsync(advanced);
+        if (result is null) return;
+        ShowImeiResult(result);
+    }
+
+    private void ShowImeiResult(ImeiLookupResultDto result)
+    {
+        ImeiResultPanel.Visibility = Visibility.Visible;
+        var meta = new StringBuilder();
+        meta.Append($"Provider: {result.Provider}");
+        meta.Append($" · Status: {result.VerificationStatus}");
+        if (result.LookedUpAt is DateTimeOffset at)
+            meta.Append($" · {at.LocalDateTime:g}");
+        if (result.FromCache) meta.Append(" · from TAC cache");
+        if (result.UsedManualFallback) meta.Append(" · manual fallback");
+        if (!string.IsNullOrWhiteSpace(result.Tac)) meta.Append($" · TAC {result.Tac}");
+        if (result.Cost is decimal c) meta.Append($" · est. ${c:0.00}");
+        if (!result.ApiConfigured) meta.Append(" · API key not configured");
+        ImeiResultMetaText.Text = meta.ToString();
+
+        if (result.Duplicates is { Count: > 0 })
+        {
+            var lines = result.Duplicates.Take(5).Select(d =>
+                d.TicketNumber is not null
+                    ? $"{d.Source}: {d.TicketNumber} — {d.Label}"
+                    : $"{d.Source}: {d.Label}");
+            ImeiDuplicatesText.Text = "Duplicate IMEI found — " + string.Join("; ", lines);
+        }
+        else
+        {
+            ImeiDuplicatesText.Text = string.Empty;
+        }
+
+        ImeiBrandEdit.Text = result.Brand ?? BrandBox.Text ?? ViewModel.Brand ?? string.Empty;
+        ImeiModelEdit.Text = result.Model ?? ModelBox.Text ?? ViewModel.Model ?? string.Empty;
+        ImeiModelNumberEdit.Text = result.ModelNumber ?? string.Empty;
+        ImeiCategoryEdit.Text = result.DeviceCategory ?? ViewModel.SelectedDeviceType;
+        ImeiDisplayEdit.Text = result.Display ?? string.Empty;
+        var proc = result.Processor;
+        if (!string.IsNullOrWhiteSpace(result.Chipset))
+            proc = string.IsNullOrWhiteSpace(proc) ? result.Chipset : $"{proc} / {result.Chipset}";
+        ImeiProcessorEdit.Text = proc ?? string.Empty;
+        ImeiBatteryEdit.Text = result.BatteryCapacity ?? string.Empty;
+        ImeiNetworkEdit.Text = result.Network ?? string.Empty;
+        ImeiStorageEdit.Text = result.StorageIsDeviceSpecific ? (result.Storage ?? string.Empty) : string.Empty;
+        ImeiColourEdit.Text = result.ColourIsDeviceSpecific ? (result.Colour ?? string.Empty) : string.Empty;
+
+        if (result.CatalogueMatches is { Count: > 0 } &&
+            string.IsNullOrWhiteSpace(result.Brand) &&
+            string.IsNullOrWhiteSpace(result.Model))
+        {
+            var best = result.CatalogueMatches[0];
+            ImeiBrandEdit.Text = best.BrandName;
+            ImeiModelEdit.Text = best.Name;
+        }
+    }
+
+    private async void ImeiApply_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.ApplyImeiLookupEdits(
+            ImeiBrandEdit.Text, ImeiModelEdit.Text, ImeiModelNumberEdit.Text, ImeiCategoryEdit.Text,
+            ImeiDisplayEdit.Text, ImeiProcessorEdit.Text, ImeiBatteryEdit.Text, ImeiNetworkEdit.Text,
+            ImeiStorageEdit.Text, ImeiColourEdit.Text);
+
+        BrandBox.Text = ViewModel.Brand;
+        ModelBox.Text = ViewModel.Model;
+        await _picker.SetBrandAsync(ViewModel.Brand);
+        SyncPickerUi();
+        ViewModel.ImeiStatus = "Applied to ticket fields — review services before creating the ticket.";
+    }
+
     private async void SvcSearchBox_TextChanged(object sender, TextChangedEventArgs e) =>
         await _picker.SearchDebouncedAsync(SvcSearchBox.Text);
 
@@ -196,7 +289,34 @@ public sealed partial class NewRepairPage : Page
         await _picker.AddAsync(SvcServicesBox.SelectedItem as CatalogueServiceRow);
 
     private void SvcRemove_Click(object sender, RoutedEventArgs e) =>
-        _picker.Remove(SvcSelectedBox.SelectedItem as CatalogueServiceRow);
+        _picker.Remove(SvcSelectedList.SelectedItem as CatalogueServiceRow);
+
+    private void CustomPartAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var name = CustomPartNameBox.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            InvPartsSummary.Text = "Enter a custom part name (special order / no stock).";
+            return;
+        }
+        var priceText = CustomPartPriceBox.Text?.Trim() ?? "0";
+        if (!decimal.TryParse(priceText, NumberStyles.Number, CultureInfo.InvariantCulture, out var price) &&
+            !decimal.TryParse(priceText, NumberStyles.Number, CultureInfo.CurrentCulture, out price))
+            price = 0m;
+
+        _selectedParts.Add(new TicketPartPick
+        {
+            InventoryItemId = null,
+            Sku = "CUSTOM",
+            Name = name,
+            SellPrice = price,
+            Quantity = 1,
+            IsCustom = true
+        });
+        CustomPartNameBox.Text = string.Empty;
+        CustomPartPriceBox.Text = string.Empty;
+        SyncPartsSummary();
+    }
 
     private async Task LoadInventoryAsync()
     {
@@ -245,11 +365,10 @@ public sealed partial class NewRepairPage : Page
             return;
         }
 
-        var existing = _selectedParts.FirstOrDefault(p => p.InventoryItemId == item.Id);
+        var existing = _selectedParts.FirstOrDefault(p => p.InventoryItemId == item.Id && !p.IsCustom);
         if (existing is not null)
         {
             existing.Quantity += 1;
-            // refresh display binding
             var idx = _selectedParts.IndexOf(existing);
             _selectedParts.RemoveAt(idx);
             _selectedParts.Insert(idx, new TicketPartPick
@@ -258,7 +377,8 @@ public sealed partial class NewRepairPage : Page
                 Sku = existing.Sku,
                 Name = existing.Name,
                 SellPrice = existing.SellPrice,
-                Quantity = existing.Quantity
+                Quantity = existing.Quantity,
+                IsCustom = false
             });
         }
         else
@@ -269,7 +389,8 @@ public sealed partial class NewRepairPage : Page
                 Sku = item.Sku,
                 Name = item.Name,
                 SellPrice = item.SellPrice,
-                Quantity = 1
+                Quantity = 1,
+                IsCustom = false
             });
         }
         SyncPartsSummary();
@@ -307,7 +428,12 @@ public sealed partial class NewRepairPage : Page
         ViewModel.ServiceNotes = SvcNotesBox.Text;
         ViewModel.ServicePartsNotes = SvcPartsBox.Text;
         ViewModel.SelectedParts = _selectedParts
-            .Select(p => new RepairPartSelectionDto(p.InventoryItemId, p.Quantity))
+            .Select(p => new RepairPartSelectionDto(
+                p.InventoryItemId,
+                p.Quantity,
+                null,
+                p.IsCustom ? p.Name : null,
+                p.IsCustom ? p.SellPrice : null))
             .ToList();
         if (ViewModel.CreateCommand.CanExecute(null))
             await ViewModel.CreateCommand.ExecuteAsync(null);

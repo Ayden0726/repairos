@@ -31,6 +31,26 @@ public sealed class SecretProtector
         aes.Encrypt(iv, plain, cipher, tag);
         return $"v1:{Convert.ToBase64String(iv)}:{Convert.ToBase64String(tag)}:{Convert.ToBase64String(cipher)}";
     }
+
+    public string Decrypt(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            throw new InvalidOperationException("Ciphertext is empty.");
+        // Plaintext passthrough for legacy unencrypted settings rows.
+        if (!payload.StartsWith("v1:", StringComparison.Ordinal))
+            return payload;
+
+        var parts = payload.Split(':');
+        if (parts.Length != 4)
+            throw new InvalidOperationException("Ciphertext format is invalid.");
+        var iv = Convert.FromBase64String(parts[1]);
+        var tag = Convert.FromBase64String(parts[2]);
+        var cipher = Convert.FromBase64String(parts[3]);
+        var plain = new byte[cipher.Length];
+        using var aes = new AesGcm(_key, 16);
+        aes.Decrypt(iv, cipher, tag, plain);
+        return Encoding.UTF8.GetString(plain);
+    }
 }
 
 public sealed class CustomerService : ICustomerService

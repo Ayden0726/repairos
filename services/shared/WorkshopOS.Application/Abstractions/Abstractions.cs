@@ -131,6 +131,14 @@ public interface IPricingSettingsService
     Task<PricingPreviewResponse> PreviewAsync(PricingPreviewRequest request, CancellationToken ct = default);
 }
 
+public interface IDeviceIdentificationService
+{
+    Task<DeviceIdentificationSettingsDto> GetSettingsAsync(CancellationToken ct = default);
+    Task<DeviceIdentificationSettingsDto> UpdateSettingsAsync(UpdateDeviceIdentificationSettingsRequest request, Guid actorId, CancellationToken ct = default);
+    Task<ImeiValidateResultDto> ValidateAsync(ImeiValidateRequest request, CancellationToken ct = default);
+    Task<ImeiLookupResultDto> LookupAsync(ImeiLookupRequest request, Guid actorId, CancellationToken ct = default);
+}
+
 public interface IServiceCatalogueService
 {
     Task EnsureSeededAsync(CancellationToken ct = default);

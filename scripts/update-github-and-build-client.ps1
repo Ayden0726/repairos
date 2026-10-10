@@ -26,10 +26,12 @@
 #>
 param(
   [string]$Repo = 'C:\Users\ayden\src\repairos',
-  [string]$Version = '1.2.32',
+  [string]$Version = '1.2.33',
   [string]$Branch = 'main',
   [string]$GitHubUrl = 'https://github.com/Ayden0726/repairos.git',
   [string]$AgentSyncUrl = 'http://127.0.0.1:28765/repairos-github-sync.zip',
+  [string]$LocalZip = '',
+  [switch]$SkipAgentSync,
   [switch]$SkipGitHubPush,
   [switch]$SkipInstaller,
   [switch]$SkipLaunch
@@ -49,12 +51,46 @@ if (-not (Test-Path $Repo)) {
   New-Item -ItemType Directory -Force -Path $Repo | Out-Null
 }
 
-# --- 1) Overlay agent sync zip ---
-$zip = Join-Path $env:TEMP 'repairos-github-sync.zip'
-Write-Host ("Downloading {0} ..." -f $AgentSyncUrl) -ForegroundColor Yellow
-Invoke-WebRequest -Uri $AgentSyncUrl -OutFile $zip
-Expand-Archive -Path $zip -DestinationPath $Repo -Force
+# --- 1) Overlay agent sync zip (optional) ---
 Set-Location $Repo
+if ($SkipAgentSync) {
+  Write-Host 'Skipping agent sync download (-SkipAgentSync). Using existing repo overlay.' -ForegroundColor DarkYellow
+} else {
+  $zip = Join-Path $env:TEMP 'repairos-github-sync.zip'
+  if (-not [string]::IsNullOrWhiteSpace($LocalZip)) {
+    if (-not (Test-Path $LocalZip)) { throw ("LocalZip not found: {0}" -f $LocalZip) }
+    Write-Host ("Using local zip {0} ..." -f $LocalZip) -ForegroundColor Yellow
+    Copy-Item -Force $LocalZip $zip
+  } else {
+    Write-Host ("Downloading {0} ..." -f $AgentSyncUrl) -ForegroundColor Yellow
+    $ok = $false
+    for ($i = 1; $i -le 4; $i++) {
+      try {
+        Invoke-WebRequest -Uri $AgentSyncUrl -OutFile $zip -TimeoutSec 120
+        $ok = $true
+        break
+      } catch {
+        Write-Host ("Download attempt {0}/4 failed: {1}" -f $i, $_.Exception.Message) -ForegroundColor Yellow
+        if ($i -lt 4) { Start-Sleep -Seconds (2 * $i) }
+      }
+    }
+    if (-not $ok) {
+      if (Test-Path $zip) {
+        Write-Host ("Download failed; reusing existing {0}" -f $zip) -ForegroundColor DarkYellow
+      } else {
+        throw @"
+Could not download agent sync zip from $AgentSyncUrl
+Fix: open Cursor Ports and forward 28765, or download once manually then re-run with:
+  -LocalZip `$env:TEMP\repairos-github-sync.zip
+Or if you already expanded the zip into `$Repo:
+  -SkipAgentSync
+"@
+      }
+    }
+  }
+  Expand-Archive -Path $zip -DestinationPath $Repo -Force
+  Set-Location $Repo
+}
 
 $scriptPath = Join-Path $Repo 'scripts\update-github-and-build-client.ps1'
 if (-not (Test-Path $scriptPath)) {

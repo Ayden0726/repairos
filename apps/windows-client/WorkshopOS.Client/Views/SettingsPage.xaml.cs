@@ -23,6 +23,7 @@ public sealed partial class SettingsPage : Page
     private bool _servicesLoaded;
     private bool _taxLoaded;
     private bool _posLoaded;
+    private bool _deviceIdLoaded;
     private bool _connectionHealthLoaded;
     private string? _initialSection;
     private readonly ObservableCollection<ModuleToggleItem> _moduleToggles = new();
@@ -177,17 +178,22 @@ public sealed partial class SettingsPage : Page
             _posLoaded = true;
             await LoadPosAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 5 && !_usersLoaded)
+        else if (SettingsPivot.SelectedIndex == 5)
+        {
+            _deviceIdLoaded = true;
+            await LoadDeviceIdAsync();
+        }
+        else if (SettingsPivot.SelectedIndex == 6 && !_usersLoaded)
         {
             _usersLoaded = true;
             await RefreshUsersUiAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 6 && !_backupsLoaded)
+        else if (SettingsPivot.SelectedIndex == 7 && !_backupsLoaded)
         {
             _backupsLoaded = true;
             await RefreshBackupsUiAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 7 && !_connectionHealthLoaded)
+        else if (SettingsPivot.SelectedIndex == 8 && !_connectionHealthLoaded)
         {
             _connectionHealthLoaded = true;
             await CheckHealthAsync();
@@ -630,6 +636,86 @@ public sealed partial class SettingsPage : Page
         {
             PosStatusText.Text = string.Empty;
             PosErrorText.Text = ex.Message;
+        }
+    }
+
+    private async Task LoadDeviceIdAsync()
+    {
+        DeviceIdErrorText.Text = string.Empty;
+        DeviceIdStatusText.Text = "Loading device identification settings…";
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var s = await api.GetAsync<DeviceIdentificationSettingsDto>("api/device-identification/settings");
+            DeviceIdEnabledToggle.IsOn = s.Enabled;
+            SelectComboString(DeviceIdProviderCombo, s.Provider);
+            DeviceIdApiKeyBox.Password = string.Empty;
+            DeviceIdClearApiKeyCheck.IsChecked = false;
+            DeviceIdApiKeyHint.Text = s.ApiKeyConfigured
+                ? "API key is stored on the server (encrypted)."
+                : "No API key yet — lookups fall back to manual entry until you save one.";
+            DeviceIdBasicCheck.IsChecked = s.BasicLookupEnabled;
+            DeviceIdAdvancedCheck.IsChecked = s.AdvancedLookupEnabled;
+            DeviceIdBasicServiceBox.Value = s.BasicServiceId;
+            DeviceIdAdvancedServiceBox.Value = s.AdvancedServiceId ?? double.NaN;
+            DeviceIdCacheCheck.IsChecked = s.CacheEnabled;
+            DeviceIdCacheTtlBox.Value = s.CacheTtlDays;
+            DeviceIdDailyLimitBox.Value = s.DailyLookupLimit;
+            DeviceIdBasicCostBox.Value = (double)(s.EstimatedBasicCost ?? 0.02m);
+            DeviceIdAdvancedCostBox.Value = s.EstimatedAdvancedCost is decimal adv ? (double)adv : double.NaN;
+            DeviceIdNotesBox.Text = s.Notes ?? string.Empty;
+            DeviceIdUsageText.Text = $"Lookups today: {s.LookupsToday}" +
+                (s.DailyLookupLimit > 0 ? $" / limit {s.DailyLookupLimit}" : " (no daily limit)") +
+                $" · est. basic ${s.EstimatedBasicCost ?? 0:0.00}";
+            DeviceIdStatusText.Text = s.Enabled
+                ? $"Enabled · provider {s.Provider}" + (s.ApiKeyConfigured ? " · API key stored" : " · waiting for API key")
+                : "Disabled — New Ticket still accepts manual brand/model/IMEI.";
+        }
+        catch (Exception ex)
+        {
+            DeviceIdStatusText.Text = string.Empty;
+            DeviceIdErrorText.Text = ex.Message;
+        }
+    }
+
+    private async void SaveDeviceId_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceIdErrorText.Text = string.Empty;
+        DeviceIdStatusText.Text = "Saving…";
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            int? advancedService = null;
+            if (!double.IsNaN(DeviceIdAdvancedServiceBox.Value))
+                advancedService = (int)DeviceIdAdvancedServiceBox.Value;
+            decimal? advancedCost = null;
+            if (!double.IsNaN(DeviceIdAdvancedCostBox.Value))
+                advancedCost = (decimal)DeviceIdAdvancedCostBox.Value;
+
+            var request = new UpdateDeviceIdentificationSettingsRequest(
+                DeviceIdEnabledToggle.IsOn,
+                (DeviceIdProviderCombo.SelectedItem as string) ?? "imei.info",
+                string.IsNullOrWhiteSpace(DeviceIdApiKeyBox.Password) ? null : DeviceIdApiKeyBox.Password,
+                DeviceIdClearApiKeyCheck.IsChecked == true,
+                DeviceIdBasicCheck.IsChecked == true,
+                DeviceIdAdvancedCheck.IsChecked == true,
+                (int)(double.IsNaN(DeviceIdBasicServiceBox.Value) ? 0 : DeviceIdBasicServiceBox.Value),
+                advancedService,
+                DeviceIdCacheCheck.IsChecked == true,
+                (int)(double.IsNaN(DeviceIdCacheTtlBox.Value) ? 90 : DeviceIdCacheTtlBox.Value),
+                (int)(double.IsNaN(DeviceIdDailyLimitBox.Value) ? 200 : DeviceIdDailyLimitBox.Value),
+                double.IsNaN(DeviceIdBasicCostBox.Value) ? 0.02m : (decimal)DeviceIdBasicCostBox.Value,
+                advancedCost,
+                NullIfBlank(DeviceIdNotesBox.Text));
+            await api.PutAsync<UpdateDeviceIdentificationSettingsRequest, DeviceIdentificationSettingsDto>(
+                "api/device-identification/settings", request);
+            await LoadDeviceIdAsync();
+            DeviceIdStatusText.Text = "Saved device identification settings.";
+        }
+        catch (Exception ex)
+        {
+            DeviceIdStatusText.Text = string.Empty;
+            DeviceIdErrorText.Text = ex.Message;
         }
     }
 

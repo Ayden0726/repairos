@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.33 — 2026-10-10
+
+### Device identification (IMEI)
+- Automatic IMEI lookup on New Ticket: Luhn validation, TAC extract, IMEI.info server-side API, TAC cache, duplicate detection
+- Manual-entry fallback when API key missing, rate-limited, timed out, or provider unavailable — intake never blocked
+- Admin **Settings → Device ID**: provider, encrypted API key, basic/advanced services, cache TTL, daily limits, estimated costs
+- Distinguishes model-level specs from device-specific fields; staff review/edit before save
+- Lookup audit stores IMEI hashes only (never raw IMEI in logs)
+
+### Tickets & quotes
+- Selected services shown as lists (not dropdowns) on New Ticket and Quote builder
+- Quote builder inventory search + custom/special-order parts (same pattern as tickets)
+
+### Version
+- API / client version `1.2.33` (ClientMinVersion `1.2.33`)
+
+
 ## 1.2.32 — 2026-10-10
 
 ### Added

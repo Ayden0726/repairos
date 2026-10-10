@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Workshop;
 
 namespace WorkshopOS.Client.Views;
@@ -233,8 +235,12 @@ public partial class NewRepairViewModel : ObservableObject
     [ObservableProperty] private string _model = string.Empty;
     [ObservableProperty] private string _issue = string.Empty;
     [ObservableProperty] private string _serial = string.Empty;
+    [ObservableProperty] private string _imei = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isSaving;
+    [ObservableProperty] private bool _isLookingUpImei;
+    [ObservableProperty] private string? _imeiStatus;
+    [ObservableProperty] private string? _imeiError;
     /// <summary>Catalogue device type label shown in the combo: Phone, Tablet, Laptop, PC, Other.</summary>
     [ObservableProperty] private string _selectedDeviceType = "Phone";
     public ObservableCollection<string> DeviceTypes { get; } = new(["Phone", "Tablet", "Laptop", "PC", "Other"]);
@@ -244,6 +250,21 @@ public partial class NewRepairViewModel : ObservableObject
     public string? ServiceNotes { get; set; }
     public string? ServicePartsNotes { get; set; }
     public List<RepairPartSelectionDto> SelectedParts { get; set; } = new();
+    public ImeiLookupResultDto? LastImeiLookup { get; set; }
+    public string? IdentificationManufacturer { get; set; }
+    public string? IdentificationModelNumber { get; set; }
+    public string? IdentificationDisplay { get; set; }
+    public string? IdentificationProcessor { get; set; }
+    public string? IdentificationChipset { get; set; }
+    public string? IdentificationBattery { get; set; }
+    public string? IdentificationNetwork { get; set; }
+    public string? IdentificationRam { get; set; }
+    public string? IdentificationColour { get; set; }
+    public string? IdentificationStorage { get; set; }
+    public string? IdentificationStatus { get; set; }
+    public string? IdentificationProvider { get; set; }
+    public DateTimeOffset? IdentificationVerifiedAt { get; set; }
+    public string? IdentificationJson { get; set; }
 
     public DeviceCategory SelectedDeviceCategory => SelectedDeviceType switch
     {
@@ -262,6 +283,13 @@ public partial class NewRepairViewModel : ObservableObject
     public bool HasCustomersStatus => !string.IsNullOrWhiteSpace(CustomersStatus);
     public bool IsCustomersIdle => !IsLoadingCustomers;
     public bool CanSubmit => !IsSaving;
+    public bool IsImeiLookupIdle => !IsLookingUpImei;
+    public bool HasImeiStatus => !string.IsNullOrWhiteSpace(ImeiStatus);
+    public bool HasImeiError => !string.IsNullOrWhiteSpace(ImeiError);
+
+    partial void OnIsLookingUpImeiChanged(bool value) => OnPropertyChanged(nameof(IsImeiLookupIdle));
+    partial void OnImeiStatusChanged(string? value) => OnPropertyChanged(nameof(HasImeiStatus));
+    partial void OnImeiErrorChanged(string? value) => OnPropertyChanged(nameof(HasImeiError));
 
     public NewRepairViewModel(ApiClient api) => _api = api;
 
@@ -421,16 +449,108 @@ public partial class NewRepairViewModel : ObservableObject
                 string.IsNullOrWhiteSpace(Brand) ? "Unknown" : Brand.Trim(),
                 string.IsNullOrWhiteSpace(Model) ? "Device" : Model.Trim(),
                 string.IsNullOrWhiteSpace(Serial) ? null : Serial.Trim(),
-                null,
+                string.IsNullOrWhiteSpace(Imei) ? null : new string(Imei.Where(char.IsDigit).ToArray()),
                 SelectedServiceIds.Count == 0 ? null : SelectedServiceIds,
                 SelectedServiceIds.Count == 0 ? null : SelectedServiceIds.Select(id =>
                     new RepairServiceSelectionDto(id, ServiceNotes, string.IsNullOrWhiteSpace(ServicePartsNotes) ? null : ServicePartsNotes)).ToList(),
-                SelectedParts.Count == 0 ? null : SelectedParts));
+                SelectedParts.Count == 0 ? null : SelectedParts,
+                string.IsNullOrWhiteSpace(IdentificationColour) ? null : IdentificationColour,
+                string.IsNullOrWhiteSpace(IdentificationStorage) ? null : IdentificationStorage,
+                string.IsNullOrWhiteSpace(IdentificationManufacturer) ? null : IdentificationManufacturer,
+                string.IsNullOrWhiteSpace(IdentificationModelNumber) ? null : IdentificationModelNumber,
+                null,
+                string.IsNullOrWhiteSpace(IdentificationStatus) ? null : IdentificationStatus,
+                string.IsNullOrWhiteSpace(IdentificationProvider) ? null : IdentificationProvider,
+                IdentificationVerifiedAt,
+                string.IsNullOrWhiteSpace(IdentificationJson) ? null : IdentificationJson,
+                string.IsNullOrWhiteSpace(IdentificationDisplay) ? null : IdentificationDisplay,
+                string.IsNullOrWhiteSpace(IdentificationProcessor) ? null : IdentificationProcessor,
+                string.IsNullOrWhiteSpace(IdentificationChipset) ? null : IdentificationChipset,
+                string.IsNullOrWhiteSpace(IdentificationBattery) ? null : IdentificationBattery,
+                string.IsNullOrWhiteSpace(IdentificationNetwork) ? null : IdentificationNetwork,
+                string.IsNullOrWhiteSpace(IdentificationRam) ? null : IdentificationRam));
             Created?.Invoke(repair.Id);
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { IsSaving = false; }
     }
+
+    public async Task<ImeiLookupResultDto?> LookupImeiAsync(bool advanced = false)
+    {
+        ImeiError = null;
+        ImeiStatus = null;
+        IsLookingUpImei = true;
+        try
+        {
+            var result = await _api.PostAsync<ImeiLookupRequest, ImeiLookupResultDto>(
+                "api/device-identification/lookup",
+                new ImeiLookupRequest(Imei?.Trim() ?? string.Empty, advanced));
+            LastImeiLookup = result;
+            if (!result.Success)
+            {
+                ImeiError = result.Message;
+                return result;
+            }
+
+            ImeiStatus = result.Message;
+            if (!string.IsNullOrWhiteSpace(result.ImeiMasked) && string.IsNullOrWhiteSpace(Imei) == false)
+            {
+                // Keep digits staff typed; do not replace with masked value.
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ImeiError = ex.Message;
+            return null;
+        }
+        finally
+        {
+            IsLookingUpImei = false;
+        }
+    }
+
+    public void ApplyImeiLookupEdits(
+        string? brand, string? model, string? modelNumber, string? category,
+        string? display, string? processor, string? battery, string? network,
+        string? storage, string? colour)
+    {
+        if (!string.IsNullOrWhiteSpace(brand)) Brand = brand.Trim();
+        if (!string.IsNullOrWhiteSpace(model)) Model = model.Trim();
+        IdentificationModelNumber = NullIfBlank(modelNumber);
+        IdentificationDisplay = NullIfBlank(display);
+        IdentificationProcessor = NullIfBlank(processor);
+        IdentificationBattery = NullIfBlank(battery);
+        IdentificationNetwork = NullIfBlank(network);
+        IdentificationStorage = NullIfBlank(storage);
+        IdentificationColour = NullIfBlank(colour);
+
+        if (LastImeiLookup is { } r)
+        {
+            IdentificationManufacturer = r.Manufacturer ?? brand;
+            IdentificationChipset = r.Chipset;
+            IdentificationRam = r.Ram;
+            IdentificationStatus = r.VerificationStatus;
+            IdentificationProvider = r.Provider;
+            IdentificationVerifiedAt = r.LookedUpAt;
+            try
+            {
+                IdentificationJson = JsonSerializer.Serialize(r);
+            }
+            catch { IdentificationJson = null; }
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                var cat = category.Trim();
+                if (cat.Contains("tablet", StringComparison.OrdinalIgnoreCase)) SelectedDeviceType = "Tablet";
+                else if (cat.Contains("phone", StringComparison.OrdinalIgnoreCase) ||
+                         cat.Contains("mobile", StringComparison.OrdinalIgnoreCase)) SelectedDeviceType = "Phone";
+            }
+        }
+    }
+
+    private static string? NullIfBlank(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }
 
 public partial class RepairDetailViewModel : ObservableObject

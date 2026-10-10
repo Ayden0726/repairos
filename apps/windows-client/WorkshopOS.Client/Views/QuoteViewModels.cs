@@ -559,6 +559,29 @@ public partial class QuoteBuilderViewModel : ObservableObject
         _ = RecalcAsync();
     }
 
+    public void AddInventoryPartLine(InventoryListItemDto item)
+    {
+        var line = new QuoteLineDraft { Type = "PART" };
+        Lines.Add(line);
+        ApplyInventoryPart(line, item);
+    }
+
+    public void AddCustomPartLine(string name, decimal sellPrice)
+    {
+        var line = new QuoteLineDraft
+        {
+            Type = "PART",
+            Description = name.Trim(),
+            PartName = name.Trim(),
+            Sku = "CUSTOM",
+            InventoryItemId = null,
+            PartCostText = QuoteLineDraft.FormatMoney((double)sellPrice),
+            QuantityText = "1"
+        };
+        Lines.Add(line);
+        _ = RecalcAsync();
+    }
+
     public void ApplyService(QuoteLineDraft line, ServicePricingDto service)
     {
         line.ServicePricingId = service.Id;

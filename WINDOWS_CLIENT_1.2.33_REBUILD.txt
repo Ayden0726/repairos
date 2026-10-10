@@ -1,0 +1,17 @@
+WorkshopOS Client 1.2.33 — IMEI device identification + ticket/quote service lists
+
+ONE COMMAND (recommended — download sync zip, push GitHub, build Setup.exe):
+
+  powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\update-github-and-build-client.ps1 -Version 1.2.33
+
+If port 28765 download fails, download the zip once in the browser from Ports, save as
+%TEMP%\repairos-github-sync.zip, then:
+
+  powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\update-github-and-build-client.ps1 -Version 1.2.33 -LocalZip $env:TEMP\repairos-github-sync.zip
+
+Or rebuild client only after overlay:
+
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.33.ps1
+
+Server (WSL): git pull / unzip overlay, then ./scripts/restart-workshopos.sh --update
+Confirm /api/health shows ApiVersion 1.2.33. Configure Settings → Device ID when ready.

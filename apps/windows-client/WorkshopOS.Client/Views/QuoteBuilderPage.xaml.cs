@@ -56,8 +56,9 @@ public sealed partial class QuoteBuilderPage : Page
         QuoteSvcCategoryBox.ItemsSource = _picker.Categories;
         QuoteSvcServicesBox.ItemsSource = null;
         QuoteSvcServicesBox.ItemsSource = _picker.Services;
-        QuoteSvcSelectedBox.ItemsSource = null;
-        QuoteSvcSelectedBox.ItemsSource = _picker.SelectedRows;
+        QuoteSvcSelectedList.ItemsSource = null;
+        QuoteSvcSelectedList.ItemsSource = _picker.SelectedRows;
+        QuoteInvPartBox.ItemsSource = ViewModel.InventoryParts.Take(80).ToList();
         QuoteSvcStatusText.Text = _picker.Status ?? string.Empty;
         QuoteSvcErrorText.Text = _picker.Error ?? string.Empty;
         QuoteSvcFilterHint.Text = _picker.DeviceTypeFilter is null
@@ -375,7 +376,47 @@ public sealed partial class QuoteBuilderPage : Page
         await _picker.AddAsync(QuoteSvcServicesBox.SelectedItem as CatalogueServiceRow);
 
     private void QuoteSvcRemove_Click(object sender, RoutedEventArgs e) =>
-        _picker.Remove(QuoteSvcSelectedBox.SelectedItem as CatalogueServiceRow);
+        _picker.Remove(QuoteSvcSelectedList.SelectedItem as CatalogueServiceRow);
+
+    private void QuoteInvAdd_Click(object sender, RoutedEventArgs e)
+    {
+        InventoryListItemDto? item = QuoteInvPartBox.SelectedItem as InventoryListItemDto;
+        if (item is null && !string.IsNullOrWhiteSpace(QuoteInvPartBox.Text))
+        {
+            var q = QuoteInvPartBox.Text.Trim();
+            item = ViewModel.InventoryParts.FirstOrDefault(p =>
+                p.Sku.Equals(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Equals(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+        if (item is null)
+        {
+            QuoteInvStatusText.Text = "Select a stock part first.";
+            return;
+        }
+        ViewModel.AddInventoryPartLine(item);
+        QuoteInvStatusText.Text = $"Added stock part: {item.Name}";
+    }
+
+    private void QuoteCustomPartAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var name = QuoteCustomPartNameBox.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            QuoteInvStatusText.Text = "Enter a custom part name (special order / no stock).";
+            return;
+        }
+        var priceText = QuoteCustomPartPriceBox.Text?.Trim() ?? "0";
+        if (!decimal.TryParse(priceText, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var price) &&
+            !decimal.TryParse(priceText, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.CurrentCulture, out price))
+            price = 0m;
+        ViewModel.AddCustomPartLine(name, price);
+        QuoteCustomPartNameBox.Text = string.Empty;
+        QuoteCustomPartPriceBox.Text = string.Empty;
+        QuoteInvStatusText.Text = $"Added custom part: {name}";
+    }
 
     private async void AddCatalogueServices_Click(object sender, RoutedEventArgs e)
     {

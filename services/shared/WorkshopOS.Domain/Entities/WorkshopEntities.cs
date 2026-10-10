@@ -36,6 +36,21 @@ public class Device : SoftDeleteEntity
     public string? Imei { get; set; }
     public string? StorageCapacity { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Manufacturer reported by identification (may differ from Brand marketing name).</summary>
+    public string? Manufacturer { get; set; }
+    public string? ModelNumber { get; set; }
+    public string? DisplaySpec { get; set; }
+    public string? Processor { get; set; }
+    public string? Chipset { get; set; }
+    public string? BatteryCapacity { get; set; }
+    public string? NetworkCapabilities { get; set; }
+    public string? Ram { get; set; }
+    /// <summary>Unverified | ModelLevel | DeviceVerified | Manual</summary>
+    public string? IdentificationStatus { get; set; }
+    public string? IdentificationProvider { get; set; }
+    public DateTimeOffset? IdentificationVerifiedAt { get; set; }
+    /// <summary>JSON snapshot of last lookup (model-level + device-specific flags).</summary>
+    public string? IdentificationJson { get; set; }
     public ICollection<RepairTicket> Repairs { get; set; } = new List<RepairTicket>();
 }
 

@@ -476,7 +476,7 @@ public sealed class ApiClient
                 message =
                     "Server outdated — missing " + path
                     + ". In WSL: cd ~/workshopos && chmod +x scripts/*.sh && ./scripts/get-workshopos.sh --update"
-                    + " (or unzip the agent sync zip then ./scripts/restart-workshopos.sh --update). Confirm /api/health shows ApiVersion 1.2.32+, then reconnect. "
+                    + " (or unzip the agent sync zip then ./scripts/restart-workshopos.sh --update). Confirm /api/health shows ApiVersion 1.2.33+, then reconnect. "
                     + message;
             }
             else if (string.IsNullOrWhiteSpace(body) || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))

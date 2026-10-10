@@ -2,7 +2,7 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Current version: 1.2.32+**
+**Current version: 1.2.33+**
 
 ## What it is
 

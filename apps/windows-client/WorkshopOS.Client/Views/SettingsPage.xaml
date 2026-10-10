@@ -34,7 +34,7 @@
                           OffContent="Off" OnContent="On"
                           Toggled="StartWithWindowsToggle_Toggled" />
             <TextBlock x:Name="StartWithWindowsStatusText" FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
-            <TextBlock Text="Client 1.2.29" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.33" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
 
             <TextBlock Text="Your password" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
             <TextBlock Text="Change the password for the account you are signed in as. Requires your current password."
@@ -235,6 +235,38 @@
               </ListView.ItemTemplate>
             </ListView>
             <Button Content="Save module visibility" Click="SaveModules_Click" />
+          </StackPanel>
+        </ScrollViewer>
+      </PivotItem>
+      <PivotItem x:Name="DeviceIdPivot" Header="Device ID" Tag="deviceid">
+        <ScrollViewer Padding="0,16,0,0">
+          <StackPanel Spacing="12" MaxWidth="640">
+            <TextBlock Text="Device identification (IMEI)" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="Automatic IMEI lookup via IMEI.info. API key stays on the server. Staff can still intake devices manually when the key is missing or the provider is offline."
+                       Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="DeviceIdStatusText" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="DeviceIdErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
+            <ToggleSwitch x:Name="DeviceIdEnabledToggle" Header="Enable device identification"
+                          OffContent="Off" OnContent="On" />
+            <ComboBox x:Name="DeviceIdProviderCombo" Header="Provider" Width="280">
+              <x:String>imei.info</x:String>
+            </ComboBox>
+            <PasswordBox x:Name="DeviceIdApiKeyBox" Header="IMEI.info API key (leave blank to keep existing)" />
+            <CheckBox x:Name="DeviceIdClearApiKeyCheck" Content="Clear stored API key" />
+            <TextBlock x:Name="DeviceIdApiKeyHint" FontSize="12" Opacity="0.65" />
+            <CheckBox x:Name="DeviceIdBasicCheck" Content="Basic lookup enabled (service 0 — model/TAC)" IsChecked="True" />
+            <CheckBox x:Name="DeviceIdAdvancedCheck" Content="Paid advanced lookup enabled (device-specific checks)" />
+            <NumberBox x:Name="DeviceIdBasicServiceBox" Header="Basic service ID" Value="0" Minimum="0" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="DeviceIdAdvancedServiceBox" Header="Advanced service ID (optional)" Minimum="0" SpinButtonPlacementMode="Compact" />
+            <CheckBox x:Name="DeviceIdCacheCheck" Content="Cache lookups by TAC" IsChecked="True" />
+            <NumberBox x:Name="DeviceIdCacheTtlBox" Header="Cache TTL (days)" Value="90" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="DeviceIdDailyLimitBox" Header="Daily paid lookup limit (0 = unlimited)" Value="200" Minimum="0" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="DeviceIdBasicCostBox" Header="Estimated basic cost (AUD)" Value="0.02" SmallChange="0.01" SpinButtonPlacementMode="Compact" />
+            <NumberBox x:Name="DeviceIdAdvancedCostBox" Header="Estimated advanced cost (AUD)" SmallChange="0.01" SpinButtonPlacementMode="Compact" />
+            <TextBox x:Name="DeviceIdNotesBox" Header="Notes" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"
+                     PlaceholderText="Account email, purchased services, cost notes…" />
+            <TextBlock x:Name="DeviceIdUsageText" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+            <Button Content="Save device identification" Click="SaveDeviceId_Click" Style="{StaticResource AccentButtonStyle}" />
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
