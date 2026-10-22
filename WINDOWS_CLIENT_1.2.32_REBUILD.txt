@@ -4,6 +4,12 @@ Includes:
 - Finance → Expenses page (GST dashboard, create/edit, CSV export)
 - Settings → Integrations → API Credentials (encrypted secrets UI)
 - ClientMinVersion / product version 1.2.32
+- Connect / Settings banners show **Client 1.2.32** (driven by assembly InformationalVersion)
 
 Server must be on 1.2.32+ with migration SecurityCredentialsAndExpenses applied
 and Encryption__Key set in Docker/.env (see docs/SETTINGS_AND_SECURITY.md).
+
+Build:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.32.ps1
+  # or one-shot push + installer:
+  powershell -ExecutionPolicy Bypass -File .\scripts\update-github-and-build-client.ps1

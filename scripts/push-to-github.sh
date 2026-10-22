@@ -3,7 +3,7 @@
 #
 #   export GITHUB_TOKEN=ghp_...   # or GH_TOKEN
 #   ./scripts/push-to-github.sh
-#   ./scripts/push-to-github.sh --tag v1.2.33
+#   ./scripts/push-to-github.sh --tag v1.2.34
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,7 +11,7 @@ cd "$ROOT"
 
 REPO_URL="${GITHUB_REPO_URL:-https://github.com/Ayden0726/repairos.git}"
 TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
-TAG="${GITHUB_TAG:-v1.2.33}"
+TAG="${GITHUB_TAG:-v1.2.34}"
 SKIP_TAG=0
 
 while [[ $# -gt 0 ]]; do

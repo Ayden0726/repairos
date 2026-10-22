@@ -15,6 +15,7 @@ public sealed partial class ServerConnectPage : Page
         ViewModel = App.Services.GetRequiredService<ServerConnectViewModel>();
         InitializeComponent();
         DataContext = ViewModel;
+        ClientVersionBanner.Text = ClientAppInfo.BannerText;
         ViewModel.Navigate = route => Frame.Navigate(route == "setup" ? typeof(SetupPage) : typeof(LoginPage));
         Loaded += (_, _) => SyncThemeToggle();
     }

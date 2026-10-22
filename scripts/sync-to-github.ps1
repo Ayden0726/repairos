@@ -9,13 +9,13 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-github.ps1
-  powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-github.ps1 -Tag v1.2.33
+  powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-github.ps1 -Tag v1.2.34
 #>
 param(
   [string]$RemoteUrl = "https://github.com/Ayden0726/repairos.git",
   [string]$Branch = "main",
-  [string]$Tag = "v1.2.33",
-  [string]$Message = "WorkshopOS 1.2.33: encrypted credentials, expenses, Raspberry Pi server",
+  [string]$Tag = "v1.2.34",
+  [string]$Message = "WorkshopOS 1.2.34: encrypted credentials, expenses, Raspberry Pi server",
   [switch]$SkipTag,
   [switch]$DryRun
 )
@@ -81,7 +81,7 @@ if (-not $SkipTag -and $Tag) {
 
 Write-Host ""
 Write-Host "  Done. Next:"
-Write-Host "    - Rebuild client: packaging\build-client.ps1 -Version 1.2.32"
+Write-Host "    - Rebuild client: packaging\build-client.ps1 -Version 1.2.34"
 Write-Host "    - Update servers:  git pull && ./scripts/restart-workshopos.sh --update"
 Write-Host "    - Pi / security:   docs\RASPBERRY_PI.md  docs\SETTINGS_AND_SECURITY.md"
 Write-Host "    - Full guide:      docs\GITHUB_SYNC.md"

@@ -1,0 +1,17 @@
+Rebuild Windows client 1.2.34 after pulling main.
+
+Product / API / client are aligned on **1.2.34**.
+
+Includes:
+- Finance → Expenses (GST, recurring, CSV)
+- Settings → Integrations → API Credentials (encrypted)
+- Raspberry Pi 3B+ server support
+- Connect / Settings banners show **Client 1.2.34** (assembly InformationalVersion)
+
+Server must be on 1.2.34+ with migration SecurityCredentialsAndExpenses applied
+and Encryption__Key set in Docker/.env (see docs/SETTINGS_AND_SECURITY.md).
+
+Build:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.34.ps1
+  # or one-shot push + installer:
+  powershell -ExecutionPolicy Bypass -File .\scripts\update-github-and-build-client.ps1

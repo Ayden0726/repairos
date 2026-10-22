@@ -2,7 +2,7 @@
 # Commit this WorkshopOS tree and push to GitHub (Ayden0726/repairos).
 #
 #   ./scripts/sync-to-github.sh
-#   ./scripts/sync-to-github.sh --tag v1.2.33
+#   ./scripts/sync-to-github.sh --tag v1.2.34
 #   ./scripts/sync-to-github.sh --dry-run
 #
 # Run inside your local clone after overlaying the sync zip (docs/GITHUB_SYNC.md).
@@ -13,8 +13,8 @@ cd "$ROOT"
 
 REMOTE_URL="${GITHUB_REPO_URL:-https://github.com/Ayden0726/repairos.git}"
 BRANCH="${GITHUB_BRANCH:-main}"
-TAG="${GITHUB_TAG:-v1.2.33}"
-MESSAGE="${GITHUB_COMMIT_MSG:-WorkshopOS 1.2.33: encrypted credentials, expenses, Raspberry Pi server}"
+TAG="${GITHUB_TAG:-v1.2.34}"
+MESSAGE="${GITHUB_COMMIT_MSG:-WorkshopOS 1.2.34: encrypted credentials, expenses, Raspberry Pi server}"
 SKIP_TAG=0
 DRY_RUN=0
 

@@ -14,7 +14,7 @@ mkdir -p "$OUT" "$SERVE"
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
 
-VERSION="1.2.33"
+VERSION="1.2.34"
 TIP="$(git -C "$ROOT" rev-parse --short HEAD)"
 
 echo "==> Staging clean tree (no .git / bin / obj / node_modules / large zips)"
@@ -52,6 +52,14 @@ cp -f "$ZIP" "$FLAT" "$BUNDLE" "$SERVE/"
 # Prefer flat zip as the canonical download name on the HTTP server
 cp -f "$FLAT" "$SERVE/repairos-github-sync.zip"
 cp -f "$FLAT" "$OUT/repairos-github-sync.zip"
+# Product-named flat zip (used by README / one-shot script)
+NAMED="$OUT/WorkshopOS-${VERSION}-github-sync.zip"
+cp -f "$FLAT" "$NAMED"
+cp -f "$FLAT" "$SERVE/WorkshopOS-${VERSION}-github-sync.zip"
+cp -f "$FLAT" "$ROOT/dist/WorkshopOS-${VERSION}-github-sync.zip" 2>/dev/null || {
+  mkdir -p "$ROOT/dist"
+  cp -f "$FLAT" "$ROOT/dist/WorkshopOS-${VERSION}-github-sync.zip"
+}
 
 cat > "$OUT/GITHUB_SYNC_INSTRUCTIONS.txt" <<EOF
 WorkshopOS / repairos — sync this agent workspace to GitHub
@@ -65,40 +73,40 @@ Agent tip: $TIP   Product: $VERSION
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to your personal GitHub without your token.
 
-Download (agent HTTP serve, port 28765 — use Ports UI URL if not localhost):
-  http://127.0.0.1:28765/repairos-github-sync.zip     (FLAT tree overlay)
-  http://127.0.0.1:28765/repairos-main.bundle
-  http://127.0.0.1:28765/GITHUB_SYNC_INSTRUCTIONS.txt
+Download (agent HTTP serve, port 18765 — use Ports UI URL if not localhost):
+  http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip     (FLAT tree overlay)
+  http://127.0.0.1:18765/repairos-github-sync.zip
+  http://127.0.0.1:18765/repairos-main.bundle
+  http://127.0.0.1:18765/GITHUB_SYNC_INSTRUCTIONS.txt
 
 Also on disk:
+  /opt/cursor/artifacts/WorkshopOS-1.2.34-github-sync.zip
   /opt/cursor/artifacts/repairos-github-sync.zip
   /opt/cursor/artifacts/repairos-main.bundle
   /opt/cursor/artifacts/GITHUB_SYNC_INSTRUCTIONS.txt
 
 Full guide in the repo after overlay: docs/GITHUB_SYNC.md
+Push + Setup.exe one-shot: scripts/update-github-and-build-client.ps1 (see README.md)
 
 ────────────────────────────────────────────────────────────
-OPTION A (recommended): PowerShell overlay → push
+OPTION A (recommended): PowerShell overlay → push + Setup.exe
 ────────────────────────────────────────────────────────────
 
-  \$repo = 'C:\\Users\\ayden\\src\\repairos'
-  \$zip  = "\$env:TEMP\\repairos-github-sync.zip"
-  New-Item -ItemType Directory -Force -Path \$repo | Out-Null
-  if (-not (Test-Path "\$repo\\.git")) {
-    git clone https://github.com/Ayden0726/repairos.git \$repo
-  }
-  Invoke-WebRequest -Uri 'http://127.0.0.1:28765/repairos-github-sync.zip' -OutFile \$zip
-  Expand-Archive -Path \$zip -DestinationPath \$repo -Force
-  powershell -ExecutionPolicy Bypass -File "\$repo\\scripts\\sync-to-github.ps1"
+  \$r = 'C:\\Users\\ayden\\src\\repairos'
+  \$z = "\$env:TEMP\\WorkshopOS-1.2.34-github-sync.zip"
+  New-Item -ItemType Directory -Force -Path \$r | Out-Null
+  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip' -OutFile \$z
+  Expand-Archive -Path \$z -DestinationPath \$r -Force
+  powershell -ExecutionPolicy Bypass -File "\$r\\scripts\\update-github-and-build-client.ps1"
 
 ────────────────────────────────────────────────────────────
-OPTION B: WSL / bash
+OPTION B: WSL / bash (push only)
 ────────────────────────────────────────────────────────────
 
   REPO="\${HOME}/src/repairos"
-  ZIP=/tmp/repairos-github-sync.zip
+  ZIP=/tmp/WorkshopOS-1.2.34-github-sync.zip
   [[ -d "\$REPO/.git" ]] || git clone https://github.com/Ayden0726/repairos.git "\$REPO"
-  curl -fsSL -o "\$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
+  curl -fsSL -o "\$ZIP" 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO" && chmod +x scripts/*.sh && ./scripts/sync-to-github.sh
 

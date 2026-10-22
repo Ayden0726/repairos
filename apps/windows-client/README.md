@@ -68,7 +68,7 @@ dotnet run --project WorkshopOS.Client\WorkshopOS.Client.csproj
 
 On launch (**Client 1.2.16+**):
 
-1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.16**. No “Connecting to server…” splash — Bootstrap is never the initial page.
+1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.34** (from assembly version). No “Connecting to server…” splash — Bootstrap is never the initial page.
 2. After you connect successfully → **Setup** (first-run shop + owner) or **Login**.
 
 Connect options on ServerConnect:

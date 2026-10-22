@@ -50,6 +50,7 @@ public sealed partial class SettingsPage : Page
     private async void SettingsPage_Loaded(object sender, RoutedEventArgs e)
     {
         ApplyRoleVisibility();
+        ClientVersionText.Text = ClientAppInfo.BannerText;
         var settings = App.Services.GetRequiredService<IAppSettingsStore>();
         SelectThemeCombo(settings.Theme);
         _themeComboReady = true;

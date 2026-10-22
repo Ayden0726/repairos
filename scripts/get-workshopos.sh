@@ -23,7 +23,7 @@ SKIP_DEPS=0
 DO_UPDATE=0
 FORCE_PI=0
 NO_PI=0
-PRODUCT_VERSION="1.2.33+"
+PRODUCT_VERSION="1.2.34+"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

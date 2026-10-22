@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.34 — 2026-10-22
+
+### Unified release version
+- API / product, Windows client, and `ClientMinVersion` all **1.2.34** (no more 1.2.32 client vs 1.2.33 API split)
+- Connect / Settings version banners driven by assembly `InformationalVersion` (`ClientAppInfo`) — no more stuck **1.2.25** labels
+- Packaging, GitHub sync zip, one-shot push/build scripts, and Inno Setup defaults updated for **1.2.34**
+- Sync artifact: `WorkshopOS-1.2.34-github-sync.zip` (agent port **18765**)
+
+Carries forward from 1.2.32 / 1.2.33: encrypted API credentials, expenses (AU GST), Raspberry Pi 3B+ server stack, settings persistence fixes.
+
+- API / client version `1.2.34` (ClientMinVersion `1.2.34`)
+
 ## 1.2.33 — 2026-10-22
 
 ### Raspberry Pi / ARM server support
@@ -14,6 +26,11 @@
 - `docs/GITHUB_SYNC.md` — push to Ayden0726/repairos + deploy servers/Pi
 - `scripts/sync-to-github.ps1` / `scripts/sync-to-github.sh` — one-shot commit+push+tag
 - Updated `build-github-sync-artifacts.sh` for 1.2.33 overlay zip + git bundle
+
+### Windows client version display
+- Connect / bootstrap / Settings banners were stuck on **Client 1.2.25** / **1.2.29** (hardcoded XAML)
+- Now read assembly `InformationalVersion` via `ClientAppInfo` so the UI matches `WorkshopOS.Client.csproj` (**1.2.32**)
+- Packaging defaults (`build-client.ps1`, Inno Setup, `rebuild-client.ps1`) aligned to **1.2.32**
 
 - API version `1.2.33` (ClientMinVersion still `1.2.32`)
 

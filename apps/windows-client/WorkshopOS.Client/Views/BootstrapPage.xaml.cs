@@ -15,6 +15,7 @@ public sealed partial class BootstrapPage : Page
     public BootstrapPage()
     {
         InitializeComponent();
+        BuildBanner.Text = ClientAppInfo.BannerText;
         Loaded += OnLoaded;
     }
 
