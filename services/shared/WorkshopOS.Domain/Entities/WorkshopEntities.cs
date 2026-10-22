@@ -36,6 +36,19 @@ public class Device : SoftDeleteEntity
     public string? Imei { get; set; }
     public string? StorageCapacity { get; set; }
     public string? Notes { get; set; }
+    // Populated by Device Identification / IMEI lookup (optional)
+    public string? Manufacturer { get; set; }
+    public string? ModelNumber { get; set; }
+    public string? DisplaySpec { get; set; }
+    public string? Processor { get; set; }
+    public string? Chipset { get; set; }
+    public string? BatteryCapacity { get; set; }
+    public string? NetworkCapabilities { get; set; }
+    public string? Ram { get; set; }
+    public string? IdentificationProvider { get; set; }
+    public string? IdentificationStatus { get; set; }
+    public DateTimeOffset? IdentificationVerifiedAt { get; set; }
+    public string? IdentificationJson { get; set; }
     public ICollection<RepairTicket> Repairs { get; set; } = new List<RepairTicket>();
 }
 

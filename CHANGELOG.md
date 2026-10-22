@@ -8,6 +8,11 @@
 - Packaging, GitHub sync zip, one-shot push/build scripts, and Inno Setup defaults updated for **1.2.34**
 - Sync artifact: `WorkshopOS-1.2.34-github-sync.zip` (agent port **18765**)
 
+### Build fix — Device Identification / IMEI (WSL Docker)
+- Restored orphaned IMEI feature that broke `docker compose` builds (`IDeviceIdentificationService` / `SecretProtector` CS0246)
+- Wired interface, DI, `SettingKeys.DeviceIdentification`, IMEI DbSets, catalogue Series/Aliases fields, and migrations
+- Worker + API publish verified; DeviceIdentification + security tests green
+
 Carries forward from 1.2.32 / 1.2.33: encrypted API credentials, expenses (AU GST), Raspberry Pi 3B+ server stack, settings persistence fixes.
 
 - API / client version `1.2.34` (ClientMinVersion `1.2.34`)

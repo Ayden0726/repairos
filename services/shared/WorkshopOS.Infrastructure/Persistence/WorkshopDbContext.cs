@@ -90,6 +90,10 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<ExpenseAttachment> ExpenseAttachments => Set<ExpenseAttachment>();
     public DbSet<RecurringExpense> RecurringExpenses => Set<RecurringExpense>();
 
+    // Device identification / IMEI
+    public DbSet<ImeiLookupLog> ImeiLookupLogs => Set<ImeiLookupLog>();
+    public DbSet<ImeiTacCache> ImeiTacCaches => Set<ImeiTacCache>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AppUser>(e =>
@@ -181,6 +185,16 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Category).HasConversion<string>().HasMaxLength(32);
             e.Property(x => x.Brand).HasMaxLength(120).IsRequired();
             e.Property(x => x.Model).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Manufacturer).HasMaxLength(120);
+            e.Property(x => x.ModelNumber).HasMaxLength(120);
+            e.Property(x => x.DisplaySpec).HasMaxLength(200);
+            e.Property(x => x.Processor).HasMaxLength(160);
+            e.Property(x => x.Chipset).HasMaxLength(160);
+            e.Property(x => x.BatteryCapacity).HasMaxLength(80);
+            e.Property(x => x.NetworkCapabilities).HasMaxLength(200);
+            e.Property(x => x.Ram).HasMaxLength(80);
+            e.Property(x => x.IdentificationProvider).HasMaxLength(80);
+            e.Property(x => x.IdentificationStatus).HasMaxLength(40);
             e.HasIndex(x => x.Serial);
             e.HasIndex(x => x.Imei);
             e.HasOne(x => x.Customer).WithMany(c => c.Devices).HasForeignKey(x => x.CustomerId);
@@ -450,10 +464,14 @@ public sealed class WorkshopDbContext : DbContext
         {
             e.ToTable("device_models");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
             e.Property(x => x.DeviceType).HasMaxLength(64);
+            e.Property(x => x.Series).HasMaxLength(120);
+            e.Property(x => x.Aliases).HasMaxLength(1000);
             e.HasIndex(x => new { x.BrandId, x.Name }).IsUnique();
             e.HasIndex(x => x.SortOrder);
+            e.HasIndex(x => x.DeviceType);
+            e.HasIndex(x => x.Series);
             e.HasOne(x => x.Brand).WithMany(b => b.Models).HasForeignKey(x => x.BrandId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -1057,6 +1075,36 @@ public sealed class WorkshopDbContext : DbContext
             e.HasIndex(x => x.NextDueDate);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<ImeiLookupLog>(e =>
+        {
+            e.ToTable("imei_lookup_logs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ImeiHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Tac).HasMaxLength(8);
+            e.Property(x => x.Provider).HasMaxLength(80).IsRequired();
+            e.Property(x => x.ErrorCode).HasMaxLength(80);
+            e.Property(x => x.VerificationStatus).HasMaxLength(40).IsRequired();
+            e.HasIndex(x => x.ActorUserId);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.ImeiHash);
+        });
+
+        modelBuilder.Entity<ImeiTacCache>(e =>
+        {
+            e.ToTable("imei_tac_cache");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Tac).HasMaxLength(8).IsRequired();
+            e.Property(x => x.Provider).HasMaxLength(80).IsRequired();
+            e.Property(x => x.Brand).HasMaxLength(120);
+            e.Property(x => x.Manufacturer).HasMaxLength(120);
+            e.Property(x => x.Model).HasMaxLength(200);
+            e.Property(x => x.ModelNumber).HasMaxLength(120);
+            e.Property(x => x.DeviceCategory).HasMaxLength(40);
+            e.Property(x => x.VerificationStatus).HasMaxLength(40).IsRequired();
+            e.HasIndex(x => x.ExpiresAt);
+            e.HasIndex(x => new { x.Tac, x.Provider }).IsUnique();
+        });
     }
 }
 
@@ -1071,6 +1119,7 @@ public static class SettingKeys
     public const string PricingSettings = "pricing.settings";
     public const string ServiceCatalogueVersion = "seed.service_catalogue_version";
     public const string PosSettings = "pos.settings";
+    public const string DeviceIdentification = "device.identification";
 }
 
 public static class DbSeed

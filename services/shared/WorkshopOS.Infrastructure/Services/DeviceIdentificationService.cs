@@ -11,6 +11,7 @@ using WorkshopOS.Application.Common;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Domain.Entities;
 using WorkshopOS.Infrastructure.Persistence;
+using WorkshopOS.Infrastructure.Security;
 
 namespace WorkshopOS.Infrastructure.Services;
 

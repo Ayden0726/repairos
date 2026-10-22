@@ -70,6 +70,12 @@ public class DeviceModel : SoftDeleteEntity
     public DeviceBrand Brand { get; set; } = null!;
     public string Name { get; set; } = string.Empty;
     public string? DeviceType { get; set; }
+    /// <summary>Optional series label (e.g. Galaxy S, iPhone).</summary>
+    public string? Series { get; set; }
+    /// <summary>Comma-separated alternate names / marketing names for IMEI matching.</summary>
+    public string? Aliases { get; set; }
+    public int? ReleaseYear { get; set; }
+    public bool IsVerified { get; set; } = true;
     public int SortOrder { get; set; }
     public bool IsSystem { get; set; }
 }

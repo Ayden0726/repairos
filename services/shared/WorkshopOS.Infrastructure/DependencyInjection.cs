@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddSingleton<SecretProtector>();
         services.AddScoped<IIntegrationCredentialService, IntegrationCredentialService>();
         services.AddScoped<IExpenseService, ExpenseService>();
+        services.AddScoped<IDeviceIdentificationService, DeviceIdentificationService>();
         services.AddScoped<IClock, SystemClock>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<ISetupService, SetupService>();
@@ -67,6 +68,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationOutboxProcessor, NotificationOutboxProcessor>();
         services.AddHttpClient("ollama");
         services.AddHttpClient("woocommerce");
+        services.AddHttpClient("imei.info");
 
         var jwt = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)

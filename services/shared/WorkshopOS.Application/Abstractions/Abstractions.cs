@@ -281,6 +281,16 @@ public interface IIntegrationCredentialService
     Task<string?> GetPublicConfigAsync(string providerKey, CancellationToken ct = default);
 }
 
+public interface IDeviceIdentificationService
+{
+    Task<DeviceIdentificationSettingsDto> GetSettingsAsync(CancellationToken ct = default);
+    Task<DeviceIdentificationSettingsDto> UpdateSettingsAsync(
+        UpdateDeviceIdentificationSettingsRequest request, Guid actorId, CancellationToken ct = default);
+    Task<DeviceIdentificationTestResultDto> TestConnectionAsync(CancellationToken ct = default);
+    Task<ImeiValidateResultDto> ValidateAsync(ImeiValidateRequest request, CancellationToken ct = default);
+    Task<ImeiLookupResultDto> LookupAsync(ImeiLookupRequest request, Guid actorId, CancellationToken ct = default);
+}
+
 public interface IExpenseService
 {
     Task EnsureDefaultsAsync(CancellationToken ct = default);
