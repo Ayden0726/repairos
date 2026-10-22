@@ -5,6 +5,7 @@ using WorkshopOS.Contracts.Workshop;
 using WorkshopOS.Domain.Entities;
 using WorkshopOS.Domain.Enums;
 using WorkshopOS.Infrastructure.Persistence;
+using WorkshopOS.Infrastructure.Security;
 
 namespace WorkshopOS.Infrastructure.Services;
 
@@ -93,22 +94,7 @@ public sealed class RepairService : IRepairService
                 Brand = request.NewDeviceBrand.Trim(),
                 Model = request.NewDeviceModel.Trim(),
                 Serial = string.IsNullOrWhiteSpace(request.NewDeviceSerial) ? null : request.NewDeviceSerial.Trim(),
-                Imei = string.IsNullOrWhiteSpace(request.NewDeviceImei) ? null : request.NewDeviceImei.Trim(),
-                Colour = string.IsNullOrWhiteSpace(request.NewDeviceColour) ? null : request.NewDeviceColour.Trim(),
-                StorageCapacity = string.IsNullOrWhiteSpace(request.NewDeviceStorage) ? null : request.NewDeviceStorage.Trim(),
-                Manufacturer = string.IsNullOrWhiteSpace(request.NewDeviceManufacturer) ? null : request.NewDeviceManufacturer.Trim(),
-                ModelNumber = string.IsNullOrWhiteSpace(request.NewDeviceModelNumber) ? null : request.NewDeviceModelNumber.Trim(),
-                Notes = string.IsNullOrWhiteSpace(request.NewDeviceNotes) ? null : request.NewDeviceNotes.Trim(),
-                DisplaySpec = string.IsNullOrWhiteSpace(request.NewDeviceDisplaySpec) ? null : request.NewDeviceDisplaySpec.Trim(),
-                Processor = string.IsNullOrWhiteSpace(request.NewDeviceProcessor) ? null : request.NewDeviceProcessor.Trim(),
-                Chipset = string.IsNullOrWhiteSpace(request.NewDeviceChipset) ? null : request.NewDeviceChipset.Trim(),
-                BatteryCapacity = string.IsNullOrWhiteSpace(request.NewDeviceBatteryCapacity) ? null : request.NewDeviceBatteryCapacity.Trim(),
-                NetworkCapabilities = string.IsNullOrWhiteSpace(request.NewDeviceNetwork) ? null : request.NewDeviceNetwork.Trim(),
-                Ram = string.IsNullOrWhiteSpace(request.NewDeviceRam) ? null : request.NewDeviceRam.Trim(),
-                IdentificationStatus = string.IsNullOrWhiteSpace(request.NewDeviceIdentificationStatus) ? null : request.NewDeviceIdentificationStatus.Trim(),
-                IdentificationProvider = string.IsNullOrWhiteSpace(request.NewDeviceIdentificationProvider) ? null : request.NewDeviceIdentificationProvider.Trim(),
-                IdentificationVerifiedAt = request.NewDeviceIdentificationVerifiedAt,
-                IdentificationJson = string.IsNullOrWhiteSpace(request.NewDeviceIdentificationJson) ? null : request.NewDeviceIdentificationJson
+                Imei = string.IsNullOrWhiteSpace(request.NewDeviceImei) ? null : request.NewDeviceImei.Trim()
             };
             _db.Devices.Add(device);
             await _db.SaveChangesAsync(ct);
@@ -165,40 +151,21 @@ public sealed class RepairService : IRepairService
         customer.LastVisitAt = DateTimeOffset.UtcNow;
 
         var selections = BuildServiceSelections(request);
-        var partsPayload = await BuildPartsPayloadAsync(request.SelectedParts, ct);
-        decimal labourOnce = 0m;
-        decimal partsSellTotal = partsPayload.SellTotal;
         if (selections.Count > 0)
         {
             var ids = selections.Select(s => s.ServicePricingId).Distinct().ToList();
             var services = await _db.ServicePricings.Where(s => ids.Contains(s.Id) && s.ArchivedAt == null)
                 .ToDictionaryAsync(s => s.Id, ct);
             var order = 0;
+            decimal labourSum = 0m;
             var names = new List<string>();
-            var isFirst = true;
             foreach (var sel in selections)
             {
                 if (!services.TryGetValue(sel.ServicePricingId, out var svc)) continue;
                 order += 10;
-                // Multi-service tickets: charge labour/service fee once on the first line; later lines track work only.
-                decimal labour;
-                decimal serviceFee;
-                if (isFirst)
-                {
-                    labour = sel.LabourOverride ?? svc.DefaultLabourFee + svc.ServiceFee;
-                    serviceFee = svc.ServiceFee;
-                    labourOnce = labour;
-                    isFirst = false;
-                }
-                else
-                {
-                    labour = sel.LabourOverride ?? 0m;
-                    serviceFee = 0m;
-                }
+                var labour = sel.LabourOverride ?? svc.DefaultLabourFee + svc.ServiceFee;
+                labourSum += labour;
                 names.Add(svc.Name);
-                var partsJson = sel.PartsJson;
-                if (string.IsNullOrWhiteSpace(partsJson) && partsPayload.Json is not null && order == 10)
-                    partsJson = partsPayload.Json;
                 _db.RepairServiceLines.Add(new RepairServiceLine
                 {
                     RepairTicketId = ticket.Id,
@@ -206,34 +173,18 @@ public sealed class RepairService : IRepairService
                     ServiceName = svc.Name,
                     Code = svc.Code,
                     LabourFee = labour,
-                    ServiceFee = serviceFee,
+                    ServiceFee = svc.ServiceFee,
                     EstimatedMinutes = svc.EstimatedMinutes,
                     WarrantyDays = svc.WarrantyDays,
                     Notes = sel.Notes,
-                    PartsJson = partsJson,
+                    PartsJson = sel.PartsJson,
                     SortOrder = order
                 });
             }
+            if (ticket.EstimatedPrice is null && labourSum > 0m)
+                ticket.EstimatedPrice = labourSum;
             if (names.Count > 0 && string.IsNullOrWhiteSpace(ticket.RecommendedRepair))
                 ticket.RecommendedRepair = string.Join(", ", names);
-        }
-        else if (partsPayload.Json is not null)
-        {
-            _db.RepairServiceLines.Add(new RepairServiceLine
-            {
-                RepairTicketId = ticket.Id,
-                ServiceName = "Parts",
-                LabourFee = 0m,
-                ServiceFee = 0m,
-                PartsJson = partsPayload.Json,
-                SortOrder = 10
-            });
-        }
-
-        if (ticket.EstimatedPrice is null)
-        {
-            var estimate = labourOnce + partsSellTotal;
-            if (estimate > 0m) ticket.EstimatedPrice = estimate;
         }
 
         await _db.SaveChangesAsync(ct);
@@ -259,63 +210,6 @@ public sealed class RepairService : IRepairService
             }
         }
         return list;
-    }
-
-    private sealed record PartsPayload(string? Json, decimal SellTotal);
-
-    private async Task<PartsPayload> BuildPartsPayloadAsync(
-        IReadOnlyList<RepairPartSelectionDto>? selectedParts, CancellationToken ct)
-    {
-        if (selectedParts is null || selectedParts.Count == 0)
-            return new PartsPayload(null, 0m);
-
-        var ids = selectedParts.Where(p => p.InventoryItemId is Guid).Select(p => p.InventoryItemId!.Value).Distinct().ToList();
-        var items = ids.Count == 0
-            ? new Dictionary<Guid, InventoryItem>()
-            : await _db.InventoryItems.AsNoTracking()
-                .Where(i => ids.Contains(i.Id) && i.ArchivedAt == null)
-                .ToDictionaryAsync(i => i.Id, ct);
-
-        var rows = new List<object>();
-        decimal sellTotal = 0m;
-        foreach (var part in selectedParts)
-        {
-            var qty = part.Quantity < 1 ? 1 : part.Quantity;
-            if (part.InventoryItemId is null)
-            {
-                var customName = string.IsNullOrWhiteSpace(part.CustomName) ? "Custom part" : part.CustomName.Trim();
-                var customSell = part.CustomSellPrice ?? 0m;
-                sellTotal += customSell * qty;
-                rows.Add(new
-                {
-                    inventoryItemId = (Guid?)null,
-                    sku = "CUSTOM",
-                    name = customName,
-                    quantity = qty,
-                    unitCost = 0m,
-                    unitSell = customSell,
-                    lineSell = customSell * qty,
-                    isCustom = true,
-                    notes = part.Notes
-                });
-                continue;
-            }
-            if (!items.TryGetValue(part.InventoryItemId.Value, out var item)) continue;
-            sellTotal += item.SellPrice * qty;
-            rows.Add(new
-            {
-                inventoryItemId = item.Id,
-                sku = item.Sku,
-                name = item.Name,
-                quantity = qty,
-                unitCost = item.Cost,
-                unitSell = item.SellPrice,
-                notes = part.Notes
-            });
-        }
-
-        if (rows.Count == 0) return new PartsPayload(null, 0m);
-        return new PartsPayload(System.Text.Json.JsonSerializer.Serialize(rows), sellTotal);
     }
 
     public async Task<RepairDetailDto> ChangeStatusAsync(Guid id, Guid statusId, Guid actorId, CancellationToken ct = default)

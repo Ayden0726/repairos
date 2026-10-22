@@ -1,4 +1,3 @@
-using System.Reflection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WorkshopOS.Client.Services;
@@ -16,20 +15,7 @@ public sealed partial class BootstrapPage : Page
     public BootstrapPage()
     {
         InitializeComponent();
-        BuildBanner.Text = "Client " + ClientBuildLabel();
         Loaded += OnLoaded;
-    }
-
-    private static string ClientBuildLabel()
-    {
-        var asm = typeof(App).Assembly;
-        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(info))
-        {
-            var plus = info.IndexOf('+');
-            return plus > 0 ? info[..plus] : info;
-        }
-        return asm.GetName().Version?.ToString(3) ?? "unknown";
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

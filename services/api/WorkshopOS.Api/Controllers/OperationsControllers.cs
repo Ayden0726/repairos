@@ -439,12 +439,31 @@ public sealed class BuildsController : ControllerBase
 public sealed class UsedTechController : ControllerBase
 {
     private readonly IUsedTechService _used;
-    public UsedTechController(IUsedTechService used) => _used = used;
+    private readonly IRefurbDashboardService _dashboard;
+    private readonly IRefurbBuyCalculatorService _buyCalc;
+
+    public UsedTechController(
+        IUsedTechService used, IRefurbDashboardService dashboard, IRefurbBuyCalculatorService buyCalc)
+    {
+        _used = used;
+        _dashboard = dashboard;
+        _buyCalc = buyCalc;
+    }
 
     [HttpGet]
     [Authorize(Policy = "perm:used.view")]
     public Task<IReadOnlyList<UsedDeviceDto>> List([FromQuery] string? q, [FromQuery] string? status, CancellationToken ct) =>
         _used.ListAsync(q, status, ct);
+
+    [HttpGet("dashboard")]
+    [Authorize(Policy = "perm:used.view")]
+    public Task<RefurbDashboardDto> Dashboard([FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct) =>
+        _dashboard.GetAsync(from, to, ct);
+
+    [HttpPost("buy-calculator")]
+    [Authorize(Policy = "perm:used.view")]
+    public Task<RefurbBuyCalcResult> BuyCalculator([FromBody] RefurbBuyCalcRequest request, CancellationToken ct) =>
+        _buyCalc.CalculateAsync(request, ct);
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "perm:used.view")]
@@ -464,6 +483,50 @@ public sealed class UsedTechController : ControllerBase
     [Authorize(Policy = "perm:used.manage")]
     public Task<UsedDeviceDetailDto> Status(Guid id, [FromBody] UpdateUsedStatusRequest request, CancellationToken ct) =>
         _used.UpdateStatusAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/acquisitions")]
+public sealed class AcquisitionsController : ControllerBase
+{
+    private readonly IAcquisitionService _acquisitions;
+    public AcquisitionsController(IAcquisitionService acquisitions) => _acquisitions = acquisitions;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:acquisitions.view")]
+    public Task<IReadOnlyList<AcquisitionLeadListItemDto>> List([FromQuery] string? q, [FromQuery] string? status, CancellationToken ct) =>
+        _acquisitions.ListAsync(q, status, ct);
+
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "perm:acquisitions.view")]
+    public Task<AcquisitionLeadDetailDto> Get(Guid id, CancellationToken ct) => _acquisitions.GetAsync(id, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:acquisitions.manage")]
+    public Task<AcquisitionLeadDetailDto> Create([FromBody] CreateAcquisitionLeadRequest request, CancellationToken ct) =>
+        _acquisitions.CreateAsync(request, UserId(), ct);
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "perm:acquisitions.manage")]
+    public Task<AcquisitionLeadDetailDto> Update(Guid id, [FromBody] UpdateAcquisitionLeadRequest request, CancellationToken ct) =>
+        _acquisitions.UpdateAsync(id, request, UserId(), ct);
+
+    [HttpPost("{id:guid}/status")]
+    [Authorize(Policy = "perm:acquisitions.manage")]
+    public Task<AcquisitionLeadDetailDto> Status(Guid id, [FromBody] UpdateAcquisitionStatusRequest request, CancellationToken ct) =>
+        _acquisitions.UpdateStatusAsync(id, request, UserId(), ct);
+
+    [HttpPost("{id:guid}/offers")]
+    [Authorize(Policy = "perm:acquisitions.manage")]
+    public Task<AcquisitionOfferDto> Offer(Guid id, [FromBody] CreateAcquisitionOfferRequest request, CancellationToken ct) =>
+        _acquisitions.AddOfferAsync(id, request, UserId(), ct);
+
+    [HttpPost("{id:guid}/convert")]
+    [Authorize(Policy = "perm:acquisitions.manage")]
+    public Task<UsedDeviceDetailDto> Convert(Guid id, [FromBody] ConvertAcquisitionRequest? request, CancellationToken ct) =>
+        _acquisitions.ConvertToInventoryAsync(id, request ?? new ConvertAcquisitionRequest(null, null, null, null, null), UserId(), ct);
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

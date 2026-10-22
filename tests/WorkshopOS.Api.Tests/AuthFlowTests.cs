@@ -102,16 +102,6 @@ public sealed class PasswordRulesTests
         var result = WorkshopOS.Application.Common.PasswordRules.Validate(password);
         (result is null).Should().Be(ok);
     }
-
-    [Fact]
-    public void GenerateTemporary_Passes_Strength_Rules()
-    {
-        for (var i = 0; i < 20; i++)
-        {
-            var pwd = WorkshopOS.Application.Common.PasswordRules.GenerateTemporary();
-            WorkshopOS.Application.Common.PasswordRules.Validate(pwd).Should().BeNull(pwd);
-        }
-    }
 }
 
 [CollectionDefinition("api")]
@@ -126,6 +116,8 @@ public sealed class WorkshopApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("ConnectionStrings:Default",
             $"Host=127.0.0.1;Port=5432;Database={Database};Username=workshopos;Password=workshopos_dev");
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-workshopos-32chars-min!!");
+        builder.UseSetting("Encryption:Key", "test-encryption-key-workshopos-32chars-min!!");
+        builder.UseSetting("Encryption:KeyVersion", "1");
         builder.UseSetting("Seed:Demo", "false");
         builder.UseEnvironment("Development");
     }

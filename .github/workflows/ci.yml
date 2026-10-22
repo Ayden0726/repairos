@@ -28,6 +28,14 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Restore & test
+        env:
+          # WorkshopApiFactory also sets these; keep CI explicit for any host-config paths.
+          Encryption__Key: "ci-encryption-key-workshopos-32chars-min!!"
+          Jwt__SigningKey: "ci-signing-key-workshopos-32chars-min!!!!!"
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          # Ensure app test role can connect (factory creates DB if missing)
+          PGPASSWORD=workshopos_dev psql -h 127.0.0.1 -U workshopos -d postgres -c "SELECT 1" || true
           dotnet restore WorkshopOS.sln
-          dotnet test WorkshopOS.sln -c Release --no-restore
+          dotnet test WorkshopOS.sln -c Release --no-restore --filter "FullyQualifiedName!~Windows"

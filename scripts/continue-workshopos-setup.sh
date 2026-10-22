@@ -33,20 +33,28 @@ fi
 
 cd "$INSTALL_DIR/docker"
 
+COMPOSE_FILES=(-f docker-compose.yml)
+if [[ -f .use-pi-profile && -f docker-compose.pi.yml ]]; then
+  COMPOSE_FILES+=(-f docker-compose.pi.yml)
+  echo "==> Pi / low-memory overlay enabled"
+fi
+
 if [[ ! -f .env ]]; then
   echo "==> Creating docker/.env from .env.example"
   cp .env.example .env
   if command -v openssl >/dev/null 2>&1; then
     PW="$(openssl rand -base64 32 | tr -d '\n=/+' | cut -c1-28)"
     KEY="$(openssl rand -base64 64 | tr -d '\n=/+' | cut -c1-48)"
+    ENC="$(openssl rand -base64 64 | tr -d '\n=/+' | cut -c1-48)"
   else
     PW="change-me-$(date +%s)"
-    KEY="change-me-signing-key-$(date +%s)-must-be-long-enough"
+    KEY="change-me-signing-key-$(date +%s)-must-be-long-enough-32"
+    ENC="change-me-encryption-key-$(date +%s)-must-be-long-enough-32"
   fi
   if command -v python3 >/dev/null 2>&1; then
-    python3 - "$PW" "$KEY" "$API_PORT" <<'PY'
+    python3 - "$PW" "$KEY" "$ENC" "$API_PORT" <<'PY'
 import sys
-pw, key, port = sys.argv[1], sys.argv[2], sys.argv[3]
+pw, key, enc, port = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 path = ".env"
 lines = open(path).read().splitlines()
 out, seen = [], set()
@@ -55,12 +63,15 @@ for line in lines:
         out.append(f"POSTGRES_PASSWORD={pw}"); seen.add("POSTGRES_PASSWORD")
     elif line.startswith("JWT_SIGNING_KEY="):
         out.append(f"JWT_SIGNING_KEY={key}"); seen.add("JWT_SIGNING_KEY")
+    elif line.startswith("Encryption__Key="):
+        out.append(f"Encryption__Key={enc}"); seen.add("Encryption__Key")
     elif line.startswith("API_PORT="):
         out.append(f"API_PORT={port}"); seen.add("API_PORT")
     else:
         out.append(line)
 if "POSTGRES_PASSWORD" not in seen: out.append(f"POSTGRES_PASSWORD={pw}")
 if "JWT_SIGNING_KEY" not in seen: out.append(f"JWT_SIGNING_KEY={key}")
+if "Encryption__Key" not in seen: out.append(f"Encryption__Key={enc}")
 if "API_PORT" not in seen: out.append(f"API_PORT={port}")
 open(path, "w").write("\n".join(out) + "\n")
 print("Wrote docker/.env with random secrets")
@@ -68,6 +79,7 @@ PY
   else
     echo "POSTGRES_PASSWORD=$PW" >> .env
     echo "JWT_SIGNING_KEY=$KEY" >> .env
+    echo "Encryption__Key=$ENC" >> .env
     echo "API_PORT=$API_PORT" >> .env
     echo "    OK: appended secrets to .env"
   fi
@@ -76,7 +88,9 @@ else
 fi
 
 echo "==> Building & starting containers"
-docker compose --env-file .env up -d --build
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+docker compose "${COMPOSE_FILES[@]}" --env-file .env up -d --build
 
 echo "==> Waiting for health..."
 ok=0
@@ -90,7 +104,7 @@ done
 
 if [[ "$ok" != "1" ]]; then
   echo "[ERROR] API did not become healthy."
-  echo "  docker compose --env-file .env logs api"
+  echo "  docker compose ${COMPOSE_FILES[*]} --env-file .env logs api"
   exit 1
 fi
 

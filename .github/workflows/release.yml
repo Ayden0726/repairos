@@ -83,8 +83,15 @@ jobs:
           body: |
             ## WorkshopOS release
 
-            1. Download **WorkshopOS-Server-*.tar.gz**, extract, run `./install-server.sh` (Docker required).
-            2. Download **WorkshopOS-Client-win-x64-*.zip** (or `WorkshopOS-Setup-*.exe` if attached), install on Windows PCs.
-            3. Point the client at `http://<server>:5088` and complete first-run setup.
+            ### Install / update server (PC, NAS, WSL, or Raspberry Pi 3B+)
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
+            # existing: cd ~/workshopos && git pull && ./scripts/restart-workshopos.sh --update
+            ```
 
-            See [docs/INSTALL.md](docs/INSTALL.md) and [docs/FEATURES.md](docs/FEATURES.md).
+            1. Or download **WorkshopOS-Server-*.tar.gz**, extract, run `./install-server.sh` (Docker required).
+            2. Download **WorkshopOS-Client-win-x64-*.zip** (or `WorkshopOS-Setup-*.exe`), install on Windows PCs.
+            3. Open `http://<server>:5088/connect`, pair the client, complete first-run setup.
+            4. Set **`Encryption__Key`** in `docker/.env` (installer does this on first run) — keep it forever.
+
+            Docs: [INSTALL.md](docs/INSTALL.md) · [RASPBERRY_PI.md](docs/RASPBERRY_PI.md) · [SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md) · [FEATURES.md](docs/FEATURES.md)

@@ -1,5 +1,6 @@
 using WorkshopOS.Contracts.Auth;
 using WorkshopOS.Contracts.Common;
+using WorkshopOS.Contracts.Finance;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Website;
 using WorkshopOS.Contracts.Workshop;
@@ -53,9 +54,9 @@ public interface IRoleService
 public interface IStaffService
 {
     Task<IReadOnlyList<StaffUserDto>> ListAsync(CancellationToken ct = default);
-    Task<CreateStaffUserResponse> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
+    Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
     Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default);
-    Task<CreateStaffUserResponse> ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default);
+    Task ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default);
 }
 
 public interface ISearchService
@@ -131,15 +132,6 @@ public interface IPricingSettingsService
     Task<PricingPreviewResponse> PreviewAsync(PricingPreviewRequest request, CancellationToken ct = default);
 }
 
-public interface IDeviceIdentificationService
-{
-    Task<DeviceIdentificationSettingsDto> GetSettingsAsync(CancellationToken ct = default);
-    Task<DeviceIdentificationSettingsDto> UpdateSettingsAsync(UpdateDeviceIdentificationSettingsRequest request, Guid actorId, CancellationToken ct = default);
-    Task<DeviceIdentificationTestResultDto> TestConnectionAsync(CancellationToken ct = default);
-    Task<ImeiValidateResultDto> ValidateAsync(ImeiValidateRequest request, CancellationToken ct = default);
-    Task<ImeiLookupResultDto> LookupAsync(ImeiLookupRequest request, Guid actorId, CancellationToken ct = default);
-}
-
 public interface IServiceCatalogueService
 {
     Task EnsureSeededAsync(CancellationToken ct = default);
@@ -162,7 +154,6 @@ public interface IServiceCatalogueService
     Task DeleteBundleAsync(Guid id, Guid actorId, CancellationToken ct = default);
     Task<IReadOnlyList<DeviceBrandDto>> ListBrandsAsync(string? deviceType = null, CancellationToken ct = default);
     Task<IReadOnlyList<DeviceModelDto>> ListModelsAsync(Guid? brandId = null, string? deviceType = null, string? brandName = null, CancellationToken ct = default);
-    Task<IReadOnlyList<DeviceModelDto>> SearchModelsAsync(string? q, string? deviceType = null, string? brandName = null, string? series = null, int take = 40, CancellationToken ct = default);
 }
 
 public interface IInvoiceService
@@ -233,6 +224,27 @@ public interface IUsedTechService
     Task<UsedDeviceDetailDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default);
 }
 
+public interface IRefurbDashboardService
+{
+    Task<RefurbDashboardDto> GetAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default);
+}
+
+public interface IRefurbBuyCalculatorService
+{
+    Task<RefurbBuyCalcResult> CalculateAsync(RefurbBuyCalcRequest request, CancellationToken ct = default);
+}
+
+public interface IAcquisitionService
+{
+    Task<IReadOnlyList<AcquisitionLeadListItemDto>> ListAsync(string? q = null, string? status = null, CancellationToken ct = default);
+    Task<AcquisitionLeadDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<AcquisitionLeadDetailDto> CreateAsync(CreateAcquisitionLeadRequest request, Guid actorId, CancellationToken ct = default);
+    Task<AcquisitionLeadDetailDto> UpdateAsync(Guid id, UpdateAcquisitionLeadRequest request, Guid actorId, CancellationToken ct = default);
+    Task<AcquisitionLeadDetailDto> UpdateStatusAsync(Guid id, UpdateAcquisitionStatusRequest request, Guid actorId, CancellationToken ct = default);
+    Task<AcquisitionOfferDto> AddOfferAsync(Guid id, CreateAcquisitionOfferRequest request, Guid actorId, CancellationToken ct = default);
+    Task<UsedDeviceDetailDto> ConvertToInventoryAsync(Guid id, ConvertAcquisitionRequest request, Guid actorId, CancellationToken ct = default);
+}
+
 public interface IQaService
 {
     Task<IReadOnlyList<QaItemDto>> ListForTicketAsync(Guid ticketId, CancellationToken ct = default);
@@ -255,6 +267,37 @@ public interface IBackupService
     Task<IReadOnlyList<BackupDto>> ListAsync(CancellationToken ct = default);
     Task<BackupDto> CreateAsync(Guid actorId, CancellationToken ct = default);
     Task<SystemHealthDetailDto> HealthDetailAsync(CancellationToken ct = default);
+}
+
+public interface IIntegrationCredentialService
+{
+    IReadOnlyList<IntegrationProviderInfoDto> ListProviders();
+    Task EnsureMigratedFromLegacySettingsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<IntegrationCredentialDto>> ListAsync(CancellationToken ct = default);
+    Task<IntegrationCredentialDto> UpsertAsync(UpsertIntegrationCredentialRequest request, Guid actorId, CancellationToken ct = default);
+    Task<TestIntegrationCredentialResponse> TestAsync(string providerKey, Guid actorId, CancellationToken ct = default);
+    /// <summary>Server-side only. Returns decrypted secret map or null. Never expose via API.</summary>
+    Task<Dictionary<string, string>?> GetSecretsMapAsync(string providerKey, CancellationToken ct = default);
+    Task<string?> GetPublicConfigAsync(string providerKey, CancellationToken ct = default);
+}
+
+public interface IExpenseService
+{
+    Task EnsureDefaultsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ExpenseCategoryDto>> ListCategoriesAsync(CancellationToken ct = default);
+    Task<ExpenseCategoryDto> UpsertCategoryAsync(UpsertExpenseCategoryRequest request, Guid actorId, CancellationToken ct = default);
+    Task<GstCalcResult> PreviewGstAsync(GstCalcRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<ExpenseListItemDto>> ListAsync(string? q, string? status, Guid? categoryId, DateOnly? from, DateOnly? to, CancellationToken ct = default);
+    Task<ExpenseDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<ExpenseDetailDto> UpsertAsync(Guid? id, UpsertExpenseRequest request, Guid actorId, CancellationToken ct = default);
+    Task SoftDeleteAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<ExpenseDashboardDto> DashboardAsync(DateOnly? from, DateOnly? to, CancellationToken ct = default);
+    Task<string> ExportCsvAsync(DateOnly? from, DateOnly? to, Guid? categoryId, CancellationToken ct = default);
+    Task<IReadOnlyList<RecurringExpenseDto>> ListRecurringAsync(CancellationToken ct = default);
+    Task<RecurringExpenseDto> UpsertRecurringAsync(Guid? id, UpsertRecurringExpenseRequest request, Guid actorId, CancellationToken ct = default);
+    Task<int> ProcessDueRecurringAsync(CancellationToken ct = default);
+    Task<ExpenseAttachmentDto> AddAttachmentAsync(Guid expenseId, string fileName, string contentType, Stream content, Guid actorId, CancellationToken ct = default);
+    Task<(Stream Stream, string ContentType, string FileName)> OpenAttachmentAsync(Guid expenseId, Guid attachmentId, CancellationToken ct = default);
 }
 
 // —— Website / WordPress / customer portal ——

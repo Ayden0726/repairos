@@ -154,14 +154,6 @@ public sealed record RepairServiceSelectionDto(
     string? PartsJson = null,
     decimal? LabourOverride = null);
 
-/// <summary>Inventory or custom/special-order part linked at ticket intake.</summary>
-public sealed record RepairPartSelectionDto(
-    Guid? InventoryItemId,
-    int Quantity = 1,
-    string? Notes = null,
-    string? CustomName = null,
-    decimal? CustomSellPrice = null);
-
 public sealed record CreateRepairRequest(
     Guid CustomerId,
     Guid? DeviceId,
@@ -189,23 +181,7 @@ public sealed record CreateRepairRequest(
     string? NewDeviceSerial,
     string? NewDeviceImei,
     IReadOnlyList<Guid>? ServicePricingIds = null,
-    IReadOnlyList<RepairServiceSelectionDto>? SelectedServices = null,
-    IReadOnlyList<RepairPartSelectionDto>? SelectedParts = null,
-    string? NewDeviceColour = null,
-    string? NewDeviceStorage = null,
-    string? NewDeviceManufacturer = null,
-    string? NewDeviceModelNumber = null,
-    string? NewDeviceNotes = null,
-    string? NewDeviceIdentificationStatus = null,
-    string? NewDeviceIdentificationProvider = null,
-    DateTimeOffset? NewDeviceIdentificationVerifiedAt = null,
-    string? NewDeviceIdentificationJson = null,
-    string? NewDeviceDisplaySpec = null,
-    string? NewDeviceProcessor = null,
-    string? NewDeviceChipset = null,
-    string? NewDeviceBatteryCapacity = null,
-    string? NewDeviceNetwork = null,
-    string? NewDeviceRam = null);
+    IReadOnlyList<RepairServiceSelectionDto>? SelectedServices = null);
 
 public sealed record CompleteRepairServiceLineRequest(bool IsCompleted = true);
 

@@ -118,6 +118,7 @@ public sealed partial class ShellPage : Page
         "repairs" => "Repairs",
         "quotes" => "Quotes",
         "invoices" => "Invoices",
+        "expenses" => "Expenses",
         "pos" => "POS",
         "calendar" => "Bookings",
         "inventory" => "Inventory",
@@ -137,6 +138,7 @@ public sealed partial class ShellPage : Page
         "Repairs" => Symbol.Repair,
         "Bookings" => Symbol.Calendar,
         "Sales" => Symbol.Shop,
+        "Finance" => Symbol.Calculator,
         "Inventory" => Symbol.Library,
         "Insights" => Symbol.View,
         "Customers" => Symbol.People,
@@ -152,6 +154,7 @@ public sealed partial class ShellPage : Page
         "repairs_ready" => Symbol.Accept,
         "quotes" => Symbol.Document,
         "invoices" => Symbol.Calculator,
+        "expenses" => Symbol.Calculator,
         "pos" => Symbol.Shop,
         "calendar" => Symbol.Calendar,
         "inventory" => Symbol.Library,
@@ -237,6 +240,9 @@ public sealed partial class ShellPage : Page
             case "invoices":
                 ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Invoices", "api/invoices"));
                 return;
+            case "expenses":
+                ContentFrame.Navigate(typeof(ExpensesPage));
+                return;
             case "pos":
                 ContentFrame.Navigate(typeof(PosPage));
                 return;
@@ -305,6 +311,12 @@ public sealed partial class ShellPage : Page
         {
             ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Invoices", "api/invoices"));
             SelectNavKey("invoices");
+            return;
+        }
+        if (path.StartsWith("/expenses", StringComparison.OrdinalIgnoreCase))
+        {
+            ContentFrame.Navigate(typeof(ExpensesPage));
+            SelectNavKey("expenses");
             return;
         }
         if (path.StartsWith("/pos", StringComparison.OrdinalIgnoreCase))

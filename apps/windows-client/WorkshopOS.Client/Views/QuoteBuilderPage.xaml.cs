@@ -56,9 +56,8 @@ public sealed partial class QuoteBuilderPage : Page
         QuoteSvcCategoryBox.ItemsSource = _picker.Categories;
         QuoteSvcServicesBox.ItemsSource = null;
         QuoteSvcServicesBox.ItemsSource = _picker.Services;
-        QuoteSvcSelectedList.ItemsSource = null;
-        QuoteSvcSelectedList.ItemsSource = _picker.SelectedRows;
-        QuoteInvPartBox.ItemsSource = ViewModel.InventoryParts.Take(80).ToList();
+        QuoteSvcSelectedBox.ItemsSource = null;
+        QuoteSvcSelectedBox.ItemsSource = _picker.SelectedRows;
         QuoteSvcStatusText.Text = _picker.Status ?? string.Empty;
         QuoteSvcErrorText.Text = _picker.Error ?? string.Empty;
         QuoteSvcFilterHint.Text = _picker.DeviceTypeFilter is null
@@ -74,13 +73,9 @@ public sealed partial class QuoteBuilderPage : Page
             QuoteBrandBox.ItemsSource = _picker.BrandNames;
             QuoteModelBox.ItemsSource = null;
             QuoteModelBox.ItemsSource = _picker.ModelNames;
-            if (!string.IsNullOrWhiteSpace(_picker.SelectedBrandName))
-                QuoteBrandBox.Text = _picker.SelectedBrandName;
-            else if (!string.IsNullOrWhiteSpace(brandText)) QuoteBrandBox.Text = brandText;
+            if (!string.IsNullOrWhiteSpace(brandText)) QuoteBrandBox.Text = brandText;
             else if (!string.IsNullOrWhiteSpace(ViewModel.DeviceBrand)) QuoteBrandBox.Text = ViewModel.DeviceBrand;
-            if (!string.IsNullOrWhiteSpace(_picker.SelectedModelName))
-                QuoteModelBox.Text = _picker.SelectedModelName;
-            else if (!string.IsNullOrWhiteSpace(modelText)) QuoteModelBox.Text = modelText;
+            if (!string.IsNullOrWhiteSpace(modelText)) QuoteModelBox.Text = modelText;
             else if (!string.IsNullOrWhiteSpace(ViewModel.DeviceModel)) QuoteModelBox.Text = ViewModel.DeviceModel;
         }
         finally { _suppressBrandEvent = false; }
@@ -355,47 +350,7 @@ public sealed partial class QuoteBuilderPage : Page
         await _picker.AddAsync(QuoteSvcServicesBox.SelectedItem as CatalogueServiceRow);
 
     private void QuoteSvcRemove_Click(object sender, RoutedEventArgs e) =>
-        _picker.Remove(QuoteSvcSelectedList.SelectedItem as CatalogueServiceRow);
-
-    private void QuoteInvAdd_Click(object sender, RoutedEventArgs e)
-    {
-        InventoryListItemDto? item = QuoteInvPartBox.SelectedItem as InventoryListItemDto;
-        if (item is null && !string.IsNullOrWhiteSpace(QuoteInvPartBox.Text))
-        {
-            var q = QuoteInvPartBox.Text.Trim();
-            item = ViewModel.InventoryParts.FirstOrDefault(p =>
-                p.Sku.Equals(q, StringComparison.OrdinalIgnoreCase) ||
-                p.Name.Equals(q, StringComparison.OrdinalIgnoreCase) ||
-                p.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
-        }
-        if (item is null)
-        {
-            QuoteInvStatusText.Text = "Select a stock part first.";
-            return;
-        }
-        ViewModel.AddInventoryPartLine(item);
-        QuoteInvStatusText.Text = $"Added stock part: {item.Name}";
-    }
-
-    private void QuoteCustomPartAdd_Click(object sender, RoutedEventArgs e)
-    {
-        var name = QuoteCustomPartNameBox.Text?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            QuoteInvStatusText.Text = "Enter a custom part name (special order / no stock).";
-            return;
-        }
-        var priceText = QuoteCustomPartPriceBox.Text?.Trim() ?? "0";
-        if (!decimal.TryParse(priceText, System.Globalization.NumberStyles.Number,
-                System.Globalization.CultureInfo.InvariantCulture, out var price) &&
-            !decimal.TryParse(priceText, System.Globalization.NumberStyles.Number,
-                System.Globalization.CultureInfo.CurrentCulture, out price))
-            price = 0m;
-        ViewModel.AddCustomPartLine(name, price);
-        QuoteCustomPartNameBox.Text = string.Empty;
-        QuoteCustomPartPriceBox.Text = string.Empty;
-        QuoteInvStatusText.Text = $"Added custom part: {name}";
-    }
+        _picker.Remove(QuoteSvcSelectedBox.SelectedItem as CatalogueServiceRow);
 
     private async void AddCatalogueServices_Click(object sender, RoutedEventArgs e)
     {

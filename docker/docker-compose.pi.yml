@@ -1,0 +1,65 @@
+# Raspberry Pi / low-memory ARM overlay (Pi 3B or greater).
+# Applied automatically by get-workshopos.sh on Pi, or manually:
+#   docker compose -f docker-compose.yml -f docker-compose.pi.yml --env-file .env up -d --build
+#
+# Goals: fit ~1 GB RAM hosts, skip unused Redis, tune Postgres, cap .NET heaps.
+
+services:
+  # Redis is unused by the current API/worker — keep it off on Pi.
+  redis:
+    profiles: ["redis"]
+
+  postgres:
+    # Postgres 16 alpine publishes linux/arm64 and linux/arm/v7.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=40
+      - -c
+      - wal_buffers=2MB
+      - -c
+      - min_wal_size=32MB
+      - -c
+      - max_wal_size=256MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - random_page_cost=1.1
+    environment:
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    mem_limit: 256m
+    cpus: "1.5"
+    healthcheck:
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+
+  api:
+    environment:
+      DOTNET_EnableDiagnostics: "0"
+      # Soft GC heap hint (~192 MiB) so the API coexists with Postgres on 1 GB boards.
+      DOTNET_GCHeapHardLimit: "0x0C000000"
+      ASPNETCORE_environment: Production
+    mem_limit: 384m
+    cpus: "1.5"
+    healthcheck:
+      interval: 20s
+      timeout: 8s
+      retries: 8
+      start_period: 120s
+
+  worker:
+    environment:
+      DOTNET_EnableDiagnostics: "0"
+      DOTNET_GCHeapHardLimit: "0x08000000"
+    mem_limit: 192m
+    cpus: "0.75"

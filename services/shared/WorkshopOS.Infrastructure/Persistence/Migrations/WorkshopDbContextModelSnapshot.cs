@@ -22,6 +22,279 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcquisitionLeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionLeadId", "CreatedAt");
+
+                    b.ToTable("acquisition_events", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionLead", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("AcceptedPurchasePrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("AcquisitionSource")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActivationLockStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("AskingPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid?>("AssignedStaffId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Carrier")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Colour")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceCondition")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset?>("FollowUpAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Imei")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("KnownFaults")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ListingUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ModelNumber")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PhotoUrlsJson")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("ProposedOffer")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset?>("PurchaseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SellerContact")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<Guid?>("SellerCustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SellerEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("SellerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SellerPhone")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("SellerType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Serial")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ShippingOrCollection")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("StorageCapacity")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SuspectedFaults")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UsedDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedStaffId");
+
+                    b.HasIndex("FollowUpAt");
+
+                    b.HasIndex("Imei");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UsedDeviceId");
+
+                    b.ToTable("acquisition_leads", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionOffer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("AbsoluteMaxPurchasePrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid>("AcquisitionLeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("BuyRecommendation")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("EstimatedMarginPercent")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<decimal?>("EstimatedPartsCost")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("EstimatedProfit")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("EstimatedResalePrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("LabourAllowance")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcquisitionLeadId");
+
+                    b.ToTable("acquisition_offers", (string)null);
+                });
+
             modelBuilder.Entity("WorkshopOS.Domain.Entities.AppNotification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -303,6 +576,131 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.HasIndex("StartsAt");
 
                     b.ToTable("bookings", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.BusinessExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountExGst")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("BusinessUsePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("GstAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("GstTreatment")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("InventoryItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InvoiceReference")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<bool>("IsInventoryOrCogsLinked")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("PaymentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecordedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RecurrenceInstanceKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid?>("RecurringExpenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid?>("RepairTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("PurchaseDate");
+
+                    b.HasIndex("RecurrenceInstanceKey")
+                        .IsUnique()
+                        .HasFilter("\"RecurrenceInstanceKey\" IS NOT NULL");
+
+                    b.HasIndex("RecurringExpenseId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("business_expenses", (string)null);
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.BusinessSetting", b =>
@@ -662,54 +1060,8 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BatteryCapacity")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("Chipset")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("DisplaySpec")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("IdentificationJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("IdentificationProvider")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("IdentificationStatus")
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTimeOffset?>("IdentificationVerifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("Imei")
                         .HasColumnType("text");
-
-                    b.Property<string>("Manufacturer")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("ModelNumber")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("NetworkCapabilities")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Processor")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("Ram")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
 
                     b.Property<string>("Model")
                         .IsRequired()
@@ -740,152 +1092,6 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Serial");
 
                     b.ToTable("devices", (string)null);
-                });
-
-
-            modelBuilder.Entity("WorkshopOS.Domain.Entities.ImeiLookupLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Advanced")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid?>("ActorUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal?>("Cost")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorCode")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<bool>("FromCache")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ImeiHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<int?>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Success")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Tac")
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<string>("VerificationStatus")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActorUserId");
-
-                    b.HasIndex("CreatedAt");
-
-                    b.HasIndex("ImeiHash");
-
-                    b.ToTable("imei_lookup_logs", (string)null);
-                });
-
-            modelBuilder.Entity("WorkshopOS.Domain.Entities.ImeiTacCache", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BatteryCapacity")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Brand")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Chipset")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DeviceCategory")
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("Display")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("HitCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("LookedUpAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Manufacturer")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Model")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("ModelNumber")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Network")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Processor")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("RamHint")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SpecsJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("StorageHint")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Tac")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<string>("VerificationStatus")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExpiresAt");
-
-                    b.HasIndex("Tac", "Provider")
-                        .IsUnique();
-
-                    b.ToTable("imei_tac_cache", (string)null);
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.DeviceBrand", b =>
@@ -935,10 +1141,6 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Aliases")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
                     b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -955,20 +1157,10 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsSystem")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsVerified")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int?>("ReleaseYear")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Series")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
@@ -977,10 +1169,6 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DeviceType");
-
-                    b.HasIndex("Series");
 
                     b.HasIndex("SortOrder");
 
@@ -1005,6 +1193,164 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.HasKey("Key");
 
                     b.ToTable("document_sequences", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.ExpenseAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExpenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<Guid>("UploadedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseId");
+
+                    b.ToTable("expense_attachments", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.ExpenseCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal?>("MonthlyBudget")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("ParentCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentCategoryId");
+
+                    b.HasIndex("SortOrder");
+
+                    b.ToTable("expense_categories", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.IntegrationCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConnectionStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("KeyVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastSuccessAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastTestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PublicConfigJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("SecretCipher")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SecretHint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique()
+                        .HasFilter("\"ArchivedAt\" IS NULL");
+
+                    b.ToTable("integration_credentials", (string)null);
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.InventoryItem", b =>
@@ -2370,6 +2716,87 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.ToTable("quote_revisions", (string)null);
                 });
 
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.RecurringExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("AutoCreateDraft")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CustomIntervalDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("GstTreatment")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("IsPaused")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly>("NextDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("NextDueDate");
+
+                    b.ToTable("recurring_expenses", (string)null);
+                });
+
             modelBuilder.Entity("WorkshopOS.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3515,6 +3942,13 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcquisitionLeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActivationLockStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<decimal?>("ActualSalePrice")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -3522,9 +3956,27 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("AssignedTechnicianId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("BatteryHealthPercent")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Brand")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Carrier")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CarrierLockStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("Category")
                         .HasMaxLength(64)
@@ -3545,6 +3997,9 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("DataSanitisedConfirmed")
+                        .HasColumnType("boolean");
+
                     b.Property<decimal>("ExpectedRepairCost")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -3553,14 +4008,58 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<bool>("FactoryResetConfirmed")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Faults")
                         .HasColumnType("text");
+
+                    b.Property<bool>("FindMyRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FrpStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("FunctionalGrade")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("Imei")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<bool>("IsPartsOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("LabourCost")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset?>("ListedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ListingUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("LocationBin")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("LostStolenStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal>("MarketplaceFees")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<string>("Model")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ModelNumber")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
@@ -3568,12 +4067,36 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<bool>("OwnershipDeclared")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("OwnershipEvidenceOnFile")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("PackagingCost")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("PaymentFees")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset?>("PurchaseDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<decimal>("PurchasePrice")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<DateTimeOffset?>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("RepairTicketId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SecurityCheckNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<Guid?>("SellerCustomerId")
                         .HasColumnType("uuid");
@@ -3581,6 +4104,25 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Serial")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<decimal>("ShippingInCost")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("ShippingOutCost")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("SimConfiguration")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Sku")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("SoldAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Source")
                         .HasMaxLength(240)
@@ -3592,6 +4134,10 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("StockId")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
@@ -3607,13 +4153,27 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("WarrantyAllowance")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("WooCommerceProductId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("AcquisitionLeadId");
+
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("Imei");
 
                     b.HasIndex("RepairTicketId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("StockId");
 
                     b.ToTable("used_devices", (string)null);
                 });
@@ -3725,6 +4285,38 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.ToTable("website_api_keys", (string)null);
                 });
 
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionEvent", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.AcquisitionLead", "AcquisitionLead")
+                        .WithMany("Events")
+                        .HasForeignKey("AcquisitionLeadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcquisitionLead");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionLead", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.UsedDevice", "UsedDevice")
+                        .WithMany()
+                        .HasForeignKey("UsedDeviceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UsedDevice");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionOffer", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.AcquisitionLead", "AcquisitionLead")
+                        .WithMany("Offers")
+                        .HasForeignKey("AcquisitionLeadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcquisitionLead");
+                });
+
             modelBuilder.Entity("WorkshopOS.Domain.Entities.AppNotification", b =>
                 {
                     b.HasOne("WorkshopOS.Domain.Entities.AppUser", "User")
@@ -3769,6 +4361,30 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.BusinessExpense", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.ExpenseCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("WorkshopOS.Domain.Entities.RecurringExpense", "RecurringExpense")
+                        .WithMany()
+                        .HasForeignKey("RecurringExpenseId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("WorkshopOS.Domain.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Category");
+
+                    b.Navigation("RecurringExpense");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.ConversationMessage", b =>
@@ -3858,6 +4474,27 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Brand");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.ExpenseAttachment", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.BusinessExpense", "Expense")
+                        .WithMany("Attachments")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.ExpenseCategory", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.ExpenseCategory", "ParentCategory")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentCategory");
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.InventoryItem", b =>
@@ -4134,6 +4771,16 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Navigation("Quote");
                 });
 
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.RecurringExpense", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.ExpenseCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Category");
+                });
+
             modelBuilder.Entity("WorkshopOS.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("WorkshopOS.Domain.Entities.AppUser", "User")
@@ -4406,6 +5053,13 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Navigation("UsedDevice");
                 });
 
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.AcquisitionLead", b =>
+                {
+                    b.Navigation("Events");
+
+                    b.Navigation("Offers");
+                });
+
             modelBuilder.Entity("WorkshopOS.Domain.Entities.AppRole", b =>
                 {
                     b.Navigation("Permissions");
@@ -4416,6 +5070,11 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WorkshopOS.Domain.Entities.AppUser", b =>
                 {
                     b.Navigation("RefreshTokens");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.BusinessExpense", b =>
+                {
+                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.ConversationThread", b =>
@@ -4438,6 +5097,11 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WorkshopOS.Domain.Entities.DeviceBrand", b =>
                 {
                     b.Navigation("Models");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.ExpenseCategory", b =>
+                {
+                    b.Navigation("Children");
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.Invoice", b =>

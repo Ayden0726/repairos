@@ -70,13 +70,6 @@ public class DeviceModel : SoftDeleteEntity
     public DeviceBrand Brand { get; set; } = null!;
     public string Name { get; set; } = string.Empty;
     public string? DeviceType { get; set; }
-    /// <summary>Marketing series, e.g. "iPhone 13", "Galaxy S".</summary>
-    public string? Series { get; set; }
-    /// <summary>Comma-separated search aliases / abbreviations (e.g. "13 PM,S22U,SM-S908").</summary>
-    public string? Aliases { get; set; }
-    public int? ReleaseYear { get; set; }
-    /// <summary>True when the marketing name has been checked; specs may still be empty.</summary>
-    public bool IsVerified { get; set; } = true;
     public int SortOrder { get; set; }
     public bool IsSystem { get; set; }
 }

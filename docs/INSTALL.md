@@ -16,11 +16,13 @@ Do **not** compile the WinUI app for normal use. Use the Release installer.
 
 | Piece | Requirement |
 | --- | --- |
-| Server host | Linux PC / NAS / VM / WSL2 / macOS with Docker |
+| Server host | Linux PC / NAS / VM / WSL2 / macOS / **Raspberry Pi 3B+** with Docker |
 | Git | Auto-installed by the setup script on common Linux distros |
 | Docker + Compose v2 | Same — auto-installed when missing |
 | Windows PCs | Windows 10/11 **x64**; download Setup.exe from Releases |
 | Network | Shop PCs must reach the server on port **5088** (LAN) |
+
+Raspberry Pi (3B or greater, ARMv7/ARM64): the install script auto-applies a low-memory compose overlay and can create 2 GB swap. See **[RASPBERRY_PI.md](RASPBERRY_PI.md)**. Pi Zero / Pi 1 are not supported.
 
 ---
 

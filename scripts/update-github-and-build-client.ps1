@@ -26,15 +26,17 @@
 #>
 param(
   [string]$Repo = 'C:\Users\ayden\src\repairos',
-  [string]$Version = '1.2.33',
+  # Windows client version (must match WorkshopOS.Client.csproj <Version>)
+  [string]$Version = '1.2.32',
   [string]$Branch = 'main',
   [string]$GitHubUrl = 'https://github.com/Ayden0726/repairos.git',
-  [string]$AgentSyncUrl = 'http://127.0.0.1:28765/repairos-github-sync.zip',
-  [string]$LocalZip = '',
-  [switch]$SkipAgentSync,
+  # Prefer Ports panel forwarding for 18765 if 127.0.0.1 fails from your PC
+  [string]$AgentSyncUrl = 'http://127.0.0.1:18765/WorkshopOS-1.2.33-github-sync.zip',
+  [string]$ReleaseTag = 'v1.2.33',
   [switch]$SkipGitHubPush,
   [switch]$SkipInstaller,
-  [switch]$SkipLaunch
+  [switch]$SkipLaunch,
+  [switch]$SkipTag
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,46 +53,12 @@ if (-not (Test-Path $Repo)) {
   New-Item -ItemType Directory -Force -Path $Repo | Out-Null
 }
 
-# --- 1) Overlay agent sync zip (optional) ---
+# --- 1) Overlay agent sync zip ---
+$zip = Join-Path $env:TEMP 'repairos-github-sync.zip'
+Write-Host ("Downloading {0} ..." -f $AgentSyncUrl) -ForegroundColor Yellow
+Invoke-WebRequest -Uri $AgentSyncUrl -OutFile $zip
+Expand-Archive -Path $zip -DestinationPath $Repo -Force
 Set-Location $Repo
-if ($SkipAgentSync) {
-  Write-Host 'Skipping agent sync download (-SkipAgentSync). Using existing repo overlay.' -ForegroundColor DarkYellow
-} else {
-  $zip = Join-Path $env:TEMP 'repairos-github-sync.zip'
-  if (-not [string]::IsNullOrWhiteSpace($LocalZip)) {
-    if (-not (Test-Path $LocalZip)) { throw ("LocalZip not found: {0}" -f $LocalZip) }
-    Write-Host ("Using local zip {0} ..." -f $LocalZip) -ForegroundColor Yellow
-    Copy-Item -Force $LocalZip $zip
-  } else {
-    Write-Host ("Downloading {0} ..." -f $AgentSyncUrl) -ForegroundColor Yellow
-    $ok = $false
-    for ($i = 1; $i -le 4; $i++) {
-      try {
-        Invoke-WebRequest -Uri $AgentSyncUrl -OutFile $zip -TimeoutSec 120
-        $ok = $true
-        break
-      } catch {
-        Write-Host ("Download attempt {0}/4 failed: {1}" -f $i, $_.Exception.Message) -ForegroundColor Yellow
-        if ($i -lt 4) { Start-Sleep -Seconds (2 * $i) }
-      }
-    }
-    if (-not $ok) {
-      if (Test-Path $zip) {
-        Write-Host ("Download failed; reusing existing {0}" -f $zip) -ForegroundColor DarkYellow
-      } else {
-        throw @"
-Could not download agent sync zip from $AgentSyncUrl
-Fix: open Cursor Ports and forward 28765, or download once manually then re-run with:
-  -LocalZip `$env:TEMP\repairos-github-sync.zip
-Or if you already expanded the zip into `$Repo:
-  -SkipAgentSync
-"@
-      }
-    }
-  }
-  Expand-Archive -Path $zip -DestinationPath $Repo -Force
-  Set-Location $Repo
-}
 
 $scriptPath = Join-Path $Repo 'scripts\update-github-and-build-client.ps1'
 if (-not (Test-Path $scriptPath)) {
@@ -129,6 +97,17 @@ Overlay from agent sync zip; Windows client build artifacts follow.
     throw 'git push failed. Run: gh auth login   (or set a PAT) then re-run this script.'
   }
   Write-Host ("OK - pushed {0}" -f $GitHubUrl) -ForegroundColor Green
+
+  if (-not $SkipTag -and $ReleaseTag) {
+    Write-Host ("Tagging {0} ..." -f $ReleaseTag) -ForegroundColor Yellow
+    git tag -f $ReleaseTag
+    git push -f origin $ReleaseTag
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host 'WARN: tag push failed (branch push succeeded). Push tag manually later.' -ForegroundColor Yellow
+    } else {
+      Write-Host ("OK - tag {0} (GitHub Actions release may run)" -f $ReleaseTag) -ForegroundColor Green
+    }
+  }
 } else {
   Write-Host 'Skipping GitHub push (-SkipGitHubPush).' -ForegroundColor DarkYellow
 }

@@ -21,7 +21,9 @@ API_PORT="${API_PORT:-5088}"
 BRANCH="${WORKSHOPOS_BRANCH:-main}"
 SKIP_DEPS=0
 DO_UPDATE=0
-PRODUCT_VERSION="1.2.15+"
+FORCE_PI=0
+NO_PI=0
+PRODUCT_VERSION="1.2.33+"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +33,8 @@ while [[ $# -gt 0 ]]; do
     --branch) BRANCH="$2"; shift 2 ;;
     --skip-deps) SKIP_DEPS=1; shift ;;
     --update|-u) DO_UPDATE=1; shift ;;
+    --pi) FORCE_PI=1; shift ;;
+    --no-pi) NO_PI=1; shift ;;
     -h|--help)
       cat <<'HELP'
 WorkshopOS server setup
@@ -46,7 +50,12 @@ Options:
   --branch NAME    Branch to use (default: main)
   --update, -u     Pull latest + rebuild containers (safe re-run)
   --skip-deps      Do not auto-install Git/Docker
+  --pi             Force Raspberry Pi / low-memory compose overlay
+  --no-pi          Never apply the Pi overlay (even on Pi hardware)
   -h, --help       Show this help
+
+Raspberry Pi 3B or greater is supported (see docs/RASPBERRY_PI.md).
+Pi Zero / Pi 1 (ARMv6) are not supported.
 
 After the server is up, download the Windows installer from:
   https://github.com/Ayden0726/repairos/releases
@@ -63,6 +72,66 @@ HELP
 done
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+is_raspberry_pi() {
+  [[ "$FORCE_PI" -eq 1 ]] && return 0
+  [[ "$NO_PI" -eq 1 ]] && return 1
+  [[ -f /etc/rpi-issue ]] && return 0
+  grep -qi 'raspberry' /proc/device-tree/model 2>/dev/null && return 0
+  grep -qi 'raspberry' /proc/cpuinfo 2>/dev/null && return 0
+  # Generic ARM SBC with little RAM — still use Pi overlay when previously opted in.
+  return 1
+}
+
+check_cpu_supported() {
+  local m; m="$(uname -m)"
+  case "$m" in
+    x86_64|amd64|aarch64|arm64|armv7l|armv7|armhf)
+      ok "CPU architecture: $m"
+      ;;
+    armv6l|armv6)
+      fail "ARMv6 ($m) is not supported by .NET 8. Use Raspberry Pi 3B or greater (ARMv7/ARM64)."
+      ;;
+    *)
+      warn "Unusual architecture '$m' — Docker multi-arch images may not exist. Continuing anyway."
+      ;;
+  esac
+}
+
+ensure_pi_swap() {
+  # Pi 3B has 1 GB RAM; building .NET images needs swap or the OOM killer wins.
+  local mem_kb swap_kb
+  mem_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  swap_kb="$(awk '/SwapTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  if [[ "${mem_kb:-0}" -ge 1900000 ]]; then
+    ok "RAM looks sufficient ($((mem_kb / 1024)) MiB)"
+    return 0
+  fi
+  if [[ "${swap_kb:-0}" -ge 1500000 ]]; then
+    ok "Swap already present ($((swap_kb / 1024)) MiB) — OK for low-RAM Pi"
+    return 0
+  fi
+  step "pi" "Low RAM ($((mem_kb / 1024)) MiB) — creating 2 GiB swapfile"
+  local swapfile="/swapfile.workshopos"
+  if [[ -f "$swapfile" ]]; then
+    sudo_run swapon "$swapfile" 2>/dev/null || true
+  else
+    sudo_run fallocate -l 2G "$swapfile" 2>/dev/null \
+      || sudo_run dd if=/dev/zero of="$swapfile" bs=1M count=2048 status=progress
+    sudo_run chmod 600 "$swapfile"
+    sudo_run mkswap "$swapfile"
+    sudo_run swapon "$swapfile"
+  fi
+  if ! grep -q "$swapfile" /etc/fstab 2>/dev/null; then
+    echo "$swapfile none swap sw 0 0" | sudo_run tee -a /etc/fstab >/dev/null
+  fi
+  ok "Swap ready ($(free -h | awk '/Swap:/ {print $2}'))"
+}
+
+use_pi_compose() {
+  [[ -f .use-pi-profile ]] && return 0
+  return 1
+}
 
 banner() {
   echo ""
@@ -414,6 +483,9 @@ print_success() {
   echo "  Logs:         cd $INSTALL_DIR/docker && docker compose --env-file .env logs -f api"
   echo "  Stop:         cd $INSTALL_DIR/docker && docker compose --env-file .env down"
   echo "  Docs:         $INSTALL_DIR/docs/INSTALL.md"
+  if [[ -f "$INSTALL_DIR/docker/.use-pi-profile" ]]; then
+    echo "  Pi guide:     $INSTALL_DIR/docs/RASPBERRY_PI.md"
+  fi
   echo ""
 }
 
@@ -429,23 +501,20 @@ if [[ "$DO_UPDATE" -eq 1 ]]; then
   echo "  Mode:    --update (pull + rebuild)"
 fi
 echo ""
-# Zip overlays and some clones drop +x — fix before anything else so --update never hits Permission denied.
-if [[ -d "$INSTALL_DIR/scripts" ]]; then
-  chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
-fi
-if [[ -f "$0" ]] && [[ ! -x "$0" ]]; then
-  chmod +x "$0" 2>/dev/null || true
-fi
+echo "  Tip: if you cloned the repo and scripts fail with Permission denied:"
+echo "       chmod +x scripts/*.sh"
 note_chmod
 
 if [[ "$SKIP_DEPS" -eq 0 ]]; then
   step "1/5" "Checking / installing dependencies"
+  check_cpu_supported
   install_curl_if_needed
   install_git_if_needed
   install_docker_if_needed
   ensure_docker_usable
 else
   step "1/5" "Checking dependencies (--skip-deps)"
+  check_cpu_supported
   have curl || fail "Missing curl"
   have git || fail "Missing git"
   have docker || fail "Missing docker"
@@ -466,34 +535,76 @@ fi
 
 cd "$INSTALL_DIR/docker" || fail "missing docker/ under $INSTALL_DIR — clone may be incomplete."
 
+# Raspberry Pi / low-memory ARM overlay
+PI_MODE=0
+if is_raspberry_pi; then
+  PI_MODE=1
+  echo "1" > .use-pi-profile
+  ensure_pi_swap
+  ok "Raspberry Pi / low-memory profile enabled (docker-compose.pi.yml)"
+  echo "    Docs: $INSTALL_DIR/docs/RASPBERRY_PI.md"
+elif [[ "$NO_PI" -eq 1 ]] && [[ -f .use-pi-profile ]]; then
+  rm -f .use-pi-profile
+  ok "Removed Pi profile (--no-pi)"
+fi
+
+COMPOSE_FILES=(-f docker-compose.yml)
+if use_pi_compose && [[ -f docker-compose.pi.yml ]]; then
+  COMPOSE_FILES+=(-f docker-compose.pi.yml)
+fi
+
 step "3/5" "Preparing docker/.env"
 if [[ ! -f .env ]]; then
   cp .env.example .env || fail "could not copy docker/.env.example -> docker/.env"
   if have openssl; then
     PW="$(openssl rand -base64 32 | tr -d '\n=/+' | cut -c1-28)"
     KEY="$(openssl rand -base64 64 | tr -d '\n=/+' | cut -c1-48)"
+    ENC="$(openssl rand -base64 64 | tr -d '\n=/+' | cut -c1-48)"
   else
     PW="change-me-$(date +%s)"
-    KEY="change-me-signing-key-$(date +%s)-must-be-long-enough"
+    KEY="change-me-signing-key-$(date +%s)-must-be-long-enough-32"
+    ENC="change-me-encryption-key-$(date +%s)-must-be-long-enough-32"
   fi
   set_env_kv .env POSTGRES_PASSWORD "$PW"
   set_env_kv .env JWT_SIGNING_KEY "$KEY"
+  set_env_kv .env Encryption__Key "$ENC"
+  set_env_kv .env Encryption__KeyVersion "1"
   set_env_kv .env API_PORT "$API_PORT"
-  ok "Wrote docker/.env with random secrets"
+  ok "Wrote docker/.env with random secrets (JWT + Encryption keys are separate)"
 else
   # Keep existing secrets; ensure port matches requested API_PORT when explicitly set
   set_env_kv .env API_PORT "$API_PORT"
+  # Older installs may lack Encryption__Key — add once without rotating JWT.
+  if ! grep -q '^Encryption__Key=' .env 2>/dev/null \
+     || grep -q '^Encryption__Key=replace-with' .env 2>/dev/null \
+     || grep -q '^Encryption__Key=$' .env 2>/dev/null; then
+    if have openssl; then
+      ENC="$(openssl rand -base64 64 | tr -d '\n=/+' | cut -c1-48)"
+    else
+      ENC="change-me-encryption-key-$(date +%s)-must-be-long-enough-32"
+    fi
+    set_env_kv .env Encryption__Key "$ENC"
+    set_env_kv .env Encryption__KeyVersion "1"
+    ok "Added Encryption__Key to existing docker/.env"
+  fi
   ok "Using existing docker/.env (API_PORT=$API_PORT)"
 fi
 
 check_port_hint "$API_PORT"
 
 step "4/5" "Building & starting containers"
-echo "    (first run can take several minutes)"
-if ! compose --env-file .env up -d --build; then
+if [[ "$PI_MODE" -eq 1 ]] || use_pi_compose; then
+  echo "    Pi overlay active — first build on Pi 3B can take 30–90 minutes. Leave it running."
+else
+  echo "    (first run can take several minutes)"
+fi
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+if ! compose "${COMPOSE_FILES[@]}" --env-file .env up -d --build; then
   echo "[ERROR] docker compose up failed."
-  echo "  Check: cd $INSTALL_DIR/docker && ${DOCKER[*]} compose --env-file .env logs"
-  echo "  Common: Docker daemon not running; port $API_PORT in use; disk full"
+  echo "  Check: cd $INSTALL_DIR/docker && ${DOCKER[*]} compose ${COMPOSE_FILES[*]} --env-file .env logs"
+  echo "  Common: Docker daemon not running; port $API_PORT in use; disk full; OOM on Pi (need swap)"
+  echo "  Pi docs: $INSTALL_DIR/docs/RASPBERRY_PI.md"
   exit 1
 fi
 ok "containers started"

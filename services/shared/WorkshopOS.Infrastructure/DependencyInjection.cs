@@ -21,7 +21,9 @@ public static class DependencyInjection
             opt.UseNpgsql(config.GetConnectionString("Default")));
 
         services.AddScoped<TokenService>();
-        services.AddScoped<SecretProtector>();
+        services.AddSingleton<SecretProtector>();
+        services.AddScoped<IIntegrationCredentialService, IntegrationCredentialService>();
+        services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<IClock, SystemClock>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<ISetupService, SetupService>();
@@ -36,7 +38,6 @@ public static class DependencyInjection
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IPricingSettingsService, PricingSettingsService>();
         services.AddScoped<IServiceCatalogueService, ServiceCatalogueService>();
-        services.AddScoped<IDeviceIdentificationService, DeviceIdentificationService>();
         services.AddScoped<IQuoteService, QuoteService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IPosService, PosService>();
@@ -47,6 +48,9 @@ public static class DependencyInjection
         services.AddScoped<IKnowledgeService, KnowledgeService>();
         services.AddScoped<IPcBuildService, PcBuildService>();
         services.AddScoped<IUsedTechService, UsedTechService>();
+        services.AddScoped<IRefurbDashboardService, RefurbDashboardService>();
+        services.AddScoped<IRefurbBuyCalculatorService, RefurbBuyCalculatorService>();
+        services.AddScoped<IAcquisitionService, AcquisitionService>();
         services.AddScoped<IQaService, QaService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAiService, AiService>();
@@ -63,11 +67,6 @@ public static class DependencyInjection
         services.AddScoped<INotificationOutboxProcessor, NotificationOutboxProcessor>();
         services.AddHttpClient("ollama");
         services.AddHttpClient("woocommerce");
-        services.AddHttpClient("imei.info", c =>
-        {
-            c.Timeout = TimeSpan.FromSeconds(12);
-            c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-        });
 
         var jwt = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwt.SigningKey) || jwt.SigningKey.Length < 32)

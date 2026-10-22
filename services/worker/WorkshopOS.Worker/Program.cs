@@ -42,6 +42,11 @@ public sealed class Worker : BackgroundService
                 var processed = await outbox.ProcessPendingAsync(50, stoppingToken);
                 if (processed > 0)
                     _logger.LogInformation("Processed {Count} notification outbox item(s)", processed);
+
+                var expenses = scope.ServiceProvider.GetRequiredService<IExpenseService>();
+                var recurringCreated = await expenses.ProcessDueRecurringAsync(stoppingToken);
+                if (recurringCreated > 0)
+                    _logger.LogInformation("Created {Count} draft expense(s) from recurring templates", recurringCreated);
             }
             catch (Exception ex)
             {

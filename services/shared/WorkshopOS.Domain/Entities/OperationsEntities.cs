@@ -382,7 +382,51 @@ public class UsedDevice : SoftDeleteEntity
     public Guid? CustomerId { get; set; }
     public Guid? RepairTicketId { get; set; }
 
-    public decimal TotalCost => PurchasePrice + ExpectedRepairCost;
+    // —— Phase 1 refurbished foundations (additive) ——
+    /// <summary>Canonical internal stock id, e.g. TB-RFB-00382.</summary>
+    public string? StockId { get; set; }
+    public string? Sku { get; set; }
+    public string? Barcode { get; set; }
+    public string? LocationBin { get; set; }
+    public Guid? AssignedTechnicianId { get; set; }
+    public string? ModelNumber { get; set; }
+    public string? Carrier { get; set; }
+    /// <summary>Physical SIM | eSIM | Dual | Unknown</summary>
+    public string? SimConfiguration { get; set; }
+    public Guid? AcquisitionLeadId { get; set; }
+    public DateTimeOffset? PurchaseDate { get; set; }
+    public DateTimeOffset? ReceivedAt { get; set; }
+    public DateTimeOffset? ListedAt { get; set; }
+    public DateTimeOffset? SoldAt { get; set; }
+    public decimal LabourCost { get; set; }
+    public decimal ShippingInCost { get; set; }
+    public decimal ShippingOutCost { get; set; }
+    public decimal PackagingCost { get; set; }
+    public decimal MarketplaceFees { get; set; }
+    public decimal PaymentFees { get; set; }
+    public decimal WarrantyAllowance { get; set; }
+    public bool IsPartsOnly { get; set; }
+    /// <summary>Separate from cosmetic ConditionGrade. Pass | Fail | Partial | Untested</summary>
+    public string? FunctionalGrade { get; set; }
+    public int? BatteryHealthPercent { get; set; }
+
+    // Security / compliance checks (required before Ready for Sale / Listed for normal resale)
+    public bool OwnershipDeclared { get; set; }
+    public bool OwnershipEvidenceOnFile { get; set; }
+    public string? ActivationLockStatus { get; set; }
+    public bool FindMyRemoved { get; set; }
+    public string? FrpStatus { get; set; }
+    public string? CarrierLockStatus { get; set; }
+    public string? LostStolenStatus { get; set; }
+    public bool FactoryResetConfirmed { get; set; }
+    public bool DataSanitisedConfirmed { get; set; }
+    public string? SecurityCheckNotes { get; set; }
+
+    public string? WooCommerceProductId { get; set; }
+    public string? ListingUrl { get; set; }
+
+    /// <summary>Purchase + parts + labour + inbound shipping + packaging (AUD, GST treatment applied at reporting layer).</summary>
+    public decimal TotalCost => PurchasePrice + ExpectedRepairCost + LabourCost + ShippingInCost + PackagingCost;
 }
 
 public class QaChecklist

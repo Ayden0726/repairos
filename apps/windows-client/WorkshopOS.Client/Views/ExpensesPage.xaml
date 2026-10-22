@@ -1,0 +1,176 @@
+<Page x:Class="WorkshopOS.Client.Views.ExpensesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:fin="using:WorkshopOS.Contracts.Finance"
+      Background="{ThemeResource WorkshopPageBackgroundBrush}">
+  <Grid Padding="24" RowSpacing="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <Grid>
+      <StackPanel Spacing="2">
+        <TextBlock Text="Expenses" FontSize="22" FontWeight="SemiBold"
+                   Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+        <TextBlock Text="Business expenses with Australian GST. Inventory-linked purchases are excluded from operating totals."
+                   Opacity="0.7" TextWrapping="Wrap" MaxWidth="720" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" VerticalAlignment="Top">
+        <Button Content="Export CSV" Click="Export_Click" />
+        <Button Content="Refresh" Click="Refresh_Click" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnSpacing="12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Border Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="2">
+          <TextBlock Text="This month" Opacity="0.7" FontSize="12" />
+          <TextBlock x:Name="DashMonth" FontWeight="SemiBold" FontSize="18" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="1" Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="2">
+          <TextBlock Text="This FY (Jul–Jun)" Opacity="0.7" FontSize="12" />
+          <TextBlock x:Name="DashFy" FontWeight="SemiBold" FontSize="18" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="2" Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="2">
+          <TextBlock Text="GST paid (est.)" Opacity="0.7" FontSize="12" />
+          <TextBlock x:Name="DashGst" FontWeight="SemiBold" FontSize="18" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="3" Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Unpaid" Opacity="0.7" FontSize="12" />
+          <TextBlock x:Name="DashUnpaid" FontWeight="SemiBold" FontSize="18" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="4" Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Overdue" Opacity="0.7" FontSize="12" />
+          <TextBlock x:Name="DashOverdue" FontWeight="SemiBold" FontSize="18" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="5" Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Recurring active" Opacity="0.7" FontSize="12" />
+          <TextBlock x:Name="DashRecurring" FontWeight="SemiBold" FontSize="18" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnSpacing="16">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" />
+        <ColumnDefinition Width="360" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel Spacing="8">
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="140" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBox x:Name="SearchBox" Header="Search" PlaceholderText="Title, supplier, invoice…" />
+          <ComboBox x:Name="StatusFilter" Grid.Column="1" Header="Status" SelectedIndex="0">
+            <x:String>All</x:String>
+            <x:String>Draft</x:String>
+            <x:String>Unpaid</x:String>
+            <x:String>PartiallyPaid</x:String>
+            <x:String>Paid</x:String>
+            <x:String>Overdue</x:String>
+            <x:String>Cancelled</x:String>
+          </ComboBox>
+          <Button Grid.Column="2" Content="Search" VerticalAlignment="Bottom" Click="Search_Click"
+                  Style="{StaticResource AccentButtonStyle}" />
+        </Grid>
+        <TextBlock x:Name="ListStatus" Opacity="0.7" TextWrapping="Wrap" />
+        <TextBlock x:Name="ListError" Foreground="DarkRed" TextWrapping="Wrap" />
+        <ListView x:Name="ExpensesList" SelectionChanged="ExpensesList_SelectionChanged" MinHeight="280">
+          <ListView.ItemTemplate>
+            <DataTemplate x:DataType="fin:ExpenseListItemDto">
+              <Grid Padding="4,8" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="2">
+                  <TextBlock FontWeight="SemiBold" Foreground="{ThemeResource WorkshopTextPrimaryBrush}">
+                    <Run Text="{x:Bind Title}" />
+                  </TextBlock>
+                  <TextBlock FontSize="12" Opacity="0.75">
+                    <Run Text="{x:Bind PurchaseDate}" />
+                    <Run Text=" · " /><Run Text="{x:Bind Status}" />
+                    <Run Text=" · " /><Run Text="{x:Bind CategoryName}" />
+                    <Run Text=" · " /><Run Text="{x:Bind SupplierName}" />
+                  </TextBlock>
+                </StackPanel>
+                <TextBlock Grid.Column="1" FontWeight="SemiBold" VerticalAlignment="Center">
+                  <Run Text="$" /><Run Text="{x:Bind TotalAmount}" />
+                </TextBlock>
+              </Grid>
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock x:Name="DashNote" FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+      </StackPanel>
+
+      <Border Grid.Column="1" Padding="16" CornerRadius="8"
+              Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+        <ScrollViewer>
+          <StackPanel Spacing="8">
+            <TextBlock Text="Record expense" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock x:Name="FormStatus" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="FormError" Foreground="DarkRed" TextWrapping="Wrap" />
+            <TextBox x:Name="TitleBox" Header="Title" />
+            <TextBox x:Name="SupplierBox" Header="Supplier" />
+            <ComboBox x:Name="CategoryCombo" Header="Category" DisplayMemberPath="Name"
+                      HorizontalAlignment="Stretch" />
+            <CalendarDatePicker x:Name="PurchaseDatePicker" Header="Purchase date" />
+            <NumberBox x:Name="AmountBox" Header="Amount (AUD)" Minimum="0" SpinButtonPlacementMode="Compact" />
+            <ComboBox x:Name="GstCombo" Header="GST treatment" SelectedIndex="0">
+              <x:String>Inclusive</x:String>
+              <x:String>Exclusive</x:String>
+              <x:String>GstFree</x:String>
+              <x:String>InputTaxed</x:String>
+              <x:String>NoCredit</x:String>
+            </ComboBox>
+            <ComboBox x:Name="StatusCombo" Header="Status" SelectedIndex="1">
+              <x:String>Draft</x:String>
+              <x:String>Unpaid</x:String>
+              <x:String>PartiallyPaid</x:String>
+              <x:String>Paid</x:String>
+              <x:String>Overdue</x:String>
+              <x:String>Cancelled</x:String>
+            </ComboBox>
+            <TextBox x:Name="PaymentMethodBox" Header="Payment method" />
+            <TextBox x:Name="InvoiceRefBox" Header="Invoice / reference" />
+            <TextBox x:Name="NotesBox" Header="Notes" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
+            <CheckBox x:Name="InventoryLinkedCheck" Content="Inventory / COGS linked (exclude from operating totals)" />
+            <TextBlock x:Name="GstPreviewText" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Save" Click="Save_Click" Style="{StaticResource AccentButtonStyle}" />
+              <Button Content="New" Click="New_Click" />
+              <Button Content="Delete" Click="Delete_Click" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</Page>

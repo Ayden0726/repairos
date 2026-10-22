@@ -559,29 +559,6 @@ public partial class QuoteBuilderViewModel : ObservableObject
         _ = RecalcAsync();
     }
 
-    public void AddInventoryPartLine(InventoryListItemDto item)
-    {
-        var line = new QuoteLineDraft { Type = "PART" };
-        Lines.Add(line);
-        ApplyInventoryPart(line, item);
-    }
-
-    public void AddCustomPartLine(string name, decimal sellPrice)
-    {
-        var line = new QuoteLineDraft
-        {
-            Type = "PART",
-            Description = name.Trim(),
-            PartName = name.Trim(),
-            Sku = "CUSTOM",
-            InventoryItemId = null,
-            PartCostText = QuoteLineDraft.FormatMoney((double)sellPrice),
-            QuantityText = "1"
-        };
-        Lines.Add(line);
-        _ = RecalcAsync();
-    }
-
     public void ApplyService(QuoteLineDraft line, ServicePricingDto service)
     {
         line.ServicePricingId = service.Id;
@@ -602,11 +579,12 @@ public partial class QuoteBuilderViewModel : ObservableObject
             && Lines[0].ServicePricingId is null)
             Lines.Clear();
 
-        // Multi-service jobs: one labour/service fee for the ticket + parts on their own lines.
+        decimal labour = 0m;
         CatalogueServiceDto? first = null;
         foreach (var svc in services)
         {
             first ??= svc;
+            labour += svc.DefaultLabourFee + svc.ServiceFee;
             var line = new QuoteLineDraft
             {
                 Type = "SERVICE",
@@ -617,7 +595,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
             Lines.Add(line);
         }
         if (first is not null && !LabourOverridden)
-            SetJobLabourFromSettings((double)(first.DefaultLabourFee + first.ServiceFee));
+            SetJobLabourFromSettings((double)labour);
         if (first?.DefaultPartMarkupPercent is decimal m && !MarkupOverridden)
             SetJobMarkupFromSettings((double)m);
         if (string.IsNullOrWhiteSpace(Issue))

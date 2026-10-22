@@ -1296,6 +1296,7 @@ public sealed class UsedTechService : IUsedTechService
         var condition = NormalizeCondition(request.ConditionGrade);
         var status = string.IsNullOrWhiteSpace(request.Status) ? "In stock" : NormalizeStatus(request.Status);
 
+        var stockId = await NextRefurbStockIdAsync(ct);
         var d = new UsedDevice
         {
             Summary = summary,
@@ -1317,7 +1318,10 @@ public sealed class UsedTechService : IUsedTechService
             Source = Norm(request.Source),
             SellerCustomerId = request.SellerCustomerId,
             CustomerId = request.CustomerId,
-            RepairTicketId = request.RepairTicketId
+            RepairTicketId = request.RepairTicketId,
+            StockId = stockId,
+            Sku = stockId,
+            PurchaseDate = DateTimeOffset.UtcNow
         };
         _db.UsedDevices.Add(d);
         await _db.SaveChangesAsync(ct);
@@ -1368,8 +1372,17 @@ public sealed class UsedTechService : IUsedTechService
     {
         var d = await _db.UsedDevices.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
             ?? throw new AppException("not_found", "Used device was not found.", 404);
-        d.Status = NormalizeStatus(request.Status);
+        var next = NormalizeStatus(request.Status);
+        // Phase 1: security-check completeness is reported on the detail DTO; hard gating ships in Phase 3 once the inspection UI is live.
+        d.Status = next;
         if (request.ActualSalePrice is decimal sale) d.ActualSalePrice = sale;
+        if (next == "Listed" && d.ListedAt is null) d.ListedAt = DateTimeOffset.UtcNow;
+        if (next == "Sold")
+        {
+            d.SoldAt ??= DateTimeOffset.UtcNow;
+            if (request.ActualSalePrice is decimal soldPrice) d.ActualSalePrice = soldPrice;
+        }
+
         d.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "used.status", "UsedDevice", id.ToString(), newValue: d.Status, ct: ct);
@@ -1378,14 +1391,14 @@ public sealed class UsedTechService : IUsedTechService
 
     private static UsedDeviceDto MapList(UsedDevice d)
     {
-        var total = d.PurchasePrice + d.ExpectedRepairCost;
+        var total = d.TotalCost;
         var margin = d.ActualSalePrice.HasValue
             ? d.ActualSalePrice.Value - total
             : d.ExpectedResale - total;
         return new UsedDeviceDto(
             d.Id, d.Summary, d.Brand, d.Model, d.Category, d.Status, d.ConditionGrade,
             d.PurchasePrice, d.ExpectedRepairCost, total, d.ExpectedResale, d.ActualSalePrice, margin,
-            d.Serial, d.Colour, d.StorageCapacity);
+            d.Serial, d.Colour, d.StorageCapacity, d.StockId, d.LocationBin, d.IsPartsOnly);
     }
 
     private async Task<UsedDeviceDetailDto> MapDetailAsync(UsedDevice d, CancellationToken ct)
@@ -1404,10 +1417,15 @@ public sealed class UsedTechService : IUsedTechService
             ticketNumber = await _db.RepairTickets.AsNoTracking()
                 .Where(t => t.Id == ticketId).Select(t => t.TicketNumber).FirstOrDefaultAsync(ct);
 
-        var total = d.PurchasePrice + d.ExpectedRepairCost;
+        var total = d.TotalCost;
         var margin = d.ActualSalePrice.HasValue
             ? d.ActualSalePrice.Value - total
             : d.ExpectedResale - total;
+
+        var securityComplete = d.IsPartsOnly ||
+            (d.OwnershipDeclared && d.FactoryResetConfirmed && d.DataSanitisedConfirmed &&
+             (d.FindMyRemoved || string.Equals(d.ActivationLockStatus, "Cleared", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(d.ActivationLockStatus, "Not Applicable", StringComparison.OrdinalIgnoreCase)));
 
         return new UsedDeviceDetailDto(
             d.Id, d.Summary, d.Brand, d.Model, d.Category,
@@ -1418,7 +1436,37 @@ public sealed class UsedTechService : IUsedTechService
             d.SellerCustomerId, sellerName,
             d.CustomerId, customerName,
             d.RepairTicketId, ticketNumber,
-            d.CreatedAt, d.UpdatedAt);
+            d.CreatedAt, d.UpdatedAt,
+            d.StockId, d.Sku, d.LocationBin, d.AssignedTechnicianId, d.AcquisitionLeadId,
+            d.IsPartsOnly, d.FunctionalGrade, d.BatteryHealthPercent,
+            new UsedDeviceSecurityDto(
+                d.OwnershipDeclared, d.OwnershipEvidenceOnFile, d.ActivationLockStatus, d.FindMyRemoved,
+                d.FrpStatus, d.CarrierLockStatus, d.LostStolenStatus, d.FactoryResetConfirmed,
+                d.DataSanitisedConfirmed, d.SecurityCheckNotes, securityComplete),
+            new UsedDeviceCostBreakdownDto(
+                d.PurchasePrice, d.ExpectedRepairCost, d.LabourCost, d.ShippingInCost, d.ShippingOutCost,
+                d.PackagingCost, d.MarketplaceFees, d.PaymentFees, d.WarrantyAllowance, total,
+                d.ExpectedResale, d.ActualSalePrice,
+                d.ActualSalePrice.HasValue ? null : d.ExpectedResale - total,
+                d.ActualSalePrice.HasValue ? d.ActualSalePrice.Value - total : null));
+    }
+
+    private async Task<string> NextRefurbStockIdAsync(CancellationToken ct)
+    {
+        var key = "doc:RFB:stock";
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var seq = await _db.DocumentSequences.FirstOrDefaultAsync(s => s.Key == key, ct);
+        if (seq is null)
+        {
+            seq = new DocumentSequence { Key = key, Year = DateTime.UtcNow.Year, NextValue = 1 };
+            _db.DocumentSequences.Add(seq);
+        }
+
+        var value = seq.NextValue++;
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        _db.Entry(seq).State = EntityState.Detached;
+        return $"TB-RFB-{value:D5}";
     }
 
     private static string BuildSummary(string? summary, string? brand, string? model, string? category, string? storage)

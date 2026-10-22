@@ -414,9 +414,14 @@ public sealed class WebsitePublicService : IWebsitePublicService
         if (status is not ("Reserved" or "Sold" or "Listed" or "Ready for Sale"))
             throw new ValidationAppException("Status must be Reserved, Sold, Listed, or Ready for Sale.");
 
+        // Prefer first-class StockId / Sku (Phase 1); keep Notes/GUID fallback for legacy rows.
         var device = await _db.UsedDevices.FirstOrDefaultAsync(u =>
             u.ArchivedAt == null &&
-            (u.Notes != null && u.Notes.Contains(key) || u.Id.ToString() == key), ct);
+            (u.StockId == key || u.Sku == key || u.Barcode == key), ct);
+        if (device is null)
+            device = await _db.UsedDevices.FirstOrDefaultAsync(u =>
+                u.ArchivedAt == null &&
+                ((u.Notes != null && u.Notes.Contains(key)) || u.Id.ToString() == key), ct);
         if (device is null && Guid.TryParse(key, out var gid))
             device = await _db.UsedDevices.FirstOrDefaultAsync(u => u.Id == gid && u.ArchivedAt == null, ct);
         if (device is null)
@@ -424,10 +429,12 @@ public sealed class WebsitePublicService : IWebsitePublicService
 
         device.Status = status;
         if (request.ActualSalePrice is decimal sale) device.ActualSalePrice = sale;
+        if (status == "Listed") device.ListedAt ??= DateTimeOffset.UtcNow;
+        if (status == "Sold") device.SoldAt ??= DateTimeOffset.UtcNow;
         device.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(null, "website.refurb.sync", "UsedDevice", device.Id.ToString(),
-            newValue: new { status, key }, ct: ct);
+            newValue: new { status, key, stockId = device.StockId }, ct: ct);
         return new SyncRefurbishedStatusResponse(device.Id, device.Status, "Status synchronised into WorkshopOS.");
     }
 

@@ -1,0 +1,9 @@
+Rebuild Windows client 1.2.32 after pulling main.
+
+Includes:
+- Finance → Expenses page (GST dashboard, create/edit, CSV export)
+- Settings → Integrations → API Credentials (encrypted secrets UI)
+- ClientMinVersion / product version 1.2.32
+
+Server must be on 1.2.32+ with migration SecurityCredentialsAndExpenses applied
+and Encryption__Key set in Docker/.env (see docs/SETTINGS_AND_SECURITY.md).

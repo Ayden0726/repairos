@@ -1,11 +1,31 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# Multi-arch runtime: linux/amd64, linux/arm64, linux/arm/v7 (Raspberry Pi 3B+).
+FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim AS build
+ARG TARGETARCH
 WORKDIR /src
 COPY . .
-RUN dotnet restore WorkshopOS.sln
-RUN dotnet publish services/worker/WorkshopOS.Worker/WorkshopOS.Worker.csproj -c Release -o /app/publish /p:UseAppHost=false
+RUN set -eux; \
+    if [ -n "${TARGETARCH:-}" ]; then \
+      case "$TARGETARCH" in \
+        amd64) DOTNET_ARCH=x64 ;; \
+        arm64) DOTNET_ARCH=arm64 ;; \
+        arm)   DOTNET_ARCH=arm ;; \
+        *)     DOTNET_ARCH="$TARGETARCH" ;; \
+      esac; \
+      echo "Publishing worker for .NET arch=$DOTNET_ARCH (Docker TARGETARCH=$TARGETARCH)"; \
+      dotnet restore WorkshopOS.sln -a "$DOTNET_ARCH"; \
+      dotnet publish services/worker/WorkshopOS.Worker/WorkshopOS.Worker.csproj \
+        -c Release -a "$DOTNET_ARCH" -o /app/publish \
+        /p:UseAppHost=false /p:PublishReadyToRun=false; \
+    else \
+      echo "Publishing worker for host RID"; \
+      dotnet restore WorkshopOS.sln; \
+      dotnet publish services/worker/WorkshopOS.Worker/WorkshopOS.Worker.csproj \
+        -c Release -o /app/publish \
+        /p:UseAppHost=false /p:PublishReadyToRun=false; \
+    fi
 
-# Worker hosts ASP.NET Core DI / EF bits — needs the aspnet shared framework, not runtime-only.
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/runtime:8.0-bookworm-slim
 WORKDIR /app
 COPY --from=build /app/publish .
+ENV DOTNET_EnableDiagnostics=0
 ENTRYPOINT ["dotnet", "WorkshopOS.Worker.dll"]

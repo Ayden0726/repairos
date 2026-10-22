@@ -98,17 +98,7 @@ public sealed record UpsertCatalogueBundleRequest(
     IReadOnlyList<Guid> ServicePricingIds);
 
 public sealed record DeviceBrandDto(Guid Id, string Name, IReadOnlyList<string> DeviceTypes, int SortOrder);
-public sealed record DeviceModelDto(
-    Guid Id,
-    Guid BrandId,
-    string BrandName,
-    string Name,
-    string? DeviceType,
-    int SortOrder,
-    string? Series = null,
-    IReadOnlyList<string>? Aliases = null,
-    int? ReleaseYear = null,
-    bool IsVerified = true);
+public sealed record DeviceModelDto(Guid Id, Guid BrandId, string BrandName, string Name, string? DeviceType, int SortOrder);
 
 public sealed record CatalogueImportResultDto(
     string Version,

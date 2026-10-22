@@ -86,84 +86,19 @@
                     ItemsSource="{x:Bind ViewModel.DeviceTypes, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedDeviceType, Mode=TwoWay}"
                     SelectionChanged="DeviceType_SelectionChanged" />
-          <TextBlock Text="IMEI lookup" FontWeight="SemiBold" FontSize="16"
-                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-          <TextBlock Text="Scan or type a 15-digit IMEI, then Lookup Device. Manual brand/model entry still works when there is no IMEI or the API is offline."
-                     Opacity="0.7" TextWrapping="Wrap" FontSize="12" />
-          <Grid ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBox x:Name="ImeiBox" Header="IMEI"
-                     PlaceholderText="15 digits — barcode scanner supported"
-                     Text="{x:Bind ViewModel.Imei, Mode=TwoWay}"
-                     KeyDown="ImeiBox_KeyDown" />
-            <Button Grid.Column="1" Content="Lookup Device" VerticalAlignment="Bottom"
-                    Style="{StaticResource AccentButtonStyle}" Click="ImeiLookup_Click"
-                    IsEnabled="{x:Bind ViewModel.IsImeiLookupIdle, Mode=OneWay}" />
-            <Button Grid.Column="2" Content="Advanced" VerticalAlignment="Bottom"
-                    Click="ImeiAdvancedLookup_Click"
-                    IsEnabled="{x:Bind ViewModel.IsImeiLookupIdle, Mode=OneWay}" />
-          </Grid>
-          <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
-                        IsActive="{x:Bind ViewModel.IsLookingUpImei, Mode=OneWay}" />
-          <TextBlock Text="{x:Bind ViewModel.ImeiStatus, Mode=OneWay}"
-                     Opacity="0.8" TextWrapping="Wrap"
-                     Visibility="{x:Bind ViewModel.HasImeiStatus, Mode=OneWay}" />
-          <TextBlock Text="{x:Bind ViewModel.ImeiError, Mode=OneWay}"
-                     Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap"
-                     Visibility="{x:Bind ViewModel.HasImeiError, Mode=OneWay}" />
-          <Border x:Name="ImeiResultPanel" Padding="12" CornerRadius="6"
-                  Background="{ThemeResource WorkshopPageBackgroundBrush}"
-                  BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1"
-                  Visibility="Collapsed">
-            <StackPanel Spacing="8">
-              <TextBlock x:Name="ImeiResultMetaText" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
-              <TextBlock x:Name="ImeiDuplicatesText" Foreground="{ThemeResource WorkshopDangerBrush}"
-                         TextWrapping="Wrap" FontSize="12" />
-              <Grid ColumnSpacing="12" RowSpacing="8">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBox x:Name="ImeiBrandEdit" Header="Brand (editable)" />
-                <TextBox x:Name="ImeiModelEdit" Grid.Column="1" Header="Model (editable)" />
-                <TextBox x:Name="ImeiModelNumberEdit" Grid.Row="1" Header="Model number" />
-                <TextBox x:Name="ImeiCategoryEdit" Grid.Row="1" Grid.Column="1" Header="Category" />
-                <TextBox x:Name="ImeiDisplayEdit" Grid.Row="2" Header="Display" />
-                <TextBox x:Name="ImeiProcessorEdit" Grid.Row="2" Grid.Column="1" Header="Processor / chipset" />
-                <TextBox x:Name="ImeiBatteryEdit" Grid.Row="3" Header="Battery" />
-                <TextBox x:Name="ImeiNetworkEdit" Grid.Row="3" Grid.Column="1" Header="Network" />
-                <TextBox x:Name="ImeiStorageEdit" Grid.Row="4" Header="Storage (only if verified)"
-                         PlaceholderText="Leave blank unless device-specific" />
-                <TextBox x:Name="ImeiColourEdit" Grid.Row="4" Grid.Column="1" Header="Colour (only if verified)"
-                         PlaceholderText="Leave blank unless device-specific" />
-              </Grid>
-              <Button Content="Apply to ticket fields" Click="ImeiApply_Click"
-                      Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
-            </StackPanel>
-          </Border>
-
           <Grid ColumnSpacing="12">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <ComboBox x:Name="BrandBox" Header="Device brand" HorizontalAlignment="Stretch"
-                      IsEditable="True" PlaceholderText="Apple, Samsung… or Other"
+                      IsEditable="True" PlaceholderText="Apple, Samsung…"
                       SelectionChanged="BrandBox_SelectionChanged"
                       LostFocus="BrandBox_LostFocus" />
             <ComboBox x:Name="ModelBox" Grid.Column="1" Header="Model" HorizontalAlignment="Stretch"
-                      IsEditable="True" PlaceholderText="Select model or Unknown / Other"
+                      IsEditable="True" PlaceholderText="iPhone 13, Galaxy S23…"
                       LostFocus="ModelBox_LostFocus" />
           </Grid>
-          <TextBox Header="Serial number (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}"
-                   PlaceholderText="For devices without IMEI, or secondary serial" />
+          <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
 
           <!-- Inline service catalogue — filtered by device type -->
           <TextBlock Text="Services for this device" FontWeight="SemiBold" FontSize="16"
@@ -180,52 +115,16 @@
                     HorizontalAlignment="Stretch" />
           <Button Content="Add selected service" Click="SvcAdd_Click"
                   Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
-          <TextBlock Text="Selected services" Opacity="0.85" FontSize="12" />
-          <ListView x:Name="SvcSelectedList" MaxHeight="160" SelectionMode="Single"
-                    DisplayMemberPath="TitleLine" />
-          <Button Content="Remove selected service" Click="SvcRemove_Click" HorizontalAlignment="Left" />
-          <TextBlock Text="Parts from inventory" FontWeight="SemiBold" FontSize="16"
-                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-          <TextBlock Text="Search stock, add custom/special-order parts when you have no stock. Multi-service tickets charge the service fee once plus parts."
-                     Opacity="0.7" TextWrapping="Wrap" FontSize="12" />
-          <Grid ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <ComboBox x:Name="InvPartBox" Header="Search inventory" DisplayMemberPath="Name"
-                      IsEditable="True" IsTextSearchEnabled="True"
-                      PlaceholderText="Type SKU or part name"
-                      HorizontalAlignment="Stretch" />
-            <Button Grid.Column="1" Content="Load" VerticalAlignment="Bottom" Click="InvLoad_Click" />
-            <Button Grid.Column="2" Content="Add stock part" VerticalAlignment="Bottom"
-                    Style="{StaticResource AccentButtonStyle}" Click="InvAdd_Click" />
-          </Grid>
-          <Grid ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="2*" />
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBox x:Name="CustomPartNameBox" Header="Custom / special-order part"
-                     PlaceholderText="Part name when not in stock" />
-            <TextBox x:Name="CustomPartPriceBox" Grid.Column="1" Header="Sell $"
-                     PlaceholderText="0.00" />
-            <Button Grid.Column="2" Content="Add custom" VerticalAlignment="Bottom"
-                    Click="CustomPartAdd_Click" />
-          </Grid>
-          <ListView x:Name="InvSelectedList" MaxHeight="160" SelectionMode="Single"
-                    DisplayMemberPath="Display" />
-          <Button Content="Remove selected part" Click="InvRemove_Click" HorizontalAlignment="Left" />
-          <TextBox x:Name="SvcPartsBox" Header="Parts notes (optional)"
-                   PlaceholderText="Extra notes not in inventory…" />
+          <ComboBox x:Name="SvcSelectedBox" Header="Selected services" DisplayMemberPath="TitleLine"
+                    HorizontalAlignment="Stretch" />
+          <Button Content="Remove selected" Click="SvcRemove_Click" HorizontalAlignment="Left" />
+          <TextBox x:Name="SvcPartsBox" Header="Parts required (optional notes)"
+                   PlaceholderText="Screen assembly, adhesive…" />
           <TextBox x:Name="SvcNotesBox" Header="Technician notes" AcceptsReturn="True"
                    Height="56" TextWrapping="Wrap" />
           <TextBlock x:Name="SvcStatusText" Opacity="0.7" TextWrapping="Wrap" />
           <TextBlock x:Name="SvcErrorText" Foreground="{ThemeResource WorkshopDangerBrush}"
                      TextWrapping="Wrap" />
-          <TextBlock x:Name="InvPartsSummary" Opacity="0.8" TextWrapping="Wrap" />
 
           <TextBox Header="Reported fault" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
                    AcceptsReturn="True" Height="110" TextWrapping="Wrap"

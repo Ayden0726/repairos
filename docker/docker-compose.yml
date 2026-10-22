@@ -14,7 +14,10 @@ services:
       timeout: 5s
       retries: 10
 
+  # Optional — not referenced by the current API/worker. Enable with:
+  #   docker compose --profile redis up -d
   redis:
+    profiles: ["redis"]
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
@@ -32,10 +35,14 @@ services:
     environment:
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=workshopos;Username=workshopos;Password=${POSTGRES_PASSWORD:-workshopos_dev}
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-change-me-to-a-long-random-secret-key-32+}
+      # Dedicated encryption key for integration credentials (AES-GCM). Do not rotate casually.
+      Encryption__Key: ${Encryption__Key:-change-me-to-a-long-random-encryption-key-32+}
+      Encryption__KeyVersion: ${Encryption__KeyVersion:-1}
       Jwt__Issuer: WorkshopOS
       Jwt__Audience: WorkshopOS.Client
       Seed__Demo: ${SEED_DEMO:-false}
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Files__Root: /data/files
       # Owner/Administrator can restart API from Settings → Connection when true.
       ALLOW_PROCESS_RESTART: ${ALLOW_PROCESS_RESTART:-true}
     ports:
@@ -55,6 +62,11 @@ services:
     environment:
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=workshopos;Username=workshopos;Password=${POSTGRES_PASSWORD:-workshopos_dev}
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-change-me-to-a-long-random-secret-key-32+}
+      Encryption__Key: ${Encryption__Key:-change-me-to-a-long-random-encryption-key-32+}
+      Encryption__KeyVersion: ${Encryption__KeyVersion:-1}
+      Files__Root: /data/files
+    volumes:
+      - files_data:/data/files
 
 volumes:
   postgres_data:

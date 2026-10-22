@@ -1,6 +1,6 @@
 # Windows Client Navigation (TechBench NQ)
 
-**Version 1.2.33+** — 700+ phone model catalogue with search on New Ticket / Quotes; POS is admin-gated (off by default); repair import, deposits, and discount presets. Custom PC Builds removed from the product surface.
+**Version 1.2.30+** — POS is admin-gated (off by default); repair import, deposits, and discount presets. Custom PC Builds removed from the product surface.
 
 ## Shell chrome (minimal)
 

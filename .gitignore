@@ -21,6 +21,7 @@ TestResults/
 
 # Secrets / local
 .env
+docker/.use-pi-profile
 appsettings.*.local.json
 **/Properties/launchSettings.json.user
 

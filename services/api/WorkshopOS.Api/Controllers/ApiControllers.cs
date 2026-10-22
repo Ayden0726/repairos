@@ -362,7 +362,7 @@ public sealed class UsersController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "perm:staff.manage")]
-    public Task<CreateStaffUserResponse> Create([FromBody] CreateStaffUserRequest request, CancellationToken ct) =>
+    public Task<StaffUserDto> Create([FromBody] CreateStaffUserRequest request, CancellationToken ct) =>
         _staff.CreateAsync(request, UserId(), ct);
 
     [HttpPut("{id:guid}")]
@@ -370,11 +370,14 @@ public sealed class UsersController : ControllerBase
     public Task<StaffUserDto> Update(Guid id, [FromBody] UpdateStaffUserRequest request, CancellationToken ct) =>
         _staff.UpdateAsync(id, request, UserId(), ct);
 
-    /// <summary>Owner/Admin with staff.manage sets a temporary password; staff must change it at next login.</summary>
+    /// <summary>Owner/Admin with staff.manage sets a new password for a staff user.</summary>
     [HttpPut("{id:guid}/password")]
     [Authorize(Policy = "perm:staff.manage")]
-    public Task<CreateStaffUserResponse> ResetPassword(Guid id, [FromBody] ResetStaffPasswordRequest? request, CancellationToken ct) =>
-        _staff.ResetPasswordAsync(id, request ?? new ResetStaffPasswordRequest(), UserId(), ct);
+    public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetStaffPasswordRequest request, CancellationToken ct)
+    {
+        await _staff.ResetPasswordAsync(id, request, UserId(), ct);
+        return NoContent();
+    }
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

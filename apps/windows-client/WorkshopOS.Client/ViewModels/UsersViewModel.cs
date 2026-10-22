@@ -227,15 +227,11 @@ public partial class UsersViewModel : ObservableObject
         }
     }
 
-    /// <summary>Set after a successful create/reset so the UI can show the one-time temporary password.</summary>
-    public string? LastTemporaryPassword { get; private set; }
-
     [RelayCommand]
     private async Task CreateAsync()
     {
         Error = null;
         Status = null;
-        LastTemporaryPassword = null;
         if (NewRole is null)
         {
             Error = "Select a role.";
@@ -245,17 +241,15 @@ public partial class UsersViewModel : ObservableObject
         IsSaving = true;
         try
         {
-            var password = string.IsNullOrWhiteSpace(NewPassword) ? null : NewPassword;
-            var created = await _api.PostAsync<CreateStaffUserRequest, CreateStaffUserResponse>(
+            await _api.PostAsync<CreateStaffUserRequest, StaffUserDto>(
                 "api/users",
-                new CreateStaffUserRequest(NewEmail.Trim(), NewDisplayName.Trim(), password, NewRole.Key,
+                new CreateStaffUserRequest(NewEmail.Trim(), NewDisplayName.Trim(), NewPassword, NewRole.Key,
                     string.IsNullOrWhiteSpace(NewPhone) ? null : NewPhone.Trim()));
-            LastTemporaryPassword = created.TemporaryPassword;
             NewEmail = string.Empty;
             NewDisplayName = string.Empty;
             NewPassword = string.Empty;
             NewPhone = string.Empty;
-            Status = $"Account created for {created.User.DisplayName}. Share the temporary password — they must change it at first login.";
+            Status = "Account created.";
             await LoadAsync();
         }
         catch (Exception ex)
@@ -297,23 +291,26 @@ public partial class UsersViewModel : ObservableObject
         }
     }
 
-    /// <summary>Admin/owner sets a temporary password; staff must change it at next login.</summary>
+    /// <summary>Admin/owner sets a new password for the selected staff user.</summary>
     [RelayCommand]
     private async Task ResetPasswordAsync(string? newPassword)
     {
         if (SelectedUser is null) return;
         Error = null;
         Status = null;
-        LastTemporaryPassword = null;
+        if (string.IsNullOrWhiteSpace(newPassword))
+        {
+            Error = "Enter a new password.";
+            return;
+        }
 
         IsSaving = true;
         try
         {
-            var result = await _api.PutAsync<ResetStaffPasswordRequest, CreateStaffUserResponse>(
+            await _api.PutAsync(
                 $"api/users/{SelectedUser.Id}/password",
-                new ResetStaffPasswordRequest(string.IsNullOrWhiteSpace(newPassword) ? null : newPassword));
-            LastTemporaryPassword = result.TemporaryPassword;
-            Status = $"Temporary password set for {SelectedUser.DisplayName}. They must change it at next login.";
+                new ResetStaffPasswordRequest(newPassword));
+            Status = $"Password reset for {SelectedUser.DisplayName}. They can sign in with the new password.";
         }
         catch (Exception ex)
         {

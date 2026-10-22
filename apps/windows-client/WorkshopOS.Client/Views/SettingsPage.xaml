@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:auth="using:WorkshopOS.Contracts.Auth"
     xmlns:ops="using:WorkshopOS.Contracts.Operations"
+    xmlns:fin="using:WorkshopOS.Contracts.Finance"
     xmlns:vm="using:WorkshopOS.Client.ViewModels">
   <Grid Padding="24" RowSpacing="12" Background="{ThemeResource WorkshopPageBackgroundBrush}">
     <Grid.RowDefinitions>
@@ -12,7 +13,7 @@
     </Grid.RowDefinitions>
     <StackPanel Spacing="4">
       <TextBlock Text="Settings" FontSize="22" FontWeight="SemiBold" />
-      <TextBlock Text="Appearance, pricing, tax, staff, backups, and server connection." Opacity="0.7" />
+      <TextBlock Text="Appearance, pricing, tax, integrations, staff, backups, and server connection." Opacity="0.7" />
     </StackPanel>
     <Pivot x:Name="SettingsPivot" Grid.Row="1" SelectionChanged="SettingsPivot_SelectionChanged">
       <PivotItem Header="App">
@@ -34,7 +35,7 @@
                           OffContent="Off" OnContent="On"
                           Toggled="StartWithWindowsToggle_Toggled" />
             <TextBlock x:Name="StartWithWindowsStatusText" FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
-            <TextBlock x:Name="ClientVersionText" Text="Client 1.2.33" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
+            <TextBlock Text="Client 1.2.29" FontSize="12" Opacity="0.55" Margin="0,12,0,0" />
 
             <TextBlock Text="Your password" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
             <TextBlock Text="Change the password for the account you are signed in as. Requires your current password."
@@ -238,40 +239,49 @@
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
-      <PivotItem x:Name="DeviceIdPivot" Header="Device ID" Tag="deviceid">
+      <PivotItem x:Name="IntegrationsPivot" Header="Integrations" Tag="integrations">
         <ScrollViewer Padding="0,16,0,0">
-          <StackPanel Spacing="12" MaxWidth="640">
-            <TextBlock Text="Device identification (IMEI)" FontWeight="SemiBold" FontSize="16" />
-            <TextBlock Text="Automatic IMEI lookup via IMEI.info. API key stays on the server. Staff can still intake devices manually when the key is missing or the provider is offline."
+          <StackPanel Spacing="16" MaxWidth="720">
+            <TextBlock Text="API Credentials" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="Secrets are encrypted on the server (AES-256-GCM). Existing keys are never shown — only a masked hint. Leave secret fields blank to keep the current value."
                        Opacity="0.7" TextWrapping="Wrap" />
-            <TextBlock x:Name="DeviceIdStatusText" Opacity="0.7" TextWrapping="Wrap" />
-            <TextBlock x:Name="DeviceIdErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
-            <ToggleSwitch x:Name="DeviceIdEnabledToggle" Header="Enable device identification"
-                          OffContent="Off" OnContent="On" />
-            <ComboBox x:Name="DeviceIdProviderCombo" Header="Provider" Width="280">
-              <x:String>imei.info</x:String>
-            </ComboBox>
-            <TextBox x:Name="DeviceIdApiKeyBox" Header="IMEI.info API key"
-                     PlaceholderText="Paste key here, then Save (leave blank to keep the stored key)"
-                     TextWrapping="Wrap" AcceptsReturn="False" />
-            <CheckBox x:Name="DeviceIdClearApiKeyCheck" Content="Clear stored API key" />
-            <TextBlock x:Name="DeviceIdApiKeyHint" FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
-            <CheckBox x:Name="DeviceIdBasicCheck" Content="Basic lookup enabled (service 0 — model/TAC)" IsChecked="True" />
-            <CheckBox x:Name="DeviceIdAdvancedCheck" Content="Paid advanced lookup enabled (device-specific checks)" />
-            <NumberBox x:Name="DeviceIdBasicServiceBox" Header="Basic service ID" Value="0" Minimum="0" SpinButtonPlacementMode="Compact" />
-            <NumberBox x:Name="DeviceIdAdvancedServiceBox" Header="Advanced service ID (0 = none)" Value="0" Minimum="0" SpinButtonPlacementMode="Compact" />
-            <CheckBox x:Name="DeviceIdCacheCheck" Content="Cache lookups by TAC" IsChecked="True" />
-            <NumberBox x:Name="DeviceIdCacheTtlBox" Header="Cache TTL (days)" Value="90" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" />
-            <NumberBox x:Name="DeviceIdDailyLimitBox" Header="Daily paid lookup limit (0 = unlimited)" Value="200" Minimum="0" SpinButtonPlacementMode="Compact" />
-            <NumberBox x:Name="DeviceIdBasicCostBox" Header="Estimated basic cost (AUD)" Value="0.02" SmallChange="0.01" SpinButtonPlacementMode="Compact" />
-            <NumberBox x:Name="DeviceIdAdvancedCostBox" Header="Estimated advanced cost (AUD)" Value="0" SmallChange="0.01" SpinButtonPlacementMode="Compact" />
-            <TextBox x:Name="DeviceIdNotesBox" Header="Notes" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"
-                     PlaceholderText="Account email, purchased services, cost notes…" />
-            <TextBlock x:Name="DeviceIdUsageText" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Save device identification" Click="SaveDeviceId_Click" Style="{StaticResource AccentButtonStyle}" />
-              <Button Content="Test connection" Click="TestDeviceId_Click" />
-            </StackPanel>
+            <TextBlock x:Name="CredStatusText" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock x:Name="CredErrorText" Foreground="DarkRed" TextWrapping="Wrap" />
+            <ListView x:Name="CredentialsList" SelectionChanged="CredentialsList_SelectionChanged"
+                      MinHeight="160" MaxHeight="280">
+              <ListView.ItemTemplate>
+                <DataTemplate x:DataType="fin:IntegrationCredentialDto">
+                  <StackPanel Padding="4,8" Spacing="2">
+                    <TextBlock FontWeight="SemiBold">
+                      <Run Text="{x:Bind DisplayName}" /><Run Text=" · " /><Run Text="{x:Bind ConnectionStatus}" />
+                    </TextBlock>
+                    <TextBlock FontSize="12" Opacity="0.75">
+                      <Run Text="{x:Bind ProviderKey}" />
+                      <Run Text=" · secret " /><Run Text="{x:Bind HasSecret}" />
+                      <Run Text=" · " /><Run Text="{x:Bind SecretHint}" />
+                    </TextBlock>
+                  </StackPanel>
+                </DataTemplate>
+              </ListView.ItemTemplate>
+            </ListView>
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+                    BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+              <StackPanel Spacing="8">
+                <TextBlock x:Name="CredEditorTitle" Text="Select an integration" FontWeight="SemiBold" />
+                <ToggleSwitch x:Name="CredEnabledToggle" Header="Enabled" OffContent="Disabled" OnContent="Enabled" />
+                <TextBox x:Name="CredPublicConfigBox" Header="Public config (JSON — URLs, IDs, non-secret options)"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" FontFamily="Consolas" />
+                <PasswordBox x:Name="CredSecret1Box" Header="Secret field 1 (leave blank to keep)" />
+                <PasswordBox x:Name="CredSecret2Box" Header="Secret field 2 (optional)" />
+                <TextBlock x:Name="CredFieldsHint" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                <CheckBox x:Name="CredClearSecretsCheck" Content="Clear stored secrets" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="Save changes" Click="SaveCredential_Click" Style="{StaticResource AccentButtonStyle}" />
+                  <Button Content="Test connection" Click="TestCredential_Click" />
+                  <Button Content="Refresh" Click="RefreshCredentials_Click" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
           </StackPanel>
         </ScrollViewer>
       </PivotItem>
@@ -327,12 +337,10 @@
                   <TextBlock Text="New account" FontWeight="SemiBold" FontSize="16" />
                   <TextBox x:Name="NewDisplayNameBox" Header="Display name" />
                   <TextBox x:Name="NewEmailBox" Header="Email" />
-                  <PasswordBox x:Name="NewPasswordBox" Header="Temp password (optional — leave blank to auto-generate)" />
+                  <PasswordBox x:Name="NewPasswordBox" Header="Password (min 10, upper/lower/digit)" />
                   <TextBox x:Name="NewPhoneBox" Header="Phone (optional)" />
                   <ComboBox x:Name="NewRoleCombo" Header="Role" DisplayMemberPath="DisplayLabel"
                             HorizontalAlignment="Stretch" PlaceholderText="Select a role" />
-                  <TextBlock Text="New staff get a temporary password and must change it at first login."
-                             FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
                   <TextBlock x:Name="RolesHintText" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
                   <Button x:Name="CreateUserButton" Content="Create account" Click="CreateUser_Click"
                           Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />

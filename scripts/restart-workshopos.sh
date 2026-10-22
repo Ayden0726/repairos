@@ -10,9 +10,23 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="$ROOT/docker/docker-compose.yml"
+COMPOSE_PI="$ROOT/docker/docker-compose.pi.yml"
+PI_MARKER="$ROOT/docker/.use-pi-profile"
 ENV_FILE="$ROOT/docker/.env"
 DO_UPDATE=0
 API_PORT="${API_PORT:-5088}"
+
+compose_cmd() {
+  local args=(-f "$COMPOSE_FILE")
+  if [[ -f "$PI_MARKER" && -f "$COMPOSE_PI" ]]; then
+    args+=(-f "$COMPOSE_PI")
+  fi
+  if [[ -f "$ENV_FILE" ]]; then
+    docker compose "${args[@]}" --env-file "$ENV_FILE" "$@"
+  else
+    docker compose "${args[@]}" "$@"
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -77,11 +91,16 @@ if [[ "$DO_UPDATE" -eq 1 ]]; then
   else
     echo "    WARN: not a git checkout — skipping pull"
   fi
-  docker compose -f "$COMPOSE_FILE" pull || true
-  docker compose -f "$COMPOSE_FILE" up -d --build
+  if [[ -f "$PI_MARKER" ]]; then
+    echo "    Pi / low-memory overlay: docker-compose.pi.yml"
+  fi
+  compose_cmd pull || true
+  export DOCKER_BUILDKIT=1
+  export COMPOSE_DOCKER_CLI_BUILD=1
+  compose_cmd up -d --build
 else
   echo "==> [1/3] Restarting api + worker"
-  docker compose -f "$COMPOSE_FILE" restart api worker
+  compose_cmd restart api worker
 fi
 
 echo "==> [2/3] Waiting for health on port ${API_PORT}"
@@ -101,7 +120,7 @@ done
 if [[ "$ok" != "1" ]]; then
   echo "    WARN: health check did not succeed yet."
   echo "      curl -v http://127.0.0.1:${API_PORT}/api/health"
-  echo "      docker compose -f $COMPOSE_FILE logs api"
+  echo "      cd $ROOT/docker && docker compose logs api"
 fi
 
 echo "==> [3/3] Done"

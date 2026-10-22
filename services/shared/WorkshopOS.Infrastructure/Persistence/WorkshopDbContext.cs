@@ -41,8 +41,6 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<ServiceRecentSelection> ServiceRecentSelections => Set<ServiceRecentSelection>();
     public DbSet<DeviceBrand> DeviceBrands => Set<DeviceBrand>();
     public DbSet<DeviceModel> DeviceModels => Set<DeviceModel>();
-    public DbSet<ImeiTacCache> ImeiTacCaches => Set<ImeiTacCache>();
-    public DbSet<ImeiLookupLog> ImeiLookupLogs => Set<ImeiLookupLog>();
     public DbSet<RepairServiceLine> RepairServiceLines => Set<RepairServiceLine>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
@@ -79,6 +77,18 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<CustomPcRequest> CustomPcRequests => Set<CustomPcRequest>();
     public DbSet<RefurbDiagnosticChecklist> RefurbDiagnosticChecklists => Set<RefurbDiagnosticChecklist>();
     public DbSet<RefurbDiagnosticResult> RefurbDiagnosticResults => Set<RefurbDiagnosticResult>();
+
+    // Refurbished acquisitions (outbound buying)
+    public DbSet<AcquisitionLead> AcquisitionLeads => Set<AcquisitionLead>();
+    public DbSet<AcquisitionOffer> AcquisitionOffers => Set<AcquisitionOffer>();
+    public DbSet<AcquisitionEvent> AcquisitionEvents => Set<AcquisitionEvent>();
+
+    // Secure credentials + business expenses
+    public DbSet<IntegrationCredential> IntegrationCredentials => Set<IntegrationCredential>();
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+    public DbSet<BusinessExpense> BusinessExpenses => Set<BusinessExpense>();
+    public DbSet<ExpenseAttachment> ExpenseAttachments => Set<ExpenseAttachment>();
+    public DbSet<RecurringExpense> RecurringExpenses => Set<RecurringExpense>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -171,49 +181,9 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Category).HasConversion<string>().HasMaxLength(32);
             e.Property(x => x.Brand).HasMaxLength(120).IsRequired();
             e.Property(x => x.Model).HasMaxLength(160).IsRequired();
-            e.Property(x => x.Manufacturer).HasMaxLength(120);
-            e.Property(x => x.ModelNumber).HasMaxLength(120);
-            e.Property(x => x.DisplaySpec).HasMaxLength(200);
-            e.Property(x => x.Processor).HasMaxLength(160);
-            e.Property(x => x.Chipset).HasMaxLength(160);
-            e.Property(x => x.BatteryCapacity).HasMaxLength(80);
-            e.Property(x => x.NetworkCapabilities).HasMaxLength(200);
-            e.Property(x => x.Ram).HasMaxLength(80);
-            e.Property(x => x.IdentificationStatus).HasMaxLength(40);
-            e.Property(x => x.IdentificationProvider).HasMaxLength(80);
             e.HasIndex(x => x.Serial);
             e.HasIndex(x => x.Imei);
             e.HasOne(x => x.Customer).WithMany(c => c.Devices).HasForeignKey(x => x.CustomerId);
-        });
-
-        modelBuilder.Entity<ImeiTacCache>(e =>
-        {
-            e.ToTable("imei_tac_cache");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Tac).HasMaxLength(8).IsRequired();
-            e.Property(x => x.Provider).HasMaxLength(80).IsRequired();
-            e.Property(x => x.Brand).HasMaxLength(120);
-            e.Property(x => x.Manufacturer).HasMaxLength(120);
-            e.Property(x => x.Model).HasMaxLength(200);
-            e.Property(x => x.ModelNumber).HasMaxLength(120);
-            e.Property(x => x.DeviceCategory).HasMaxLength(40);
-            e.Property(x => x.VerificationStatus).HasMaxLength(40);
-            e.HasIndex(x => new { x.Tac, x.Provider }).IsUnique();
-            e.HasIndex(x => x.ExpiresAt);
-        });
-
-        modelBuilder.Entity<ImeiLookupLog>(e =>
-        {
-            e.ToTable("imei_lookup_logs");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.ImeiHash).HasMaxLength(64).IsRequired();
-            e.Property(x => x.Tac).HasMaxLength(8);
-            e.Property(x => x.Provider).HasMaxLength(80).IsRequired();
-            e.Property(x => x.ErrorCode).HasMaxLength(80);
-            e.Property(x => x.VerificationStatus).HasMaxLength(40);
-            e.HasIndex(x => x.ImeiHash);
-            e.HasIndex(x => x.CreatedAt);
-            e.HasIndex(x => x.ActorUserId);
         });
 
         modelBuilder.Entity<RepairStatus>(e =>
@@ -480,14 +450,10 @@ public sealed class WorkshopDbContext : DbContext
         {
             e.ToTable("device_models");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
             e.Property(x => x.DeviceType).HasMaxLength(64);
-            e.Property(x => x.Series).HasMaxLength(120);
-            e.Property(x => x.Aliases).HasMaxLength(1000);
             e.HasIndex(x => new { x.BrandId, x.Name }).IsUnique();
             e.HasIndex(x => x.SortOrder);
-            e.HasIndex(x => x.Series);
-            e.HasIndex(x => x.DeviceType);
             e.HasOne(x => x.Brand).WithMany(b => b.Models).HasForeignKey(x => x.BrandId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -739,10 +705,104 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.ActualSalePrice).HasPrecision(12, 2);
             e.Property(x => x.Notes).HasMaxLength(2000);
             e.Property(x => x.Source).HasMaxLength(240);
+            e.Property(x => x.StockId).HasMaxLength(32);
+            e.Property(x => x.Sku).HasMaxLength(64);
+            e.Property(x => x.Barcode).HasMaxLength(64);
+            e.Property(x => x.LocationBin).HasMaxLength(64);
+            e.Property(x => x.ModelNumber).HasMaxLength(120);
+            e.Property(x => x.Carrier).HasMaxLength(64);
+            e.Property(x => x.SimConfiguration).HasMaxLength(32);
+            e.Property(x => x.LabourCost).HasPrecision(12, 2);
+            e.Property(x => x.ShippingInCost).HasPrecision(12, 2);
+            e.Property(x => x.ShippingOutCost).HasPrecision(12, 2);
+            e.Property(x => x.PackagingCost).HasPrecision(12, 2);
+            e.Property(x => x.MarketplaceFees).HasPrecision(12, 2);
+            e.Property(x => x.PaymentFees).HasPrecision(12, 2);
+            e.Property(x => x.WarrantyAllowance).HasPrecision(12, 2);
+            e.Property(x => x.FunctionalGrade).HasMaxLength(32);
+            e.Property(x => x.ActivationLockStatus).HasMaxLength(32);
+            e.Property(x => x.FrpStatus).HasMaxLength(32);
+            e.Property(x => x.CarrierLockStatus).HasMaxLength(32);
+            e.Property(x => x.LostStolenStatus).HasMaxLength(32);
+            e.Property(x => x.SecurityCheckNotes).HasMaxLength(2000);
+            e.Property(x => x.WooCommerceProductId).HasMaxLength(64);
+            e.Property(x => x.ListingUrl).HasMaxLength(500);
             e.Ignore(x => x.TotalCost);
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.CustomerId);
             e.HasIndex(x => x.RepairTicketId);
+            e.HasIndex(x => x.StockId);
+            e.HasIndex(x => x.Imei);
+            e.HasIndex(x => x.AcquisitionLeadId);
+        });
+
+        modelBuilder.Entity<AcquisitionLead>(e =>
+        {
+            e.ToTable("acquisition_leads");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Reference).HasMaxLength(32).IsRequired();
+            e.HasIndex(x => x.Reference).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(40);
+            e.Property(x => x.Brand).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Model).HasMaxLength(120).IsRequired();
+            e.Property(x => x.ModelNumber).HasMaxLength(120);
+            e.Property(x => x.Category).HasMaxLength(64);
+            e.Property(x => x.StorageCapacity).HasMaxLength(64);
+            e.Property(x => x.Colour).HasMaxLength(64);
+            e.Property(x => x.Imei).HasMaxLength(32);
+            e.Property(x => x.Serial).HasMaxLength(120);
+            e.Property(x => x.Carrier).HasMaxLength(64);
+            e.Property(x => x.SellerName).HasMaxLength(200);
+            e.Property(x => x.SellerContact).HasMaxLength(240);
+            e.Property(x => x.SellerEmail).HasMaxLength(320);
+            e.Property(x => x.SellerPhone).HasMaxLength(40);
+            e.Property(x => x.SellerType).HasMaxLength(32);
+            e.Property(x => x.AcquisitionSource).HasMaxLength(64);
+            e.Property(x => x.ListingUrl).HasMaxLength(1000);
+            e.Property(x => x.AskingPrice).HasPrecision(12, 2);
+            e.Property(x => x.ProposedOffer).HasPrecision(12, 2);
+            e.Property(x => x.AcceptedPurchasePrice).HasPrecision(12, 2);
+            e.Property(x => x.DeviceCondition).HasMaxLength(120);
+            e.Property(x => x.ActivationLockStatus).HasMaxLength(32);
+            e.Property(x => x.PaymentMethod).HasMaxLength(64);
+            e.Property(x => x.ShippingOrCollection).HasMaxLength(500);
+            e.Property(x => x.Notes).HasMaxLength(4000);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.Imei);
+            e.HasIndex(x => x.AssignedStaffId);
+            e.HasIndex(x => x.FollowUpAt);
+            e.HasOne(x => x.UsedDevice).WithMany().HasForeignKey(x => x.UsedDeviceId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<AcquisitionOffer>(e =>
+        {
+            e.ToTable("acquisition_offers");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.Property(x => x.Message).HasMaxLength(4000);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.Property(x => x.Amount).HasPrecision(12, 2);
+            e.Property(x => x.EstimatedResalePrice).HasPrecision(12, 2);
+            e.Property(x => x.EstimatedPartsCost).HasPrecision(12, 2);
+            e.Property(x => x.LabourAllowance).HasPrecision(12, 2);
+            e.Property(x => x.EstimatedProfit).HasPrecision(12, 2);
+            e.Property(x => x.EstimatedMarginPercent).HasPrecision(8, 2);
+            e.Property(x => x.AbsoluteMaxPurchasePrice).HasPrecision(12, 2);
+            e.Property(x => x.BuyRecommendation).HasMaxLength(32);
+            e.HasOne(x => x.AcquisitionLead).WithMany(l => l.Offers).HasForeignKey(x => x.AcquisitionLeadId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.AcquisitionLeadId);
+        });
+
+        modelBuilder.Entity<AcquisitionEvent>(e =>
+        {
+            e.ToTable("acquisition_events");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.EventType).HasMaxLength(64);
+            e.Property(x => x.Summary).HasMaxLength(500);
+            e.HasOne(x => x.AcquisitionLead).WithMany(l => l.Events).HasForeignKey(x => x.AcquisitionLeadId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.AcquisitionLeadId, x.CreatedAt });
         });
 
         modelBuilder.Entity<QaChecklist>(e =>
@@ -919,6 +979,84 @@ public sealed class WorkshopDbContext : DbContext
             e.HasIndex(x => x.UsedDeviceId);
             e.Property(x => x.OverallGrade).HasMaxLength(32);
         });
+
+        modelBuilder.Entity<IntegrationCredential>(e =>
+        {
+            e.ToTable("integration_credentials");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProviderKey).IsUnique()
+                .HasFilter("\"ArchivedAt\" IS NULL");
+            e.Property(x => x.ProviderKey).HasMaxLength(64).IsRequired();
+            e.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
+            e.Property(x => x.ConnectionStatus).HasMaxLength(32);
+            e.Property(x => x.SecretHint).HasMaxLength(64);
+            e.Property(x => x.PublicConfigJson).HasColumnType("jsonb");
+            e.Ignore(x => x.HasSecret);
+        });
+
+        modelBuilder.Entity<ExpenseCategory>(e =>
+        {
+            e.ToTable("expense_categories");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Kind).HasMaxLength(32);
+            e.Property(x => x.Icon).HasMaxLength(64);
+            e.Property(x => x.MonthlyBudget).HasPrecision(12, 2);
+            e.HasOne(x => x.ParentCategory).WithMany(x => x.Children).HasForeignKey(x => x.ParentCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.SortOrder);
+        });
+
+        modelBuilder.Entity<BusinessExpense>(e =>
+        {
+            e.ToTable("business_expenses");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32);
+            e.Property(x => x.GstTreatment).HasMaxLength(32);
+            e.Property(x => x.PaymentMethod).HasMaxLength(64);
+            e.Property(x => x.SupplierName).HasMaxLength(200);
+            e.Property(x => x.InvoiceReference).HasMaxLength(120);
+            e.Property(x => x.RecurrenceInstanceKey).HasMaxLength(80);
+            e.Property(x => x.TotalAmount).HasPrecision(12, 2);
+            e.Property(x => x.AmountExGst).HasPrecision(12, 2);
+            e.Property(x => x.GstAmount).HasPrecision(12, 2);
+            e.Property(x => x.AmountPaid).HasPrecision(12, 2);
+            e.Property(x => x.RefundAmount).HasPrecision(12, 2);
+            e.Property(x => x.BusinessUsePercent).HasPrecision(5, 2);
+            e.HasIndex(x => x.PurchaseDate);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.RecurrenceInstanceKey).IsUnique()
+                .HasFilter("\"RecurrenceInstanceKey\" IS NOT NULL");
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.RecurringExpense).WithMany().HasForeignKey(x => x.RecurringExpenseId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ExpenseAttachment>(e =>
+        {
+            e.ToTable("expense_attachments");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FileName).HasMaxLength(260).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(120);
+            e.Property(x => x.StoragePath).HasMaxLength(1024).IsRequired();
+            e.HasOne(x => x.Expense).WithMany(x => x.Attachments).HasForeignKey(x => x.ExpenseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecurringExpense>(e =>
+        {
+            e.ToTable("recurring_expenses");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(240).IsRequired();
+            e.Property(x => x.Frequency).HasMaxLength(32);
+            e.Property(x => x.GstTreatment).HasMaxLength(32);
+            e.Property(x => x.PaymentMethod).HasMaxLength(64);
+            e.Property(x => x.SupplierName).HasMaxLength(200);
+            e.Property(x => x.TotalAmount).HasPrecision(12, 2);
+            e.HasIndex(x => x.NextDueDate);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
+        });
     }
 }
 
@@ -933,7 +1071,6 @@ public static class SettingKeys
     public const string PricingSettings = "pricing.settings";
     public const string ServiceCatalogueVersion = "seed.service_catalogue_version";
     public const string PosSettings = "pos.settings";
-    public const string DeviceIdentification = "device.identification";
 }
 
 public static class DbSeed
@@ -1100,8 +1237,16 @@ public static class DbSeed
     }
 
     public static async Task SetSettingAsync(WorkshopDbContext db, string key, object value, Guid? userId, CancellationToken ct = default)
+        => await SetSettingAsync(db, key, value, userId, expectedUpdatedAt: null, ct);
+
+    /// <summary>
+    /// Persists a settings blob. When <paramref name="expectedUpdatedAt"/> is supplied and the row
+    /// has been changed by another writer, throws <see cref="WorkshopOS.Application.Common.ConflictAppException"/>.
+    /// Never inserts defaults over an existing row.
+    /// </summary>
+    public static async Task SetSettingAsync(
+        WorkshopDbContext db, string key, object value, Guid? userId, DateTimeOffset? expectedUpdatedAt, CancellationToken ct = default)
     {
-        // Persist as camelCase JSON (same shape the API returns) so PUT/GET stay consistent.
         var options = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -1110,13 +1255,43 @@ public static class DbSeed
         var json = JsonSerializer.Serialize(value, options);
         var row = await db.Settings.FirstOrDefaultAsync(s => s.Key == key, ct);
         if (row is null)
+        {
             db.Settings.Add(new BusinessSetting { Key = key, JsonValue = json, UpdatedById = userId, UpdatedAt = DateTimeOffset.UtcNow });
+        }
         else
         {
+            if (expectedUpdatedAt is DateTimeOffset expected)
+            {
+                // Allow 1ms skew from JSON round-trips.
+                if (Math.Abs((row.UpdatedAt - expected).TotalMilliseconds) > 5)
+                    throw new WorkshopOS.Application.Common.ConflictAppException(
+                        "This setting was changed by someone else. Reload and try again — your edits were not discarded on the server; re-apply them after refresh.");
+            }
+
             row.JsonValue = json;
             row.UpdatedById = userId;
             row.UpdatedAt = DateTimeOffset.UtcNow;
         }
+
         await db.SaveChangesAsync(ct);
+    }
+
+    public static async Task<(T Value, DateTimeOffset? UpdatedAt)> GetSettingWithMetaAsync<T>(
+        WorkshopDbContext db, string key, T fallback, CancellationToken ct = default)
+    {
+        var row = await db.Settings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == key, ct);
+        if (row is null || string.IsNullOrWhiteSpace(row.JsonValue))
+            return (fallback, null);
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var parsed = JsonSerializer.Deserialize<T>(row.JsonValue, options);
+            return (parsed ?? fallback, row.UpdatedAt);
+        }
+        catch (JsonException)
+        {
+            throw new InvalidOperationException(
+                $"Setting '{key}' has invalid JSON and cannot be loaded. Re-save from Settings to repair it.");
+        }
     }
 }

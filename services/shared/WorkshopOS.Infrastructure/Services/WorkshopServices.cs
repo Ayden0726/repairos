@@ -1,7 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using WorkshopOS.Application.Abstractions;
 using WorkshopOS.Application.Common;
 using WorkshopOS.Contracts.Workshop;
@@ -9,49 +6,6 @@ using WorkshopOS.Domain.Entities;
 using WorkshopOS.Infrastructure.Persistence;
 
 namespace WorkshopOS.Infrastructure.Services;
-
-public sealed class SecretProtector
-{
-    private readonly byte[] _key;
-
-    public SecretProtector(IConfiguration config)
-    {
-        var raw = config["Encryption:Key"] ?? config["Jwt:SigningKey"]
-            ?? throw new InvalidOperationException("Encryption:Key or Jwt:SigningKey is required.");
-        _key = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
-    }
-
-    public string Encrypt(string plaintext)
-    {
-        var iv = RandomNumberGenerator.GetBytes(12);
-        using var aes = new AesGcm(_key, 16);
-        var plain = Encoding.UTF8.GetBytes(plaintext);
-        var cipher = new byte[plain.Length];
-        var tag = new byte[16];
-        aes.Encrypt(iv, plain, cipher, tag);
-        return $"v1:{Convert.ToBase64String(iv)}:{Convert.ToBase64String(tag)}:{Convert.ToBase64String(cipher)}";
-    }
-
-    public string Decrypt(string payload)
-    {
-        if (string.IsNullOrWhiteSpace(payload))
-            throw new InvalidOperationException("Ciphertext is empty.");
-        // Plaintext passthrough for legacy unencrypted settings rows.
-        if (!payload.StartsWith("v1:", StringComparison.Ordinal))
-            return payload;
-
-        var parts = payload.Split(':');
-        if (parts.Length != 4)
-            throw new InvalidOperationException("Ciphertext format is invalid.");
-        var iv = Convert.FromBase64String(parts[1]);
-        var tag = Convert.FromBase64String(parts[2]);
-        var cipher = Convert.FromBase64String(parts[3]);
-        var plain = new byte[cipher.Length];
-        using var aes = new AesGcm(_key, 16);
-        aes.Decrypt(iv, cipher, tag, plain);
-        return Encoding.UTF8.GetString(plain);
-    }
-}
 
 public sealed class CustomerService : ICustomerService
 {

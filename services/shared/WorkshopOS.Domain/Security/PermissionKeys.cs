@@ -26,6 +26,11 @@ public static class PermissionKeys
         ("payments.view", "Finance", "View payments"),
         ("payments.record", "Finance", "Record payments"),
         ("payments.refund", "Finance", "Issue refunds"),
+        ("expenses.view", "Finance", "View expenses"),
+        ("expenses.manage", "Finance", "Add and edit expenses"),
+        ("expenses.delete", "Finance", "Delete or restore expenses"),
+        ("expenses.export", "Finance", "Export expense reports"),
+        ("expenses.categories", "Finance", "Manage expense categories"),
         ("pos.view", "POS", "View POS sales"),
         ("pos.sell", "POS", "Ring up POS sales"),
         ("pos.manage", "POS", "Manage POS settings and void sales"),
@@ -46,6 +51,12 @@ public static class PermissionKeys
         ("builds.manage", "PC Builds", "Manage PC builds"),
         ("used.view", "Refurbished", "View refurbished / used tech"),
         ("used.manage", "Refurbished", "Manage refurbished / used tech"),
+        ("used.view_costs", "Refurbished", "View purchase prices and refurbishment costs"),
+        ("used.view_financials", "Refurbished", "View refurbished financial reports and ROI"),
+        ("used.approve_purchase", "Refurbished", "Approve acquisition purchases"),
+        ("used.publish", "Refurbished", "Approve and publish refurbished listings"),
+        ("acquisitions.view", "Acquisitions", "View acquisition / buying leads"),
+        ("acquisitions.manage", "Acquisitions", "Manage acquisition leads and offers"),
         ("bookings.view", "Calendar", "View bookings"),
         ("bookings.manage", "Calendar", "Manage bookings"),
         ("staff.view", "Staff", "View staff"),
@@ -81,7 +92,9 @@ public static class PermissionKeys
             "tickets.internal_notes", "tickets.credentials.view",
             "customers.view", "devices.view", "inventory.view", "quotes.view", "quotes.manage",
             "pricing.view", "pricing.apply_discount",
-            "builds.view", "builds.manage", "used.view", "bookings.view",
+            "expenses.view", "expenses.manage",
+            "builds.view", "builds.manage", "used.view", "used.view_costs", "bookings.view",
+            "acquisitions.view", "acquisitions.manage",
             "selltech.view", "messages.view", "messages.manage",
             "knowledge.view", "knowledge.manage", "ai.use",
             "pos.view"
@@ -92,7 +105,9 @@ public static class PermissionKeys
             "customers.view", "customers.manage", "devices.view", "devices.manage", "inventory.view",
             "quotes.view", "quotes.manage", "invoices.view", "invoices.manage",
             "payments.view", "payments.record", "pricing.view", "pricing.apply_discount",
-            "builds.view", "used.view", "selltech.view", "selltech.manage",
+            "expenses.view", "expenses.manage",
+            "builds.view", "used.view", "acquisitions.view", "acquisitions.manage",
+            "selltech.view", "selltech.manage",
             "messages.view", "messages.manage",
             "bookings.view", "bookings.manage", "knowledge.view", "ai.use",
             "pos.view", "pos.sell"
@@ -102,15 +117,18 @@ public static class PermissionKeys
             "customers.view", "customers.manage", "quotes.view", "quotes.manage",
             "pricing.view", "pricing.view_cost", "pricing.view_profit", "pricing.change_markup",
             "pricing.apply_discount", "pricing.override_labour",
-            "used.view", "used.manage", "selltech.view", "selltech.manage",
+            "expenses.view",
+            "used.view", "used.manage", "used.view_costs", "used.view_financials", "used.approve_purchase", "used.publish",
+            "acquisitions.view", "acquisitions.manage",
+            "selltech.view", "selltech.manage",
             "inventory.view", "builds.view", "ai.use",
             "pos.view", "pos.sell"
         ],
         ["read_only"] =
         [
             "tickets.view", "customers.view", "devices.view", "inventory.view",
-            "quotes.view", "invoices.view", "payments.view", "builds.view",
-            "used.view", "selltech.view", "bookings.view", "knowledge.view", "reports.view", "pricing.view",
+            "quotes.view", "invoices.view", "payments.view", "expenses.view", "builds.view",
+            "used.view", "acquisitions.view", "selltech.view", "bookings.view", "knowledge.view", "reports.view", "pricing.view",
             "pos.view"
         ]
     };

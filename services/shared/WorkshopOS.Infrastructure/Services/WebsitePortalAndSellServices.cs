@@ -369,9 +369,13 @@ public sealed class SellTechService : ISellTechService
             ExpectedRepairCost = row.Offer?.EstimatedPartsCost ?? 0,
             ExpectedResale = row.Offer?.EstimatedResalePrice ?? 0,
             Faults = row.KnownFaults,
-            Notes = $"Stock {stockId}. From Sell Your Tech {row.Reference}. {row.CustomerNotes}".Trim(),
+            Notes = $"From Sell Your Tech {row.Reference}. {row.CustomerNotes}".Trim(),
             Source = "SellYourTech",
-            SellerCustomerId = row.CustomerId
+            SellerCustomerId = row.CustomerId,
+            StockId = stockId,
+            Sku = stockId,
+            PurchaseDate = DateTimeOffset.UtcNow,
+            ActivationLockStatus = row.FindMyEnabled == true ? "Locked" : row.AccountLocked == true ? "Suspected Locked" : "Unknown"
         };
         _db.UsedDevices.Add(used);
         row.UsedDevice = used;

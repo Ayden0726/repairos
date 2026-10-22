@@ -7,6 +7,7 @@ using WorkshopOS.Client.Services;
 using WorkshopOS.Client.ViewModels;
 using WorkshopOS.Contracts.Auth;
 using WorkshopOS.Contracts.Common;
+using WorkshopOS.Contracts.Finance;
 using WorkshopOS.Contracts.Operations;
 
 namespace WorkshopOS.Client.Views;
@@ -23,27 +24,20 @@ public sealed partial class SettingsPage : Page
     private bool _servicesLoaded;
     private bool _taxLoaded;
     private bool _posLoaded;
-    private bool _deviceIdLoaded;
+    private bool _credentialsLoaded;
     private bool _connectionHealthLoaded;
     private string? _initialSection;
     private readonly ObservableCollection<ModuleToggleItem> _moduleToggles = new();
     private PricingSettingsDto? _pricing;
     private BusinessProfileDto? _business;
+    private IntegrationCredentialDto? _selectedCredential;
+    private IReadOnlyList<IntegrationProviderInfoDto> _providers = Array.Empty<IntegrationProviderInfoDto>();
 
     public SettingsPage()
     {
         Users = App.Services.GetRequiredService<UsersViewModel>();
         Backups = new BackupsViewModel(App.Services.GetRequiredService<ApiClient>());
         InitializeComponent();
-        var info = typeof(App).Assembly
-            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
-            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
-            .FirstOrDefault()?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(info))
-        {
-            var plus = info.IndexOf('+');
-            ClientVersionText.Text = "Client " + (plus > 0 ? info[..plus] : info);
-        }
         Loaded += SettingsPage_Loaded;
     }
 
@@ -105,21 +99,39 @@ public sealed partial class SettingsPage : Page
         }
 
         if (string.Equals(_initialSection, "pricing", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 1;
+            SelectPivotTag("pricing");
         else if (string.Equals(_initialSection, "services", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 2;
+            SelectPivotTag("services");
         else if (string.Equals(_initialSection, "tax", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 3;
+            SelectPivotTag("tax");
         else if (string.Equals(_initialSection, "pos", StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(_initialSection, "modules", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 4;
+            SelectPivotTag("pos");
+        else if (string.Equals(_initialSection, "integrations", StringComparison.OrdinalIgnoreCase))
+            SelectPivotTag("integrations");
         else if (string.Equals(_initialSection, "users", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 5;
+            SelectPivotTag("users");
         else if (string.Equals(_initialSection, "backups", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 6;
+            SelectPivotTag("backups");
         else if (string.Equals(_initialSection, "connection", StringComparison.OrdinalIgnoreCase))
-            SettingsPivot.SelectedIndex = 7;
+            SelectPivotTag("connection");
     }
+
+    private void SelectPivotTag(string tag)
+    {
+        foreach (var item in SettingsPivot.Items.OfType<PivotItem>())
+        {
+            if (string.Equals(item.Tag as string, tag, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.Header as string, tag, StringComparison.OrdinalIgnoreCase))
+            {
+                SettingsPivot.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private static string? PivotTag(Pivot pivot) =>
+        (pivot.SelectedItem as PivotItem)?.Tag as string;
 
     private void SelectThemeCombo(string theme)
     {
@@ -167,42 +179,46 @@ public sealed partial class SettingsPage : Page
 
     private async void SettingsPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SettingsPivot.SelectedIndex == 1)
+        var tag = PivotTag(SettingsPivot);
+        if (string.Equals(tag, "pricing", StringComparison.OrdinalIgnoreCase))
         {
             _pricingLoaded = true;
             await LoadPricingAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 2)
+        else if (string.Equals(tag, "services", StringComparison.OrdinalIgnoreCase))
         {
             _servicesLoaded = true;
             await LoadServicesAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 3)
+        else if (string.Equals(tag, "tax", StringComparison.OrdinalIgnoreCase))
         {
             _taxLoaded = true;
             await LoadTaxAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 4)
+        else if (string.Equals(tag, "pos", StringComparison.OrdinalIgnoreCase))
         {
             _posLoaded = true;
             await LoadPosAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 5)
+        else if (string.Equals(tag, "integrations", StringComparison.OrdinalIgnoreCase))
         {
-            _deviceIdLoaded = true;
-            await LoadDeviceIdAsync();
+            _credentialsLoaded = true;
+            await LoadCredentialsAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 6 && !_usersLoaded)
+        else if (string.Equals(tag, "users", StringComparison.OrdinalIgnoreCase) && !_usersLoaded)
         {
             _usersLoaded = true;
             await RefreshUsersUiAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 7 && !_backupsLoaded)
+        else if (string.Equals(tag, "backups", StringComparison.OrdinalIgnoreCase) && !_backupsLoaded)
         {
             _backupsLoaded = true;
             await RefreshBackupsUiAsync();
         }
-        else if (SettingsPivot.SelectedIndex == 8 && !_connectionHealthLoaded)
+        else if ((tag is null || string.Equals(tag, "connection", StringComparison.OrdinalIgnoreCase)
+                  || string.Equals((SettingsPivot.SelectedItem as PivotItem)?.Header as string, "Connection", StringComparison.OrdinalIgnoreCase))
+                 && !_connectionHealthLoaded
+                 && SettingsPivot.SelectedItem == ConnectionPivot)
         {
             _connectionHealthLoaded = true;
             await CheckHealthAsync();
@@ -648,132 +664,6 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private async Task LoadDeviceIdAsync()
-    {
-        DeviceIdErrorText.Text = string.Empty;
-        DeviceIdStatusText.Text = "Loading device identification settings…";
-        try
-        {
-            var api = App.Services.GetRequiredService<ApiClient>();
-            var s = await api.GetAsync<DeviceIdentificationSettingsDto>("api/device-identification/settings");
-            ApplyDeviceIdSettings(s, clearKeyBox: true);
-        }
-        catch (Exception ex)
-        {
-            DeviceIdStatusText.Text = string.Empty;
-            DeviceIdErrorText.Text = ex.Message;
-        }
-    }
-
-    private void ApplyDeviceIdSettings(DeviceIdentificationSettingsDto s, bool clearKeyBox)
-    {
-        DeviceIdEnabledToggle.IsOn = s.Enabled;
-        SelectComboString(DeviceIdProviderCombo, s.Provider);
-        if (clearKeyBox)
-            DeviceIdApiKeyBox.Text = string.Empty;
-        DeviceIdClearApiKeyCheck.IsChecked = false;
-        DeviceIdApiKeyHint.Text = s.ApiKeyConfigured
-            ? "API key is stored on the server (encrypted). The box stays empty on purpose — leave it blank to keep the saved key."
-            : "No API key stored yet — paste your IMEI.info key above and click Save.";
-        DeviceIdBasicCheck.IsChecked = s.BasicLookupEnabled;
-        DeviceIdAdvancedCheck.IsChecked = s.AdvancedLookupEnabled;
-        DeviceIdBasicServiceBox.Value = s.BasicServiceId;
-        DeviceIdAdvancedServiceBox.Value = s.AdvancedServiceId ?? 0;
-        DeviceIdCacheCheck.IsChecked = s.CacheEnabled;
-        DeviceIdCacheTtlBox.Value = s.CacheTtlDays > 0 ? s.CacheTtlDays : 90;
-        DeviceIdDailyLimitBox.Value = s.DailyLookupLimit;
-        DeviceIdBasicCostBox.Value = (double)(s.EstimatedBasicCost ?? 0.02m);
-        DeviceIdAdvancedCostBox.Value = (double)(s.EstimatedAdvancedCost ?? 0m);
-        DeviceIdNotesBox.Text = s.Notes ?? string.Empty;
-        DeviceIdUsageText.Text = $"Lookups today: {s.LookupsToday}" +
-            (s.DailyLookupLimit > 0 ? $" / limit {s.DailyLookupLimit}" : " (no daily limit)") +
-            $" · est. basic ${s.EstimatedBasicCost ?? 0:0.00}";
-        DeviceIdStatusText.Text = s.Enabled
-            ? $"Enabled · provider {s.Provider}" + (s.ApiKeyConfigured ? " · API key stored" : " · waiting for API key")
-            : "Disabled — New Ticket still accepts manual brand/model/IMEI.";
-    }
-
-    private async void SaveDeviceId_Click(object sender, RoutedEventArgs e)
-    {
-        DeviceIdErrorText.Text = string.Empty;
-        DeviceIdStatusText.Text = "Saving…";
-        try
-        {
-            var api = App.Services.GetRequiredService<ApiClient>();
-            var keyText = DeviceIdApiKeyBox.Text?.Trim() ?? string.Empty;
-            var advancedRaw = SafeNumberBoxInt(DeviceIdAdvancedServiceBox, 0);
-            int? advancedService = advancedRaw > 0 ? advancedRaw : null;
-            var advancedCostRaw = SafeNumberBoxDecimal(DeviceIdAdvancedCostBox, 0m);
-            decimal? advancedCost = advancedCostRaw > 0 ? advancedCostRaw : null;
-
-            var request = new UpdateDeviceIdentificationSettingsRequest(
-                DeviceIdEnabledToggle.IsOn,
-                (DeviceIdProviderCombo.SelectedItem as string) ?? "imei.info",
-                string.IsNullOrWhiteSpace(keyText) ? null : keyText,
-                DeviceIdClearApiKeyCheck.IsChecked == true,
-                DeviceIdBasicCheck.IsChecked == true,
-                DeviceIdAdvancedCheck.IsChecked == true,
-                SafeNumberBoxInt(DeviceIdBasicServiceBox, 0),
-                advancedService,
-                DeviceIdCacheCheck.IsChecked == true,
-                SafeNumberBoxInt(DeviceIdCacheTtlBox, 90),
-                SafeNumberBoxInt(DeviceIdDailyLimitBox, 200),
-                SafeNumberBoxDecimal(DeviceIdBasicCostBox, 0.02m),
-                advancedCost,
-                NullIfBlank(DeviceIdNotesBox.Text));
-            var saved = await api.PutAsync<UpdateDeviceIdentificationSettingsRequest, DeviceIdentificationSettingsDto>(
-                "api/device-identification/settings", request);
-            ApplyDeviceIdSettings(saved, clearKeyBox: true);
-            DeviceIdStatusText.Text = saved.ApiKeyConfigured
-                ? "Saved — API key is stored on the server. Use Test connection to verify IMEI.info."
-                : "Saved — no API key stored (lookups stay on manual entry until you paste a key and Save).";
-            if (!string.IsNullOrWhiteSpace(keyText) && !saved.ApiKeyConfigured && DeviceIdClearApiKeyCheck.IsChecked != true)
-                DeviceIdErrorText.Text = "Key was sent but the server did not report it as stored. Check you are signed in as Owner/Admin.";
-        }
-        catch (Exception ex)
-        {
-            DeviceIdStatusText.Text = string.Empty;
-            DeviceIdErrorText.Text = ex.Message;
-        }
-    }
-
-    private async void TestDeviceId_Click(object sender, RoutedEventArgs e)
-    {
-        DeviceIdErrorText.Text = string.Empty;
-        DeviceIdStatusText.Text = "Testing IMEI.info connection…";
-        try
-        {
-            var api = App.Services.GetRequiredService<ApiClient>();
-            var result = await api.PostAsync<DeviceIdentificationTestResultDto>("api/device-identification/test");
-            if (result.Success)
-                DeviceIdStatusText.Text = result.Message;
-            else
-            {
-                DeviceIdStatusText.Text = string.Empty;
-                DeviceIdErrorText.Text = result.Message;
-            }
-        }
-        catch (Exception ex)
-        {
-            DeviceIdStatusText.Text = string.Empty;
-            DeviceIdErrorText.Text = ex.Message;
-        }
-    }
-
-    private static int SafeNumberBoxInt(NumberBox box, int fallback)
-    {
-        var v = box.Value;
-        if (double.IsNaN(v) || double.IsInfinity(v)) return fallback;
-        return (int)Math.Clamp(v, int.MinValue, int.MaxValue);
-    }
-
-    private static decimal SafeNumberBoxDecimal(NumberBox box, decimal fallback)
-    {
-        var v = box.Value;
-        if (double.IsNaN(v) || double.IsInfinity(v)) return fallback;
-        return (decimal)v;
-    }
-
     private async void SaveModules_Click(object sender, RoutedEventArgs e)
     {
         PosErrorText.Text = string.Empty;
@@ -931,8 +821,6 @@ public sealed partial class SettingsPage : Page
                 NewEmailBox.Text = string.Empty;
                 NewPasswordBox.Password = string.Empty;
                 NewPhoneBox.Text = string.Empty;
-                if (!string.IsNullOrWhiteSpace(Users.LastTemporaryPassword))
-                    await ShowTemporaryPasswordAsync("Temporary password", Users.LastTemporaryPassword);
             }
             await RefreshUsersUiAsync();
             UsersStatusText.Text = Users.Status ?? UsersStatusText.Text;
@@ -943,23 +831,6 @@ public sealed partial class SettingsPage : Page
         {
             CreateUserButton.IsEnabled = true;
         }
-    }
-
-    private async Task ShowTemporaryPasswordAsync(string title, string temporaryPassword)
-    {
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = new TextBlock
-            {
-                Text = $"Give this password to the staff member. They must change it when they first sign in.\n\n{temporaryPassword}",
-                TextWrapping = TextWrapping.Wrap,
-                IsTextSelectionEnabled = true
-            },
-            CloseButtonText = "Done",
-            XamlRoot = XamlRoot
-        };
-        await dialog.ShowAsync();
     }
 
     private async void SaveUser_Click(object sender, RoutedEventArgs e)
@@ -979,12 +850,12 @@ public sealed partial class SettingsPage : Page
         if (Users.SelectedUser is null) return;
         UsersErrorText.Text = string.Empty;
 
-        var newBox = new PasswordBox { Header = "Temp password (optional — leave blank to auto-generate)", Width = 320 };
-        var confirmBox = new PasswordBox { Header = "Confirm (if you typed one)", Width = 320 };
+        var newBox = new PasswordBox { Header = "New password (min 10, upper/lower/digit)", Width = 320 };
+        var confirmBox = new PasswordBox { Header = "Confirm new password", Width = 320 };
         var panel = new StackPanel { Spacing = 12 };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Issue a temporary password for {Users.SelectedUser.DisplayName} ({Users.SelectedUser.Email}). They must change it at next login.",
+            Text = $"Set a new password for {Users.SelectedUser.DisplayName} ({Users.SelectedUser.Email}).",
             TextWrapping = TextWrapping.Wrap
         });
         panel.Children.Add(newBox);
@@ -1004,18 +875,16 @@ public sealed partial class SettingsPage : Page
 
         var pwd = newBox.Password ?? string.Empty;
         var confirm = confirmBox.Password ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(pwd) && !string.Equals(pwd, confirm, StringComparison.Ordinal))
+        if (!string.Equals(pwd, confirm, StringComparison.Ordinal))
         {
             UsersErrorText.Text = "New password and confirmation do not match.";
             return;
         }
 
-        await Users.ResetPasswordCommand.ExecuteAsync(string.IsNullOrWhiteSpace(pwd) ? null : pwd);
+        await Users.ResetPasswordCommand.ExecuteAsync(pwd);
         UsersStatusText.Text = Users.Status ?? UsersStatusText.Text;
         if (!string.IsNullOrWhiteSpace(Users.Error))
             UsersErrorText.Text = Users.Error;
-        else if (!string.IsNullOrWhiteSpace(Users.LastTemporaryPassword))
-            await ShowTemporaryPasswordAsync("Temporary password", Users.LastTemporaryPassword);
     }
 
     private async void ChangeOwnPassword_Click(object sender, RoutedEventArgs e)
@@ -1168,11 +1037,128 @@ public sealed partial class SettingsPage : Page
         ServicesPivot.Visibility = Has("pricing.manage_catalogue") || Has("pricing.view") ? Visibility.Visible : Visibility.Collapsed;
         TaxPivot.Visibility = Has("settings.manage") || Has("settings.view") ? Visibility.Visible : Visibility.Collapsed;
         PosPivot.Visibility = Has("pos.manage") || Has("pos.view") ? Visibility.Visible : Visibility.Collapsed;
+        IntegrationsPivot.Visibility = Has("integrations.manage") || Has("settings.manage") ? Visibility.Visible : Visibility.Collapsed;
         UsersPivot.Visibility = Has("staff.view") || Has("roles.manage") ? Visibility.Visible : Visibility.Collapsed;
         BackupsPivot.Visibility = Has("backups.manage") ? Visibility.Visible : Visibility.Collapsed;
         ConnectionPivot.Visibility = Has("settings.view") || Has("settings.manage") || canRestart
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    private async void RefreshCredentials_Click(object sender, RoutedEventArgs e) => await LoadCredentialsAsync();
+
+    private async Task LoadCredentialsAsync()
+    {
+        CredErrorText.Text = string.Empty;
+        CredStatusText.Text = "Loading API credentials…";
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            _providers = await api.GetAsync<IReadOnlyList<IntegrationProviderInfoDto>>("api/integrations/credentials/providers");
+            var list = await api.GetAsync<IReadOnlyList<IntegrationCredentialDto>>("api/integrations/credentials");
+            CredentialsList.ItemsSource = list;
+            CredStatusText.Text = $"{list.Count} integration(s). Secrets are never returned by the API.";
+        }
+        catch (Exception ex)
+        {
+            CredErrorText.Text = ex.Message;
+            CredStatusText.Text = string.Empty;
+        }
+    }
+
+    private void CredentialsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _selectedCredential = CredentialsList.SelectedItem as IntegrationCredentialDto;
+        if (_selectedCredential is null)
+        {
+            CredEditorTitle.Text = "Select an integration";
+            return;
+        }
+
+        CredEditorTitle.Text = _selectedCredential.DisplayName;
+        CredEnabledToggle.IsOn = _selectedCredential.IsEnabled;
+        CredPublicConfigBox.Text = _selectedCredential.PublicConfigJson ?? "";
+        CredSecret1Box.Password = "";
+        CredSecret2Box.Password = "";
+        CredClearSecretsCheck.IsChecked = false;
+        var provider = _providers.FirstOrDefault(p =>
+            string.Equals(p.ProviderKey, _selectedCredential.ProviderKey, StringComparison.OrdinalIgnoreCase));
+        var fields = provider?.SecretFieldNames ?? Array.Empty<string>();
+        CredSecret1Box.Header = fields.Count > 0
+            ? $"{fields[0]} (leave blank to keep existing)"
+            : "Secret field 1 (leave blank to keep)";
+        CredSecret2Box.Header = fields.Count > 1
+            ? $"{fields[1]} (leave blank to keep existing)"
+            : "Secret field 2 (optional)";
+        CredSecret2Box.Visibility = fields.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        CredFieldsHint.Text = _selectedCredential.HasSecret
+            ? $"Configured · hint {_selectedCredential.SecretHint} · status {_selectedCredential.ConnectionStatus}"
+              + (_selectedCredential.LastError is null ? "" : $" · last error: {_selectedCredential.LastError}")
+            : "No secret stored yet.";
+    }
+
+    private async void SaveCredential_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedCredential is null) return;
+        CredErrorText.Text = string.Empty;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var provider = _providers.FirstOrDefault(p =>
+                string.Equals(p.ProviderKey, _selectedCredential.ProviderKey, StringComparison.OrdinalIgnoreCase));
+            var fields = provider?.SecretFieldNames ?? Array.Empty<string>();
+            string? secretsJson = null;
+            if (!string.IsNullOrWhiteSpace(CredSecret1Box.Password) || !string.IsNullOrWhiteSpace(CredSecret2Box.Password))
+            {
+                var map = new Dictionary<string, string>();
+                if (fields.Count > 0 && !string.IsNullOrWhiteSpace(CredSecret1Box.Password))
+                    map[fields[0]] = CredSecret1Box.Password;
+                if (fields.Count > 1 && !string.IsNullOrWhiteSpace(CredSecret2Box.Password))
+                    map[fields[1]] = CredSecret2Box.Password;
+                if (fields.Count == 0 && !string.IsNullOrWhiteSpace(CredSecret1Box.Password))
+                    map["apiKey"] = CredSecret1Box.Password;
+                if (map.Count > 0)
+                    secretsJson = System.Text.Json.JsonSerializer.Serialize(map);
+            }
+
+            var request = new UpsertIntegrationCredentialRequest(
+                _selectedCredential.ProviderKey,
+                _selectedCredential.DisplayName,
+                CredEnabledToggle.IsOn,
+                string.IsNullOrWhiteSpace(CredPublicConfigBox.Text) ? null : CredPublicConfigBox.Text.Trim(),
+                secretsJson,
+                CredClearSecretsCheck.IsChecked == true);
+
+            await api.PutAsync<UpsertIntegrationCredentialRequest, IntegrationCredentialDto>(
+                "api/integrations/credentials", request);
+            CredStatusText.Text = "Saved on server.";
+            CredSecret1Box.Password = "";
+            CredSecret2Box.Password = "";
+            CredClearSecretsCheck.IsChecked = false;
+            await LoadCredentialsAsync();
+        }
+        catch (Exception ex)
+        {
+            CredErrorText.Text = ex.Message + " Your form values were not cleared.";
+        }
+    }
+
+    private async void TestCredential_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedCredential is null) return;
+        CredErrorText.Text = string.Empty;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var result = await api.PostAsync<TestIntegrationCredentialResponse>(
+                $"api/integrations/credentials/{Uri.EscapeDataString(_selectedCredential.ProviderKey)}/test");
+            CredStatusText.Text = result.Success ? $"Test OK: {result.Message}" : $"Test failed: {result.Message}";
+            await LoadCredentialsAsync();
+        }
+        catch (Exception ex)
+        {
+            CredErrorText.Text = ex.Message;
+        }
     }
 
     private async void RestartServer_Click(object sender, RoutedEventArgs e)

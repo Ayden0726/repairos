@@ -1,0 +1,69 @@
+WorkshopOS / repairos — sync this agent workspace to GitHub
+===========================================================
+Target: https://github.com/Ayden0726/repairos.git  (branch: main)
+Agent tip: 64d929d   Product: 1.2.33
+  - Encrypted API credentials + settings persistence fixes
+  - Business expenses (GST / AU FY)
+  - Raspberry Pi 3B+ Docker server support
+
+You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
+This Cloud Agent VM cannot push to your personal GitHub without your token.
+
+Download (agent HTTP serve, port 28765 — use Ports UI URL if not localhost):
+  http://127.0.0.1:28765/repairos-github-sync.zip     (FLAT tree overlay)
+  http://127.0.0.1:28765/repairos-main.bundle
+  http://127.0.0.1:28765/GITHUB_SYNC_INSTRUCTIONS.txt
+
+Also on disk:
+  /opt/cursor/artifacts/repairos-github-sync.zip
+  /opt/cursor/artifacts/repairos-main.bundle
+  /opt/cursor/artifacts/GITHUB_SYNC_INSTRUCTIONS.txt
+
+Full guide in the repo after overlay: docs/GITHUB_SYNC.md
+
+────────────────────────────────────────────────────────────
+OPTION A (recommended): PowerShell overlay → push
+────────────────────────────────────────────────────────────
+
+  $repo = 'C:\Users\ayden\src\repairos'
+  $zip  = "$env:TEMP\repairos-github-sync.zip"
+  New-Item -ItemType Directory -Force -Path $repo | Out-Null
+  if (-not (Test-Path "$repo\.git")) {
+    git clone https://github.com/Ayden0726/repairos.git $repo
+  }
+  Invoke-WebRequest -Uri 'http://127.0.0.1:28765/repairos-github-sync.zip' -OutFile $zip
+  Expand-Archive -Path $zip -DestinationPath $repo -Force
+  powershell -ExecutionPolicy Bypass -File "$repo\scripts\sync-to-github.ps1"
+
+────────────────────────────────────────────────────────────
+OPTION B: WSL / bash
+────────────────────────────────────────────────────────────
+
+  REPO="${HOME}/src/repairos"
+  ZIP=/tmp/repairos-github-sync.zip
+  [[ -d "$REPO/.git" ]] || git clone https://github.com/Ayden0726/repairos.git "$REPO"
+  curl -fsSL -o "$ZIP" 'http://127.0.0.1:28765/repairos-github-sync.zip'
+  unzip -o "$ZIP" -d "$REPO"
+  cd "$REPO" && chmod +x scripts/*.sh && ./scripts/sync-to-github.sh
+
+────────────────────────────────────────────────────────────
+After GitHub push — deploy servers
+────────────────────────────────────────────────────────────
+
+  # Fresh (auto-detects Raspberry Pi)
+  curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
+
+  # Existing install
+  cd ~/workshopos && git pull origin main && ./scripts/restart-workshopos.sh --update
+
+  # Pi docs: docs/RASPBERRY_PI.md
+  # Secrets:  Encryption__Key in docker/.env (see docs/SETTINGS_AND_SECURITY.md)
+
+────────────────────────────────────────────────────────────
+Key changes in this sync (1.2.33)
+────────────────────────────────────────────────────────────
+  Encrypted integration_credentials (AES-GCM); Woo/POS/webhook secrets migrated
+  Settings no longer overwritten by pricing defaults
+  Finance → Expenses (AU GST, FY Jul–Jun, recurring, CSV)
+  Raspberry Pi 3B+ compose overlay + multi-arch Dockerfiles
+  Redis optional (unused); Encryption__Key written by installer

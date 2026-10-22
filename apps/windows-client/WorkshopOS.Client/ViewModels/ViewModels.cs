@@ -320,7 +320,7 @@ public partial class LoginViewModel : ObservableObject
         }
     }
 
-    public Func<Task>? OnLoggedIn { get; set; }
+    public Action? OnLoggedIn { get; set; }
     /// <summary>True when email was prefilled so the login page can focus the password box.</summary>
     public bool HasPrefillEmail => !string.IsNullOrWhiteSpace(Email);
 
@@ -335,8 +335,7 @@ public partial class LoginViewModel : ObservableObject
         {
             _settings.RememberEmail = RememberEmail;
             await _api.LoginAsync(Email.Trim(), Password);
-            if (OnLoggedIn is not null)
-                await OnLoggedIn();
+            OnLoggedIn?.Invoke();
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { IsBusy = false; }
@@ -381,6 +380,7 @@ public partial class ShellViewModel : ObservableObject
         ("Customers", ["customers"]),
         ("Quotes", ["quotes"]),
         ("Invoices", ["invoices"]),
+        ("Finance", ["expenses"]),
         ("POS", ["pos"]),
         ("Inventory", ["inventory"]),
         ("Refurbished", ["used"]),
@@ -397,6 +397,7 @@ public partial class ShellViewModel : ObservableObject
             ["customers"] = "customers.view",
             ["quotes"] = "quotes.view",
             ["invoices"] = "invoices.view",
+            ["expenses"] = "expenses.view",
             ["pos"] = "pos.view",
             ["inventory"] = "inventory.view",
             ["used"] = "used.view",
@@ -426,7 +427,9 @@ public partial class ShellViewModel : ObservableObject
                 || HasPermission("staff.view")
                 || HasPermission("backups.manage")
                 || HasPermission("pricing.view")
-                || HasPermission("pos.manage");
+                || HasPermission("pos.manage")
+                || HasPermission("integrations.manage")
+                || HasPermission("expenses.view");
             CanRestartServer = session.User.IsOwner
                 || string.Equals(session.User.RoleKey, "owner", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(session.User.RoleKey, "administrator", StringComparison.OrdinalIgnoreCase);

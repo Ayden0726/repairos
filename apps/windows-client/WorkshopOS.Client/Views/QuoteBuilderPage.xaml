@@ -118,10 +118,9 @@
                       HorizontalAlignment="Stretch" />
             <Button Content="Add selected service" Click="QuoteSvcAdd_Click"
                     Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
-            <TextBlock Text="Selected services" Opacity="0.85" FontSize="12" />
-            <ListView x:Name="QuoteSvcSelectedList" MaxHeight="160" SelectionMode="Single"
-                      DisplayMemberPath="TitleLine" />
-            <Button Content="Remove selected service" Click="QuoteSvcRemove_Click" HorizontalAlignment="Left" />
+            <ComboBox x:Name="QuoteSvcSelectedBox" Header="Selected services" DisplayMemberPath="TitleLine"
+                      HorizontalAlignment="Stretch" />
+            <Button Content="Remove selected" Click="QuoteSvcRemove_Click" HorizontalAlignment="Left" />
             <TextBlock x:Name="QuoteSvcStatusText" Opacity="0.7" TextWrapping="Wrap" />
             <TextBlock x:Name="QuoteSvcErrorText" Foreground="{ThemeResource WorkshopDangerBrush}"
                        TextWrapping="Wrap" />
@@ -134,47 +133,11 @@
                 Background="{ThemeResource WorkshopSurfaceBrush}"
                 BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
           <StackPanel Spacing="10">
-            <TextBlock Text="Inventory &amp; custom parts" FontWeight="SemiBold"
-                       Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-            <TextBlock Text="Search stock or add a custom/special-order part when you have no stock."
-                       Opacity="0.7" TextWrapping="Wrap" FontSize="12" />
-            <Grid ColumnSpacing="8">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <ComboBox x:Name="QuoteInvPartBox" Header="Search inventory" DisplayMemberPath="Name"
-                        IsEditable="True" IsTextSearchEnabled="True"
-                        PlaceholderText="SKU or part name" HorizontalAlignment="Stretch" />
-              <Button Grid.Column="1" Content="Add stock part" VerticalAlignment="Bottom"
-                      Style="{StaticResource AccentButtonStyle}" Click="QuoteInvAdd_Click" />
-            </Grid>
-            <Grid ColumnSpacing="8">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <TextBox x:Name="QuoteCustomPartNameBox" Header="Custom / special-order part"
-                       PlaceholderText="Part name when not in stock" />
-              <TextBox x:Name="QuoteCustomPartPriceBox" Grid.Column="1" Header="Sell $"
-                       PlaceholderText="0.00" />
-              <Button Grid.Column="2" Content="Add custom" VerticalAlignment="Bottom"
-                      Click="QuoteCustomPartAdd_Click" />
-            </Grid>
-            <TextBlock x:Name="QuoteInvStatusText" Opacity="0.8" TextWrapping="Wrap" />
-          </StackPanel>
-        </Border>
-
-        <Border Padding="14" CornerRadius="8"
-                Background="{ThemeResource WorkshopSurfaceBrush}"
-                BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
-          <StackPanel Spacing="10">
             <Grid>
               <TextBlock Text="Parts (costs)" FontWeight="SemiBold" VerticalAlignment="Center"
                          Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <Button Content="Add blank line" Command="{x:Bind ViewModel.AddLineCommand}" />
+                <Button Content="Add part" Command="{x:Bind ViewModel.AddLineCommand}" />
                 <Button Content="Recalculate" Command="{x:Bind ViewModel.RecalcCommand}" />
               </StackPanel>
             </Grid>

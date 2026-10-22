@@ -274,19 +274,20 @@ public sealed class AuthService : IAuthService
             : user.Role.Permissions.Select(p => p.PermissionKey).Distinct().ToList();
 
     private static UserDto ToUserDto(AppUser user, IReadOnlyList<string> perms, BusinessProfileDto? business) =>
-        new(user.Id, user.Email, user.DisplayName, user.Role.Key, user.Role.Name, user.IsOwner, perms, user.Theme, business,
-            user.MustResetPassword);
+        new(user.Id, user.Email, user.DisplayName, user.Role.Key, user.Role.Name, user.IsOwner, perms, user.Theme, business);
 }
 
 public sealed class SettingsService : ISettingsService
 {
     private readonly WorkshopDbContext _db;
     private readonly IAuditService _audit;
+    private readonly IIntegrationCredentialService _credentials;
 
-    public SettingsService(WorkshopDbContext db, IAuditService audit)
+    public SettingsService(WorkshopDbContext db, IAuditService audit, IIntegrationCredentialService credentials)
     {
         _db = db;
         _audit = audit;
+        _credentials = credentials;
     }
 
     public Task<BusinessProfileDto> GetBusinessAsync(CancellationToken ct = default) =>
@@ -326,6 +327,7 @@ public sealed class SettingsService : ISettingsService
             new("customers", "Main", "Customers", 1, IsVisible(visibility, "customers"), true),
             new("quotes", "Main", "Quotes", 1, IsVisible(visibility, "quotes"), true),
             new("invoices", "Main", "Invoices", 1, IsVisible(visibility, "invoices"), true),
+            new("expenses", "Main", "Expenses", 1, IsVisible(visibility, "expenses"), true),
             new("pos", "Main", "POS", 6, IsVisible(visibility, "pos", defaultVisible: false), true),
             new("inventory", "Main", "Inventory", 1, IsVisible(visibility, "inventory"), true),
             new("purchasing", "Main", "Purchasing", 1, IsVisible(visibility, "purchasing"), true),
@@ -378,21 +380,40 @@ public sealed class SettingsService : ISettingsService
         var existing = await DbSeed.GetSettingAsync<PosSettingsStored?>(_db, SettingKeys.PosSettings, null, ct)
             ?? new PosSettingsStored(false, "None", null, null, null, null, null, DefaultDiscountPresets());
 
-        var apiKey = existing.ApiKey;
-        if (request.ClearApiKey)
-            apiKey = null;
-        else if (!string.IsNullOrWhiteSpace(request.ApiKey))
-            apiKey = request.ApiKey.Trim();
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
+
+        var clearSecrets = request.ClearApiKey;
+        string? secretsJson = null;
+        if (!string.IsNullOrWhiteSpace(request.ApiKey))
+        {
+            secretsJson = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["apiKey"] = request.ApiKey.Trim()
+            });
+        }
+
+        var publicCfg = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            enabled = request.Enabled,
+            provider,
+            merchantId = TrimOrNull(request.MerchantId),
+            terminalId = TrimOrNull(request.TerminalId),
+            providerLocationId = TrimOrNull(request.ProviderLocationId)
+        });
+
+        await _credentials.UpsertAsync(new WorkshopOS.Contracts.Finance.UpsertIntegrationCredentialRequest(
+            "pos", "POS / payments", request.Enabled, publicCfg, secretsJson, clearSecrets), actorId, ct);
 
         var presets = NormalizeDiscountPresets(request.DiscountPresets ?? existing.DiscountPresets);
 
+        // Never persist API keys in business_settings JSON — encrypted credentials store holds secrets.
         var stored = new PosSettingsStored(
             request.Enabled,
             provider,
             TrimOrNull(request.MerchantId),
             TrimOrNull(request.TerminalId),
             TrimOrNull(request.ProviderLocationId),
-            apiKey,
+            ApiKey: null,
             TrimOrNull(request.ConnectionNotes),
             presets);
 
@@ -402,28 +423,36 @@ public sealed class SettingsService : ISettingsService
         visibility["pos"] = request.Enabled;
         await DbSeed.SetSettingAsync(_db, SettingKeys.ModuleVisibility, visibility, actorId, ct);
 
+        var secrets = await _credentials.GetSecretsMapAsync("pos", ct);
+        var configured = secrets is not null && secrets.TryGetValue("apiKey", out var k) && !string.IsNullOrWhiteSpace(k);
+
         await _audit.WriteAsync(actorId, "settings.pos.update", "Setting", SettingKeys.PosSettings,
-            newValue: new { stored.Enabled, stored.Provider, stored.MerchantId, stored.TerminalId, ApiKeyConfigured = !string.IsNullOrEmpty(stored.ApiKey) },
+            newValue: new { stored.Enabled, stored.Provider, stored.MerchantId, stored.TerminalId, ApiKeyConfigured = configured },
             ct: ct);
 
-        return ToPosDto(stored);
+        return ToPosDto(stored, configured);
     }
 
     private async Task<PosSettingsDto> GetPosSettingsInternalAsync(CancellationToken ct)
     {
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
         var stored = await DbSeed.GetSettingAsync<PosSettingsStored?>(_db, SettingKeys.PosSettings, null, ct);
+        var secrets = await _credentials.GetSecretsMapAsync("pos", ct);
+        var configured = secrets is not null && secrets.TryGetValue("apiKey", out var k) && !string.IsNullOrWhiteSpace(k)
+                         || (stored is not null && !string.IsNullOrWhiteSpace(stored.ApiKey));
+
         if (stored is null)
         {
             var visibility = await DbSeed.GetSettingAsync(_db, SettingKeys.ModuleVisibility, new Dictionary<string, bool>(), ct);
             var enabled = visibility.TryGetValue("pos", out var v) && v;
-            return new PosSettingsDto(enabled, "None", null, null, null, false, null, DefaultDiscountPresets());
+            return new PosSettingsDto(enabled, "None", null, null, null, configured, null, DefaultDiscountPresets());
         }
-        return ToPosDto(stored);
+        return ToPosDto(stored, configured);
     }
 
-    private static PosSettingsDto ToPosDto(PosSettingsStored s) =>
+    private static PosSettingsDto ToPosDto(PosSettingsStored s, bool apiKeyConfigured) =>
         new(s.Enabled, s.Provider, s.MerchantId, s.TerminalId, s.ProviderLocationId,
-            !string.IsNullOrWhiteSpace(s.ApiKey), s.ConnectionNotes,
+            apiKeyConfigured, s.ConnectionNotes,
             NormalizeDiscountPresets(s.DiscountPresets));
 
     internal static IReadOnlyList<PosDiscountPresetDto> DefaultDiscountPresets() =>
@@ -628,7 +657,7 @@ public sealed class StaffService : IStaffService
         return users.Select(ToDto).ToList();
     }
 
-    public async Task<CreateStaffUserResponse> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task<StaffUserDto> CreateAsync(CreateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
     {
         var email = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
         var display = (request.DisplayName ?? string.Empty).Trim();
@@ -639,10 +668,7 @@ public sealed class StaffService : IStaffService
         if (string.IsNullOrWhiteSpace(roleKey) || roleKey == "owner")
             throw new ValidationAppException("Choose a role other than Owner. The shop owner is created during setup.");
 
-        var temporaryPassword = string.IsNullOrWhiteSpace(request.Password)
-            ? PasswordRules.GenerateTemporary()
-            : request.Password.Trim();
-        var problem = PasswordRules.Validate(temporaryPassword);
+        var problem = PasswordRules.Validate(request.Password);
         if (problem is not null) throw new ValidationAppException(problem);
 
         if (await _db.Users.AnyAsync(u => u.NormalizedEmail == email.ToUpperInvariant() && u.ArchivedAt == null, ct))
@@ -669,15 +695,13 @@ public sealed class StaffService : IStaffService
             Role = role,
             LocationId = locationId,
             IsOwner = false,
-            Status = UserStatus.Active,
-            MustResetPassword = true
+            Status = UserStatus.Active
         };
-        user.PasswordHash = _tokens.HashPassword(user, temporaryPassword);
+        user.PasswordHash = _tokens.HashPassword(user, request.Password);
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(actorId, "staff.create", "User", user.Id.ToString(),
-            newValue: new { user.Email, role.Key, mustResetPassword = true }, ct: ct);
-        return new CreateStaffUserResponse(ToDto(user), temporaryPassword);
+        await _audit.WriteAsync(actorId, "staff.create", "User", user.Id.ToString(), newValue: new { user.Email, role.Key }, ct: ct);
+        return ToDto(user);
     }
 
     public async Task<StaffUserDto> UpdateAsync(Guid id, UpdateStaffUserRequest request, Guid actorId, CancellationToken ct = default)
@@ -718,20 +742,17 @@ public sealed class StaffService : IStaffService
         return ToDto(user);
     }
 
-    public async Task<CreateStaffUserResponse> ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default)
+    public async Task ResetPasswordAsync(Guid id, ResetStaffPasswordRequest request, Guid actorId, CancellationToken ct = default)
     {
         var user = await _db.Users.Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.Id == id && u.ArchivedAt == null, ct)
             ?? throw new ValidationAppException("User was not found.");
 
-        var temporaryPassword = string.IsNullOrWhiteSpace(request.NewPassword)
-            ? PasswordRules.GenerateTemporary()
-            : request.NewPassword.Trim();
-        var problem = PasswordRules.Validate(temporaryPassword);
+        var problem = PasswordRules.Validate(request.NewPassword);
         if (problem is not null) throw new ValidationAppException(problem);
 
-        user.PasswordHash = _tokens.HashPassword(user, temporaryPassword);
-        user.MustResetPassword = true;
+        user.PasswordHash = _tokens.HashPassword(user, request.NewPassword);
+        user.MustResetPassword = false;
         user.UpdatedAt = DateTimeOffset.UtcNow;
 
         var active = await _db.RefreshTokens.Where(t => t.UserId == user.Id && t.RevokedAt == null).ToListAsync(ct);
@@ -739,13 +760,12 @@ public sealed class StaffService : IStaffService
 
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "staff.password_reset", "User", user.Id.ToString(),
-            newValue: new { user.Email, mustResetPassword = true }, ct: ct);
-        return new CreateStaffUserResponse(ToDto(user), temporaryPassword);
+            newValue: new { user.Email }, ct: ct);
     }
 
     private static StaffUserDto ToDto(AppUser user) =>
         new(user.Id, user.Email, user.DisplayName, user.Phone, user.Role.Key, user.Role.Name,
-            user.Status.ToString(), user.IsOwner, user.LastLoginAt, user.CreatedAt, user.MustResetPassword);
+            user.Status.ToString(), user.IsOwner, user.LastLoginAt, user.CreatedAt);
 }
 
 public sealed class SearchService : ISearchService

@@ -224,7 +224,10 @@ public sealed record UsedDeviceDto(
     decimal? Margin,
     string? Serial,
     string? Colour,
-    string? StorageCapacity);
+    string? StorageCapacity,
+    string? StockId = null,
+    string? LocationBin = null,
+    bool IsPartsOnly = false);
 
 public sealed record UsedDeviceDetailDto(
     Guid Id,
@@ -255,7 +258,17 @@ public sealed record UsedDeviceDetailDto(
     Guid? RepairTicketId,
     string? RepairTicketNumber,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? StockId = null,
+    string? Sku = null,
+    string? LocationBin = null,
+    Guid? AssignedTechnicianId = null,
+    Guid? AcquisitionLeadId = null,
+    bool IsPartsOnly = false,
+    string? FunctionalGrade = null,
+    int? BatteryHealthPercent = null,
+    UsedDeviceSecurityDto? Security = null,
+    UsedDeviceCostBreakdownDto? Costs = null);
 
 public sealed record CreateUsedDeviceRequest(
     string? Summary,

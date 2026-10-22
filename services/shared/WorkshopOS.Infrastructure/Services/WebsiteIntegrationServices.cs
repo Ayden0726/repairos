@@ -181,14 +181,17 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
     private readonly IAuditService _audit;
     private readonly IConfiguration _config;
     private readonly IHttpClientFactory _http;
+    private readonly IIntegrationCredentialService _credentials;
 
     public WebsiteIntegrationService(
-        WorkshopDbContext db, IAuditService audit, IConfiguration config, IHttpClientFactory http)
+        WorkshopDbContext db, IAuditService audit, IConfiguration config, IHttpClientFactory http,
+        IIntegrationCredentialService credentials)
     {
         _db = db;
         _audit = audit;
         _config = config;
         _http = http;
+        _credentials = credentials;
     }
 
     public async Task EnsureWebsiteDefaultsAsync(CancellationToken ct = default)
@@ -246,25 +249,68 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
 
     public async Task<WooCommerceSettingsDto> GetWooSettingsAsync(CancellationToken ct = default)
     {
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
         var stored = await DbSeed.GetSettingAsync(_db, "website.woocommerce", new WooStoredSettings(), ct);
+        var secrets = await _credentials.GetSecretsMapAsync("woocommerce", ct);
+        var hasKey = secrets is not null && secrets.TryGetValue("consumerKey", out var ck) && !string.IsNullOrWhiteSpace(ck)
+                     || !string.IsNullOrWhiteSpace(stored.ConsumerKey);
+        var hasSecret = secrets is not null && secrets.TryGetValue("consumerSecret", out var cs) && !string.IsNullOrWhiteSpace(cs)
+                        || !string.IsNullOrWhiteSpace(stored.ConsumerSecret);
+        var publicCfg = await _credentials.GetPublicConfigAsync("woocommerce", ct);
+        var storeUrl = stored.StoreUrl;
+        var enabled = stored.Enabled;
+        if (!string.IsNullOrWhiteSpace(publicCfg))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(publicCfg);
+                if (doc.RootElement.TryGetProperty("storeUrl", out var u))
+                    storeUrl = u.GetString() ?? storeUrl;
+                if (doc.RootElement.TryGetProperty("enabled", out var en) && en.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    enabled = en.GetBoolean();
+            }
+            catch { /* keep settings blob */ }
+        }
+
         return new WooCommerceSettingsDto(
-            stored.Enabled,
-            stored.StoreUrl,
-            !string.IsNullOrWhiteSpace(stored.ConsumerKey),
-            !string.IsNullOrWhiteSpace(stored.ConsumerSecret),
+            enabled,
+            storeUrl,
+            hasKey,
+            hasSecret,
             stored.DefaultWarrantyText ?? "90-day local warranty");
     }
 
     public async Task<WooCommerceSettingsDto> SaveWooSettingsAsync(UpdateWooCommerceSettingsRequest request, Guid actorId, CancellationToken ct = default)
     {
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
         var existing = await DbSeed.GetSettingAsync(_db, "website.woocommerce", new WooStoredSettings(), ct);
+        var warranty = request.DefaultWarrantyText ?? existing.DefaultWarrantyText ?? "90-day local warranty";
+        string? secretsJson = null;
+        if (!string.IsNullOrWhiteSpace(request.ConsumerKey) || !string.IsNullOrWhiteSpace(request.ConsumerSecret))
+        {
+            var map = await _credentials.GetSecretsMapAsync("woocommerce", ct) ?? new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(request.ConsumerKey)) map["consumerKey"] = request.ConsumerKey.Trim();
+            if (!string.IsNullOrWhiteSpace(request.ConsumerSecret)) map["consumerSecret"] = request.ConsumerSecret.Trim();
+            secretsJson = JsonSerializer.Serialize(map);
+        }
+
+        var publicCfg = JsonSerializer.Serialize(new
+        {
+            storeUrl = request.StoreUrl,
+            enabled = request.Enabled,
+            defaultWarrantyText = warranty
+        });
+        await _credentials.UpsertAsync(new WorkshopOS.Contracts.Finance.UpsertIntegrationCredentialRequest(
+            "woocommerce", "WooCommerce", request.Enabled, publicCfg, secretsJson, ClearSecrets: false), actorId, ct);
+
+        // Persist non-secret flags only in settings JSON.
         var payload = new WooStoredSettings
         {
             Enabled = request.Enabled,
             StoreUrl = request.StoreUrl,
-            ConsumerKey = string.IsNullOrWhiteSpace(request.ConsumerKey) ? existing.ConsumerKey : request.ConsumerKey,
-            ConsumerSecret = string.IsNullOrWhiteSpace(request.ConsumerSecret) ? existing.ConsumerSecret : request.ConsumerSecret,
-            DefaultWarrantyText = request.DefaultWarrantyText ?? existing.DefaultWarrantyText ?? "90-day local warranty"
+            ConsumerKey = null,
+            ConsumerSecret = null,
+            DefaultWarrantyText = warranty
         };
         await DbSeed.SetSettingAsync(_db, "website.woocommerce", payload, actorId, ct);
         await _audit.WriteAsync(actorId, "website.woo.settings", "Setting", "website.woocommerce", ct: ct);
@@ -284,25 +330,53 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
     {
         var device = await _db.UsedDevices.FirstOrDefaultAsync(u => u.Id == request.UsedDeviceId && u.ArchivedAt == null, ct)
             ?? throw new AppException("not_found", "Refurbished device not found.", 404);
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
         var stored = await DbSeed.GetSettingAsync(_db, "website.woocommerce", new WooStoredSettings(), ct);
+        var secrets = await _credentials.GetSecretsMapAsync("woocommerce", ct);
+        var publicCfg = await _credentials.GetPublicConfigAsync("woocommerce", ct);
+        var storeUrl = stored.StoreUrl;
+        var enabled = stored.Enabled;
+        if (!string.IsNullOrWhiteSpace(publicCfg))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(publicCfg);
+                if (doc.RootElement.TryGetProperty("storeUrl", out var u))
+                    storeUrl = u.GetString() ?? storeUrl;
+                if (doc.RootElement.TryGetProperty("enabled", out var en) && en.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    enabled = en.GetBoolean();
+            }
+            catch { /* keep */ }
+        }
+
         device.Status = "Listed";
         device.ExpectedResale = request.SalePriceOverride ?? device.ExpectedResale;
         await _db.SaveChangesAsync(ct);
 
-        var stockId = device.Notes?.StartsWith("Stock ") == true
-            ? device.Notes.Split(' ', 3)[1].TrimEnd('.')
-            : device.Id.ToString("N")[..8].ToUpperInvariant();
+        var stockId = !string.IsNullOrWhiteSpace(device.StockId)
+            ? device.StockId!
+            : device.Notes?.StartsWith("Stock ") == true
+                ? device.Notes.Split(' ', 3)[1].TrimEnd('.')
+                : device.Id.ToString("N")[..8].ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(device.StockId))
+            device.StockId = stockId;
+        if (string.IsNullOrWhiteSpace(device.Sku))
+            device.Sku = stockId;
+        device.ListedAt ??= DateTimeOffset.UtcNow;
+
+        var consumerKey = secrets?.GetValueOrDefault("consumerKey") ?? stored.ConsumerKey;
+        var consumerSecret = secrets?.GetValueOrDefault("consumerSecret") ?? stored.ConsumerSecret;
 
         string? externalId = null;
         string message;
-        if (stored.Enabled &&
-            !string.IsNullOrWhiteSpace(stored.StoreUrl) &&
-            !string.IsNullOrWhiteSpace(stored.ConsumerKey) &&
-            !string.IsNullOrWhiteSpace(stored.ConsumerSecret))
+        if (enabled &&
+            !string.IsNullOrWhiteSpace(storeUrl) &&
+            !string.IsNullOrWhiteSpace(consumerKey) &&
+            !string.IsNullOrWhiteSpace(consumerSecret))
         {
             try
             {
-                externalId = await PushWooProductAsync(device, stockId, stored, ct);
+                externalId = await PushWooProductAsync(device, stockId, storeUrl!, consumerKey!, consumerSecret!, stored.DefaultWarrantyText, ct);
                 message = $"Published to WooCommerce as product {externalId}.";
             }
             catch (Exception ex)
@@ -316,7 +390,7 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
         }
 
         await _audit.WriteAsync(actorId, "website.woo.publish", "UsedDevice", device.Id.ToString(),
-            newValue: new { stockId, stored.Enabled, stored.StoreUrl, externalId }, ct: ct);
+            newValue: new { stockId, enabled, storeUrl, externalId }, ct: ct);
         await EmitWebhookAsync("refurb.listed", new
         {
             usedDeviceId = device.Id,
@@ -335,11 +409,13 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
         return new PublishRefurbishedResponse(device.Id, stockId, externalId, message);
     }
 
-    private async Task<string> PushWooProductAsync(UsedDevice device, string stockId, WooStoredSettings stored, CancellationToken ct)
+    private async Task<string> PushWooProductAsync(
+        UsedDevice device, string stockId, string storeUrl, string consumerKey, string consumerSecret,
+        string? warrantyText, CancellationToken ct)
     {
-        var baseUrl = stored.StoreUrl!.TrimEnd('/');
+        var baseUrl = storeUrl.TrimEnd('/');
         var client = _http.CreateClient("woocommerce");
-        var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{stored.ConsumerKey}:{stored.ConsumerSecret}"));
+        var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{consumerKey}:{consumerSecret}"));
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/wp-json/wc/v3/products");
         req.Headers.Authorization = new AuthenticationHeaderValue("Basic", creds);
         var body = new
@@ -354,7 +430,7 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
             {
                 device.Specs,
                 device.Faults is null ? null : $"Notes: {device.Faults}",
-                stored.DefaultWarrantyText
+                warrantyText
             }.Where(x => !string.IsNullOrWhiteSpace(x))),
             meta_data = new object[]
             {
@@ -376,18 +452,32 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
 
     public async Task<WebsiteWebhookSettingsDto> GetWebhookSettingsAsync(CancellationToken ct = default)
     {
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
         var s = await DbSeed.GetSettingAsync(_db, "website.webhooks", new WebhookStoredSettings(), ct);
-        return new WebsiteWebhookSettingsDto(s.Enabled, s.Url, !string.IsNullOrWhiteSpace(s.Secret));
+        var secrets = await _credentials.GetSecretsMapAsync("webhook", ct);
+        var hasSecret = secrets is not null && secrets.TryGetValue("secret", out var sec) && !string.IsNullOrWhiteSpace(sec)
+                        || !string.IsNullOrWhiteSpace(s.Secret);
+        return new WebsiteWebhookSettingsDto(s.Enabled, s.Url, hasSecret);
     }
 
     public async Task<WebsiteWebhookSettingsDto> SaveWebhookSettingsAsync(UpdateWebsiteWebhookSettingsRequest request, Guid actorId, CancellationToken ct = default)
     {
-        var existing = await DbSeed.GetSettingAsync(_db, "website.webhooks", new WebhookStoredSettings(), ct);
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
+        string? secretsJson = null;
+        if (!string.IsNullOrWhiteSpace(request.Secret))
+        {
+            secretsJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["secret"] = request.Secret.Trim() });
+        }
+
+        var publicCfg = JsonSerializer.Serialize(new { enabled = request.Enabled, url = request.Url?.Trim() });
+        await _credentials.UpsertAsync(new WorkshopOS.Contracts.Finance.UpsertIntegrationCredentialRequest(
+            "webhook", "Website webhooks", request.Enabled, publicCfg, secretsJson, ClearSecrets: false), actorId, ct);
+
         var payload = new WebhookStoredSettings
         {
             Enabled = request.Enabled,
             Url = request.Url?.Trim(),
-            Secret = string.IsNullOrWhiteSpace(request.Secret) ? existing.Secret : request.Secret
+            Secret = null
         };
         await DbSeed.SetSettingAsync(_db, "website.webhooks", payload, actorId, ct);
         await _audit.WriteAsync(actorId, "website.webhook.settings", "Setting", "website.webhooks", ct: ct);
@@ -396,14 +486,17 @@ public sealed class WebsiteIntegrationService : IWebsiteIntegrationService
 
     public async Task EmitWebhookAsync(string eventName, object payload, CancellationToken ct = default)
     {
+        await _credentials.EnsureMigratedFromLegacySettingsAsync(ct);
         var s = await DbSeed.GetSettingAsync(_db, "website.webhooks", new WebhookStoredSettings(), ct);
+        var secrets = await _credentials.GetSecretsMapAsync("webhook", ct);
+        var secret = secrets?.GetValueOrDefault("secret") ?? s.Secret;
         if (!s.Enabled || string.IsNullOrWhiteSpace(s.Url)) return;
         try
         {
             var client = _http.CreateClient("woocommerce");
             using var req = new HttpRequestMessage(HttpMethod.Post, s.Url);
-            if (!string.IsNullOrWhiteSpace(s.Secret))
-                req.Headers.TryAddWithoutValidation("X-WorkshopOS-Webhook-Secret", s.Secret);
+            if (!string.IsNullOrWhiteSpace(secret))
+                req.Headers.TryAddWithoutValidation("X-WorkshopOS-Webhook-Secret", secret);
             req.Headers.TryAddWithoutValidation("X-WorkshopOS-Event", eventName);
             var envelope = new { id = Guid.NewGuid(), @event = eventName, at = DateTimeOffset.UtcNow, data = payload };
             req.Content = new StringContent(JsonSerializer.Serialize(envelope), Encoding.UTF8, "application/json");

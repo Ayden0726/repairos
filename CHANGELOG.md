@@ -1,45 +1,59 @@
 # Changelog
 
-## 1.2.33 — 2026-10-10
+## 1.2.33 — 2026-10-22
 
-### Device identification (IMEI)
-- Automatic IMEI lookup on New Ticket: Luhn validation, TAC extract, IMEI.info server-side API, TAC cache, duplicate detection
-- Manual-entry fallback when API key missing, rate-limited, timed out, or provider unavailable — intake never blocked
-- Admin **Settings → Device ID**: provider, encrypted API key, basic/advanced services, cache TTL, daily limits, estimated costs
-- Distinguishes model-level specs from device-specific fields; staff review/edit before save
-- Lookup audit stores IMEI hashes only (never raw IMEI in logs)
+### Raspberry Pi / ARM server support
+- Multi-arch Dockerfiles (linux/amd64, linux/arm64, linux/arm/v7) on .NET 8 bookworm-slim
+- `docker/docker-compose.pi.yml` low-memory overlay (Postgres tune, API/worker mem caps, Redis off)
+- `get-workshopos.sh` detects Pi, creates 2 GiB swap when RAM < 2 GB, rejects ARMv6
+- Redis moved to optional Compose profile (unused by API/worker)
+- Installer also writes `Encryption__Key` into `docker/.env`
+- Guide: `docs/RASPBERRY_PI.md`
 
-### Tickets & quotes
-- Selected services shown as lists (not dropdowns) on New Ticket and Quote builder
-- Quote builder inventory search + custom/special-order parts (same pattern as tickets)
+### GitHub sync packaging
+- `docs/GITHUB_SYNC.md` — push to Ayden0726/repairos + deploy servers/Pi
+- `scripts/sync-to-github.ps1` / `scripts/sync-to-github.sh` — one-shot commit+push+tag
+- Updated `build-github-sync-artifacts.sh` for 1.2.33 overlay zip + git bundle
 
-### Version
-- API / client version `1.2.33` (ClientMinVersion `1.2.33`)
+- API version `1.2.33` (ClientMinVersion still `1.2.32`)
 
+## 1.2.32 — 2026-10-21
 
-## 1.2.32 — 2026-10-10
+### Security & persistent settings
+- Documented root causes of settings/API-key “resets” in `docs/SETTINGS_AND_SECURITY.md`
+- `SecretProtector`: AES-256-GCM encrypt **and** decrypt, dedicated `Encryption:Key`, key versioning; never silently wipe ciphertext on decrypt failure
+- New `integration_credentials` table + `/api/integrations/credentials` (admin-only); secrets never returned in API responses
+- Migrates legacy WooCommerce / POS / webhook secrets out of plaintext `settings` JSON into encrypted credentials
+- Pricing save no longer invents/overwrites a default business profile
+- Settings writes support optional concurrency checks (`expectedUpdatedAt`)
+- Docker Compose requires `Encryption__Key` (separate from JWT); files volume used for expense receipts
 
-### Added
-- **Device model database**: seed catalogue `v2-device-catalogue-500` with **721 phone** and **19 tablet** marketing-name records across 30 phone brands (Apple, Samsung, Google, Motorola, OPPO, Xiaomi/Redmi/POCO, OnePlus, Huawei, HONOR, vivo, realme, Nokia/HMD, Sony, ASUS, Nothing, ZTE/nubia/RedMagic, plus AU-common lines)
-- Device model fields: `Series`, `Aliases`, `ReleaseYear`, `IsVerified` (migration `DeviceModelCatalogueFields`)
-- Server-side model search `GET /api/catalogue/models/search` (aliases, abbreviations like `13 PM` / `S22U`, known codes like `SM-S908` / `A2484`)
-- New Ticket + Quote Builder: searchable device model picker; brand dropdown loads models; **Unknown / Other Device** always available
-- Specs and unverified inventable model numbers are intentionally omitted — only marketing names + known aliases/codes
+### Business expenses
+- New Finance → **Expenses** module (WinUI + API): categories, GST treatments (AU 10%), dashboard (FY Jul–Jun), recurring drafts (idempotent), CSV export, soft delete, receipt attachments
+- Permissions: `expenses.view/manage/delete/export/categories`
+- Worker processes due recurring expenses without duplicates
 
-### Changed
+### Tests
+- `SecurityExpensesTests` — protector round-trip, GST, credentials masking, POS key not in settings JSON, expenses dashboard/export/recurring
+
 - API / client version `1.2.32` (ClientMinVersion `1.2.32`)
 
-## 1.2.31 — 2026-10-10
+## 1.2.31 — 2026-10-15
 
-### Added
-- **Staff temp passwords**: creating or resetting a staff account issues a temporary password; `MustResetPassword` forces a change dialog at first login
-- **Ticket inventory parts**: New Ticket can search stock and attach required parts (`SelectedParts` on `POST /api/repairs`)
-- Create-staff API returns `{ user, temporaryPassword }`; reset-password returns the same shape
+### Refurbished Devices Phase 1 foundations
+- Audit and phased plan: `docs/REFURBISHED_OVERHAUL.md`
+- Additive `used_devices` columns: stock id / SKU, location, technician, acquisition link, cost breakdown, security checks, listing refs
+- New acquisition (outbound buying) aggregate: leads, offers, events — `/api/acquisitions/*`
+- Refurbished dashboard KPIs — `GET /api/used-tech/dashboard`
+- Buy / profit calculator with AUD recommendations — `POST /api/used-tech/buy-calculator`
+- Permissions: `acquisitions.view/manage`, `used.view_costs`, `used.view_financials`, `used.approve_purchase`, `used.publish`
+- New devices and Sell Your Tech conversions assign canonical `TB-RFB-#####` stock ids
+- Existing Used Tech CRUD and WinUI page remain compatible (ClientMinVersion stays `1.2.30`)
 
-### Changed
-- Multi-service tickets/quotes charge the labour/service fee **once** (first service) plus parts — no longer sums labour per service line
-- POS 404 guidance points at server update + `/api/health` ApiVersion; `get-workshopos.sh` auto `chmod +x scripts/*.sh`
-- API / client version `1.2.31` (ClientMinVersion `1.2.31`)
+### Tests
+- `RefurbishedPhase1Tests` — calculator, acquisition → inventory convert, dashboard, stock id assignment
+
+- API version `1.2.31` (ClientMinVersion `1.2.30`)
 
 ## 1.2.30 — 2026-10-09
 

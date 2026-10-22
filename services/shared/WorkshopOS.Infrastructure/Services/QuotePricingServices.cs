@@ -40,15 +40,20 @@ public sealed class PricingSettingsService : IPricingSettingsService
         await DbSeed.SetSettingAsync(_db, SettingKeys.PricingSettings, cleaned, actorId, ct);
         if (cleaned.Tax is { } tax)
         {
-            var business = await DbSeed.GetSettingAsync(_db, SettingKeys.BusinessProfile,
-                new BusinessProfileDto("Workshop", null, null, null, null, null, null, null, null, "#0F766E", true, 0.10m, "AUD", 110m), ct);
-            business = business with
+            // Never invent a default business profile and write it back — that was overwriting
+            // real shop names/ABNs when the profile row was briefly missing.
+            var business = await DbSeed.GetSettingAsync<BusinessProfileDto?>(_db, SettingKeys.BusinessProfile, null, ct);
+            if (business is not null)
             {
-                GstRegistered = tax.Enabled,
-                GstRate = tax.Rate <= 0 ? 0.10m : tax.Rate,
-                GstInclusive = tax.Inclusive
-            };
-            await DbSeed.SetSettingAsync(_db, SettingKeys.BusinessProfile, business, actorId, ct);
+                business = business with
+                {
+                    GstRegistered = tax.Enabled,
+                    GstRate = tax.Rate <= 0 ? 0.10m : tax.Rate,
+                    GstInclusive = tax.Inclusive
+                };
+                await DbSeed.SetSettingAsync(_db, SettingKeys.BusinessProfile, business, actorId, ct);
+            }
+
             await DbSeed.SetSettingAsync(_db, SettingKeys.Gst, new { registered = tax.Enabled, rate = tax.Rate, inclusive = tax.Inclusive }, actorId, ct);
         }
         await _audit.WriteAsync(actorId, "pricing.settings.update", "Setting", SettingKeys.PricingSettings, newValue: cleaned, ct: ct);
