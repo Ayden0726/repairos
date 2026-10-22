@@ -291,6 +291,12 @@ public interface IDeviceIdentificationService
     Task<ImeiLookupResultDto> LookupAsync(ImeiLookupRequest request, Guid actorId, CancellationToken ct = default);
 }
 
+public interface IUserPreferenceService
+{
+    Task<DashboardLayoutDto> GetDashboardLayoutAsync(Guid userId, CancellationToken ct = default);
+    Task<DashboardLayoutDto> SaveDashboardLayoutAsync(Guid userId, UpdateDashboardLayoutRequest request, CancellationToken ct = default);
+}
+
 public interface IExpenseService
 {
     Task EnsureDefaultsAsync(CancellationToken ct = default);

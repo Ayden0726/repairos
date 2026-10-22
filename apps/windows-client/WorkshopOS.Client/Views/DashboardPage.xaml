@@ -8,13 +8,52 @@
       <Grid>
         <StackPanel Spacing="2">
           <TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
-          <TextBlock Text="Dashboard" FontSize="13" Opacity="0.65" />
+          <TextBlock Text="Your dashboard — show, hide, and reorder widgets for this account." FontSize="13" Opacity="0.65" TextWrapping="Wrap" />
         </StackPanel>
-        <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Right" VerticalAlignment="Top" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+          <Button Content="Customise" Command="{x:Bind ViewModel.ToggleCustomizeCommand}" />
+          <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" />
+        </StackPanel>
       </Grid>
-      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
+      <TextBlock Text="{x:Bind ViewModel.LayoutStatus, Mode=OneWay}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
 
-      <StackPanel Spacing="8">
+      <!-- Per-user layout editor -->
+      <Border Padding="14" CornerRadius="8" Background="{ThemeResource WorkshopSurfaceBrush}"
+              BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1"
+              Visibility="{x:Bind ViewModel.IsCustomizing, Mode=OneWay}">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Customise dashboard" FontWeight="SemiBold" FontSize="16" />
+          <TextBlock Text="Toggle widgets and use Up / Down to change order. Saved to your user account on this server."
+                     FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+          <ListView ItemsSource="{x:Bind ViewModel.EditableWidgets, Mode=OneWay}" SelectionMode="None">
+            <ListView.ItemTemplate>
+              <DataTemplate x:DataType="local:DashboardWidgetEditVm">
+                <Grid ColumnSpacing="8" Padding="0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{x:Bind Title}" VerticalAlignment="Center" FontWeight="SemiBold" />
+                  <CheckBox Grid.Column="1" Content="Show" IsChecked="{x:Bind Visible, Mode=TwoWay}" />
+                  <Button Grid.Column="2" Content="Up" Click="MoveUp_Click" Tag="{x:Bind}" Padding="10,4" />
+                  <Button Grid.Column="3" Content="Down" Click="MoveDown_Click" Tag="{x:Bind}" Padding="10,4" />
+                </Grid>
+              </DataTemplate>
+            </ListView.ItemTemplate>
+          </ListView>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Save layout" Command="{x:Bind ViewModel.SaveLayoutCommand}"
+                    Style="{StaticResource AccentButtonStyle}" />
+            <Button Content="Reset defaults" Command="{x:Bind ViewModel.ResetLayoutCommand}" />
+            <Button Content="Cancel" Command="{x:Bind ViewModel.ToggleCustomizeCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowMyTicketsWidget, Mode=OneWay}">
         <TextBlock Text="My open tickets" FontWeight="SemiBold" FontSize="16" />
         <TextBlock Text="{x:Bind ViewModel.MyTicketsStatus, Mode=OneWay}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
         <TextBlock Text="Nothing assigned to you right now."
@@ -49,7 +88,8 @@
         </ListView>
       </StackPanel>
 
-      <GridView ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Card_Click">
+      <GridView ItemsSource="{x:Bind ViewModel.Cards, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Card_Click"
+                Visibility="{x:Bind ViewModel.ShowSummaryCardsWidget, Mode=OneWay}">
         <GridView.ItemTemplate>
           <DataTemplate x:DataType="local:DashboardCardVm">
             <Border Width="160" Height="72" Padding="12" Margin="4" Background="{ThemeResource WorkshopSurfaceBrush}" CornerRadius="8">
@@ -67,10 +107,16 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <StackPanel Spacing="8">
-          <TextBlock Text="Upcoming calendar" FontWeight="SemiBold" FontSize="16" />
+
+        <!-- Calendar widget -->
+        <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowCalendarWidget, Mode=OneWay}">
+          <Grid>
+            <TextBlock Text="Calendar" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center" />
+            <Button Content="Open full calendar" Click="OpenCalendar_Click"
+                    HorizontalAlignment="Right" Padding="10,4" />
+          </Grid>
           <TextBlock Text="{x:Bind ViewModel.CalendarStatus, Mode=OneWay}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
-          <ListView ItemsSource="{x:Bind ViewModel.UpcomingBookings, Mode=OneWay}" MaxHeight="280" SelectionMode="None">
+          <ListView ItemsSource="{x:Bind ViewModel.UpcomingBookings, Mode=OneWay}" MaxHeight="320" SelectionMode="None">
             <ListView.ItemTemplate>
               <DataTemplate x:DataType="local:DashboardBookingVm">
                 <Border Padding="10,8" Margin="0,0,0,6" Background="{ThemeResource WorkshopSurfaceBrush}" CornerRadius="6">
@@ -94,7 +140,8 @@
             </ListView.ItemTemplate>
           </ListView>
         </StackPanel>
-        <StackPanel Grid.Column="1" Spacing="8">
+
+        <StackPanel Grid.Column="1" Spacing="8" Visibility="{x:Bind ViewModel.ShowPipelineWidget, Mode=OneWay}">
           <TextBlock Text="Repair pipeline" FontWeight="SemiBold" FontSize="16" />
           <ItemsControl ItemsSource="{x:Bind ViewModel.Pipeline, Mode=OneWay}">
             <ItemsControl.ItemsPanel>
@@ -126,32 +173,40 @@
         </StackPanel>
       </Grid>
 
-      <TextBlock Text="Technician workload" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.Workload, Mode=OneWay}" MaxHeight="140">
-        <ListView.ItemTemplate>
-          <DataTemplate x:DataType="ops:TechnicianWorkloadDto">
-            <TextBlock>
-              <Run Text="{x:Bind Name}" /><Run Text=" — open " /><Run Text="{x:Bind OpenJobs}" />
-            </TextBlock>
-          </DataTemplate>
-        </ListView.ItemTemplate>
-      </ListView>
-      <TextBlock Text="Low stock" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.LowStock, Mode=OneWay}" MaxHeight="100">
-        <ListView.ItemTemplate>
-          <DataTemplate x:DataType="ops:LowStockDto">
-            <TextBlock Text="{x:Bind Name}" />
-          </DataTemplate>
-        </ListView.ItemTemplate>
-      </ListView>
-      <TextBlock Text="Recent activity" FontWeight="SemiBold" />
-      <ListView ItemsSource="{x:Bind ViewModel.Activity, Mode=OneWay}" MaxHeight="140">
-        <ListView.ItemTemplate>
-          <DataTemplate x:DataType="ops:ActivityDto">
-            <TextBlock Text="{x:Bind Summary}" TextWrapping="Wrap" />
-          </DataTemplate>
-        </ListView.ItemTemplate>
-      </ListView>
+      <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowWorkloadWidget, Mode=OneWay}">
+        <TextBlock Text="Technician workload" FontWeight="SemiBold" />
+        <ListView ItemsSource="{x:Bind ViewModel.Workload, Mode=OneWay}" MaxHeight="140">
+          <ListView.ItemTemplate>
+            <DataTemplate x:DataType="ops:TechnicianWorkloadDto">
+              <TextBlock>
+                <Run Text="{x:Bind Name}" /><Run Text=" — open " /><Run Text="{x:Bind OpenJobs}" />
+              </TextBlock>
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+      </StackPanel>
+
+      <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowLowStockWidget, Mode=OneWay}">
+        <TextBlock Text="Low stock" FontWeight="SemiBold" />
+        <ListView ItemsSource="{x:Bind ViewModel.LowStock, Mode=OneWay}" MaxHeight="100">
+          <ListView.ItemTemplate>
+            <DataTemplate x:DataType="ops:LowStockDto">
+              <TextBlock Text="{x:Bind Name}" />
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+      </StackPanel>
+
+      <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowActivityWidget, Mode=OneWay}">
+        <TextBlock Text="Recent activity" FontWeight="SemiBold" />
+        <ListView ItemsSource="{x:Bind ViewModel.Activity, Mode=OneWay}" MaxHeight="140">
+          <ListView.ItemTemplate>
+            <DataTemplate x:DataType="ops:ActivityDto">
+              <TextBlock Text="{x:Bind Summary}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+      </StackPanel>
     </StackPanel>
   </ScrollViewer>
 </Page>

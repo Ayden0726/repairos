@@ -15,7 +15,9 @@ public sealed record DeviceIdentificationSettingsDto(
     int LookupsToday,
     decimal? EstimatedBasicCost,
     decimal? EstimatedAdvancedCost,
-    string? Notes);
+    string? Notes,
+    /// <summary>When true, quote builder shows the IMEI lookup panel.</summary>
+    bool ShowOnQuotes = true);
 
 public sealed record UpdateDeviceIdentificationSettingsRequest(
     bool Enabled,
@@ -31,7 +33,8 @@ public sealed record UpdateDeviceIdentificationSettingsRequest(
     int DailyLookupLimit,
     decimal? EstimatedBasicCost,
     decimal? EstimatedAdvancedCost,
-    string? Notes);
+    string? Notes,
+    bool ShowOnQuotes = true);
 
 public sealed record ImeiLookupRequest(
     string Imei,

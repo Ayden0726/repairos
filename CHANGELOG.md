@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.35 — 2026-10-22
+
+### Quote IMEI lookup
+- Quote builder shows a configurable **IMEI lookup** panel (Settings → Device ID → Show on quotes)
+- Lookups fill brand/model when the provider returns them; IMEI stored on the quote (`DeviceImei`)
+- Device Identification settings UI added under Settings → Device ID
+
+### Modular per-user dashboard
+- Each user can show/hide and reorder dashboard widgets (saved server-side via `api/me/preferences/dashboard`)
+- Calendar widget on the dashboard (14-day upcoming bookings) with link to the full Calendar page
+- Customise / Save layout / Reset defaults on the Dashboard
+
+- API / client version `1.2.35` (ClientMinVersion `1.2.35`)
+
 ## 1.2.34 — 2026-10-22
 
 ### Unified release version

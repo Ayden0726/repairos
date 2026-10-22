@@ -1,32 +1,26 @@
-# Dashboard Data Requirements (Phase 3)
+# Dashboard
 
-Phase 1 ships the Dashboard **route shell only**. Live metrics are Phase 3.
+Each signed-in user can customise their dashboard. Layout is stored per user on the server (`user_ui_preferences` / `api/me/preferences/dashboard`).
 
-## Summary cards (click → filtered Repairs)
+## Widgets
 
-| Card | Source rule |
-| --- | --- |
-| Open Jobs | Status not completed/cancelled |
-| Due Today | DueDate::date = today, open |
-| Awaiting Approval | Status = Awaiting Quote Approval |
-| Waiting for Parts | Status = Waiting for Parts |
-| Ready for Pickup | Status = Ready for Pickup |
-| Overdue | DueDate < now AND open |
-| Revenue — 30 Days | Paid invoice totals (AUD) last 30 days |
-| Gross Profit — 30 Days | Revenue − COGS for same window |
+| Id | Title | Source |
+| --- | --- | --- |
+| `myTickets` | My open tickets | Repairs assigned to the current user |
+| `summaryCards` | Summary cards | `GET api/dashboard` cards (click → filtered repairs) |
+| `calendar` | Calendar | Upcoming bookings (14 days) + link to full Calendar page |
+| `pipeline` | Repair pipeline | Pipeline stages, urgent/overdue, unassigned |
+| `workload` | Technician workload | Open jobs per technician |
+| `lowStock` | Low stock | Inventory below reorder |
+| `activity` | Recent activity | Audit / domain activity |
 
-## Other panels
+## Customise
 
-- Repair Pipeline — counts per status stage
-- Urgent / Overdue — severity sort (overdue urgent → …)
-- Technician Workload + Unassigned
-- Waiting for Parts detail
-- Low Stock
-- Today's Work
-- Recent Activity (from audit / domain events)
+1. Open **Dashboard**
+2. Tap **Customise**
+3. Toggle **Show** and use **Up** / **Down** to reorder
+4. **Save layout** (persists for this user on this server) or **Reset defaults**
 
-## Validation rules
+## Calendar on the dashboard
 
-- Average repair hours: only jobs with valid start AND completion; never negative
-- No duplicate rows from incorrect joins (tests cover count queries)
-- Production never uses seed/fake numbers
+The calendar widget lists upcoming bookings for the next 14 days. Use **Open full calendar** for the dedicated Calendar page (create/edit bookings).

@@ -29,6 +29,13 @@ public sealed partial class QuoteBuilderPage : Page
         DataContext = ViewModel;
         _picker.Changed += (_, _) => SyncPickerUi();
         ViewModel.DeviceTypeChanged = async dt => await ApplyDeviceTypeAsync(dt);
+        ViewModel.DeviceBrandModelChanged = () =>
+        {
+            if (!string.IsNullOrWhiteSpace(ViewModel.DeviceBrand))
+                QuoteBrandBox.Text = ViewModel.DeviceBrand;
+            if (!string.IsNullOrWhiteSpace(ViewModel.DeviceModel))
+                QuoteModelBox.Text = ViewModel.DeviceModel;
+        };
         Loaded += async (_, _) =>
         {
             if (_loaded) return;

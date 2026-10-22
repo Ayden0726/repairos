@@ -294,6 +294,7 @@ public sealed class QuoteService : IQuoteService
             DeviceBrand = request.DeviceBrand?.Trim(),
             DeviceModel = request.DeviceModel?.Trim(),
             DeviceSerial = request.DeviceSerial?.Trim(),
+            DeviceImei = request.DeviceImei?.Trim(),
             DeviceCategory = request.DeviceCategory?.Trim(),
             CreatedById = actorId,
             ValidityDays = validity,
@@ -341,6 +342,7 @@ public sealed class QuoteService : IQuoteService
         quote.DeviceBrand = request.DeviceBrand?.Trim() ?? quote.DeviceBrand;
         quote.DeviceModel = request.DeviceModel?.Trim() ?? quote.DeviceModel;
         quote.DeviceSerial = request.DeviceSerial?.Trim() ?? quote.DeviceSerial;
+        quote.DeviceImei = request.DeviceImei?.Trim() ?? quote.DeviceImei;
         quote.DeviceCategory = request.DeviceCategory?.Trim() ?? quote.DeviceCategory;
         if (request.ValidityDays is int days && days > 0)
         {
@@ -770,6 +772,7 @@ public sealed class QuoteService : IQuoteService
         quote.DeviceBrand ??= ticket.Device.Brand;
         quote.DeviceModel ??= ticket.Device.Model;
         quote.DeviceSerial ??= ticket.Device.Serial;
+        quote.DeviceImei ??= ticket.Device.Imei;
         quote.DeviceCategory ??= ticket.Device.Category.ToString();
         quote.Issue ??= ticket.ReportedIssue;
     }
@@ -845,6 +848,7 @@ public sealed class QuoteService : IQuoteService
             includeInternal ? markupPercent : 0m,
             includeInternal ? markupAmount : 0m,
             labourFee,
-            q.AdditionalTotal);
+            q.AdditionalTotal,
+            q.DeviceImei);
     }
 }

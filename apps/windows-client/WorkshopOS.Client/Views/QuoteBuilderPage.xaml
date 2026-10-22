@@ -94,6 +94,42 @@
                         IsEditable="True" LostFocus="QuoteModelBox_LostFocus" />
               <TextBox Grid.Column="2" Header="Serial" Text="{x:Bind ViewModel.DeviceSerial, Mode=TwoWay}" />
             </Grid>
+
+            <Border Padding="12" CornerRadius="6"
+                    Background="{ThemeResource WorkshopAccentSoftBrush}"
+                    Visibility="{x:Bind ViewModel.ShowImeiLookup, Mode=OneWay}">
+              <StackPanel Spacing="8">
+                <TextBlock Text="IMEI lookup" FontWeight="SemiBold"
+                           Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+                <TextBlock Text="Look up the device from its IMEI (Settings → Device ID). Brand and model fill when the provider returns them."
+                           FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                <Grid ColumnSpacing="8">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBox Header="IMEI (15 digits)"
+                           Text="{x:Bind ViewModel.DeviceImei, Mode=TwoWay}"
+                           PlaceholderText="356166091795616" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                    <CheckBox Content="Advanced"
+                              IsChecked="{x:Bind ViewModel.ImeiUseAdvanced, Mode=TwoWay}"
+                              Visibility="{x:Bind ViewModel.ImeiAdvancedLookupAvailable, Mode=OneWay}" />
+                    <Button Content="Look up"
+                            Command="{x:Bind ViewModel.LookupImeiCommand}"
+                            Style="{StaticResource AccentButtonStyle}" />
+                  </StackPanel>
+                </Grid>
+                <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
+                              IsActive="{x:Bind ViewModel.IsLookingUpImei, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind ViewModel.ImeiStatus, Mode=OneWay}"
+                           TextWrapping="Wrap" FontSize="12" Opacity="0.8" />
+                <TextBlock Text="{x:Bind ViewModel.ImeiResultSummary, Mode=OneWay}"
+                           TextWrapping="Wrap" FontWeight="SemiBold"
+                           Visibility="{x:Bind ViewModel.HasImeiResult, Mode=OneWay}" />
+              </StackPanel>
+            </Border>
+
             <TextBox Header="Issue" Text="{x:Bind ViewModel.Issue, Mode=TwoWay}"
                      AcceptsReturn="True" Height="70" TextWrapping="Wrap" />
           </StackPanel>

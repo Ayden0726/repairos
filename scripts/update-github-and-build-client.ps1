@@ -14,9 +14,9 @@
   powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\update-github-and-build-client.ps1
 
   # First run when the script is not on disk yet (download then run):
-  $r='C:\Users\ayden\src\repairos'; $z="$env:TEMP\WorkshopOS-1.2.34-github-sync.zip"
+  $r='C:\Users\ayden\src\repairos'; $z="$env:TEMP\WorkshopOS-1.2.35-github-sync.zip"
   New-Item -ItemType Directory -Force -Path $r | Out-Null
-  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip' -OutFile $z
+  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip' -OutFile $z
   Expand-Archive -Path $z -DestinationPath $r -Force
   powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1"
 
@@ -27,12 +27,12 @@
 param(
   [string]$Repo = 'C:\Users\ayden\src\repairos',
   # Windows client version (must match WorkshopOS.Client.csproj <Version>)
-  [string]$Version = '1.2.34',
+  [string]$Version = '1.2.35',
   [string]$Branch = 'main',
   [string]$GitHubUrl = 'https://github.com/Ayden0726/repairos.git',
   # Prefer Ports panel forwarding for 18765 if 127.0.0.1 fails from your PC
-  [string]$AgentSyncUrl = 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip',
-  [string]$ReleaseTag = 'v1.2.34',
+  [string]$AgentSyncUrl = 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip',
+  [string]$ReleaseTag = 'v1.2.35',
   [switch]$SkipGitHubPush,
   [switch]$SkipInstaller,
   [switch]$SkipLaunch,

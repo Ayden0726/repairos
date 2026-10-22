@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<IIntegrationCredentialService, IntegrationCredentialService>();
         services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<IDeviceIdentificationService, DeviceIdentificationService>();
+        services.AddScoped<IUserPreferenceService, UserPreferenceService>();
         services.AddScoped<IClock, SystemClock>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<ISetupService, SetupService>();

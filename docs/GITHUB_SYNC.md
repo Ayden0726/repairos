@@ -2,7 +2,7 @@
 
 This tree is ready for **https://github.com/Ayden0726/repairos** (`main`).
 
-**Current product: 1.2.34** — encrypted API credentials, persistent settings fixes, business expenses, Raspberry Pi 3B+ server support.
+**Current product: 1.2.35** — encrypted API credentials, persistent settings fixes, business expenses, Raspberry Pi 3B+ server support.
 
 ---
 
@@ -26,27 +26,27 @@ Requires: Git, GitHub auth (`gh auth login` or Credential Manager), and this syn
 
 ```powershell
 $r = 'C:\Users\ayden\src\repairos'
-$z = "$env:TEMP\WorkshopOS-1.2.34-github-sync.zip"
+$z = "$env:TEMP\WorkshopOS-1.2.35-github-sync.zip"
 New-Item -ItemType Directory -Force -Path $r | Out-Null
-Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip' -OutFile $z
+Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip' -OutFile $z
 Expand-Archive -Path $z -DestinationPath $r -Force
 powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1"
 ```
 
-Outputs: GitHub `main` + tag `v1.2.34`, then
-`packaging\dist\WorkshopOS-Client-win-x64-v1.2.34.zip` and
-`packaging\dist\WorkshopOS-Setup-1.2.34.exe`.
+Outputs: GitHub `main` + tag `v1.2.35`, then
+`packaging\dist\WorkshopOS-Client-win-x64-v1.2.35.zip` and
+`packaging\dist\WorkshopOS-Setup-1.2.35.exe`.
 
 ### Manual overlay + push
 
 ```powershell
 # 1) Folder for the real GitHub clone
 $repo = 'C:\Users\ayden\src\repairos'
-$zip  = "$env:TEMP\WorkshopOS-1.2.34-github-sync.zip"
+$zip  = "$env:TEMP\WorkshopOS-1.2.35-github-sync.zip"
 New-Item -ItemType Directory -Force -Path $repo | Out-Null
 
 # 2) Get the sync zip (Cloud Agent Ports → 18765)
-Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip' -OutFile $zip
+Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip' -OutFile $zip
 
 # 3) If the folder is empty, clone first; otherwise overlay the zip onto your clone
 if (-not (Test-Path "$repo\.git")) {
@@ -68,12 +68,12 @@ Set-Location $repo
 git remote set-url origin https://github.com/Ayden0726/repairos.git
 git add -A
 git status
-git commit -m "WorkshopOS 1.2.34: encrypted credentials, expenses, Raspberry Pi server"
+git commit -m "WorkshopOS 1.2.35: encrypted credentials, expenses, Raspberry Pi server"
 git push -u origin main
 
 # 6) Tag a release (optional — triggers GitHub Actions release workflow)
-git tag -f v1.2.34
-git push -f origin v1.2.34
+git tag -f v1.2.35
+git push -f origin v1.2.35
 ```
 
 Push-only helper (after overlay):
@@ -85,9 +85,9 @@ powershell -ExecutionPolicy Bypass -File "$repo\scripts\sync-to-github.ps1"
 Rebuild Windows client after push (VS 2022 Developer PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$repo\scripts\rebuild-client-1.2.34.ps1"
+powershell -ExecutionPolicy Bypass -File "$repo\scripts\rebuild-client-1.2.35.ps1"
 # or:
-powershell -ExecutionPolicy Bypass -File "$repo\packaging\build-client.ps1" -Configuration Release -Version 1.2.34
+powershell -ExecutionPolicy Bypass -File "$repo\packaging\build-client.ps1" -Configuration Release -Version 1.2.35
 ```
 
 ---
@@ -96,15 +96,15 @@ powershell -ExecutionPolicy Bypass -File "$repo\packaging\build-client.ps1" -Con
 
 ```bash
 REPO="${HOME}/src/repairos"
-ZIP=/tmp/WorkshopOS-1.2.34-github-sync.zip
+ZIP=/tmp/WorkshopOS-1.2.35-github-sync.zip
 
 # Clone if needed
 mkdir -p "$(dirname "$REPO")"
 [[ -d "$REPO/.git" ]] || git clone https://github.com/Ayden0726/repairos.git "$REPO"
 
 # Download sync zip (agent serve port 18765, or copy from artifacts)
-curl -fsSL -o "$ZIP" 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip'
-# Or: cp /opt/cursor/artifacts/WorkshopOS-1.2.34-github-sync.zip "$ZIP"
+curl -fsSL -o "$ZIP" 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip'
+# Or: cp /opt/cursor/artifacts/WorkshopOS-1.2.35-github-sync.zip "$ZIP"
 
 unzip -o "$ZIP" -d "$REPO"
 cd "$REPO"
@@ -114,9 +114,9 @@ rm -rf apps/windows-client/WorkshopOS.Client/obj apps/windows-client/WorkshopOS.
 
 git remote set-url origin https://github.com/Ayden0726/repairos.git
 git add -A
-git commit -m "WorkshopOS 1.2.34: encrypted credentials, expenses, Raspberry Pi server"
+git commit -m "WorkshopOS 1.2.35: encrypted credentials, expenses, Raspberry Pi server"
 git push -u origin main
-git tag -f v1.2.34 && git push -f origin v1.2.34
+git tag -f v1.2.35 && git push -f origin v1.2.35
 
 chmod +x scripts/*.sh
 ```

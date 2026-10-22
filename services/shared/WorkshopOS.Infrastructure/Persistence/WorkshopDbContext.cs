@@ -94,6 +94,9 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<ImeiLookupLog> ImeiLookupLogs => Set<ImeiLookupLog>();
     public DbSet<ImeiTacCache> ImeiTacCaches => Set<ImeiTacCache>();
 
+    // Per-user UI preferences (dashboard layout, …)
+    public DbSet<UserUiPreference> UserUiPreferences => Set<UserUiPreference>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AppUser>(e =>
@@ -281,6 +284,7 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.DeviceBrand).HasMaxLength(120);
             e.Property(x => x.DeviceModel).HasMaxLength(120);
             e.Property(x => x.DeviceSerial).HasMaxLength(120);
+            e.Property(x => x.DeviceImei).HasMaxLength(32);
             e.Property(x => x.DeviceCategory).HasMaxLength(64);
             e.Property(x => x.RoundingMethod).HasMaxLength(32);
             e.Property(x => x.Subtotal).HasPrecision(12, 2);
@@ -1104,6 +1108,17 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.VerificationStatus).HasMaxLength(40).IsRequired();
             e.HasIndex(x => x.ExpiresAt);
             e.HasIndex(x => new { x.Tac, x.Provider }).IsUnique();
+        });
+
+        modelBuilder.Entity<UserUiPreference>(e =>
+        {
+            e.ToTable("user_ui_preferences");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Key).HasMaxLength(80).IsRequired();
+            e.Property(x => x.JsonValue).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.Key }).IsUnique();
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

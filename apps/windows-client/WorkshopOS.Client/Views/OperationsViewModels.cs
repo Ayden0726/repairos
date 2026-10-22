@@ -20,6 +20,8 @@ public partial class DashboardViewModel : ObservableObject
     public ObservableCollection<ActivityDto> Activity { get; } = new();
     public ObservableCollection<DashboardBookingVm> UpcomingBookings { get; } = new();
     public ObservableCollection<MyTicketVm> MyOpenTickets { get; } = new();
+    public ObservableCollection<DashboardWidgetEditVm> EditableWidgets { get; } = new();
+
     [ObservableProperty] private string? _error;
     [ObservableProperty] private string? _calendarStatus;
     [ObservableProperty] private int _unassigned;
@@ -27,6 +29,19 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] private string _myTicketsStatus = "Loading your open tickets…";
     [ObservableProperty] private bool _hasMyTickets;
     [ObservableProperty] private bool _showMyTicketsEmpty = true;
+    [ObservableProperty] private bool _isCustomizing;
+    [ObservableProperty] private string? _layoutStatus;
+    [ObservableProperty] private bool _showMyTicketsWidget = true;
+    [ObservableProperty] private bool _showSummaryCardsWidget = true;
+    [ObservableProperty] private bool _showCalendarWidget = true;
+    [ObservableProperty] private bool _showPipelineWidget = true;
+    [ObservableProperty] private bool _showWorkloadWidget = true;
+    [ObservableProperty] private bool _showLowStockWidget = true;
+    [ObservableProperty] private bool _showActivityWidget = true;
+
+    private List<DashboardWidgetPreferenceDto> _layout =
+        DashboardWidgetIds.All.Select((id, i) =>
+            new DashboardWidgetPreferenceDto(id, DashboardWidgetIds.DisplayName(id), true, i)).ToList();
 
     public DashboardViewModel(ApiClient api, AuthSession session)
     {
@@ -54,6 +69,8 @@ public partial class DashboardViewModel : ObservableObject
         Error = null;
         CalendarStatus = null;
         Greeting = BuildGreeting(_session.User?.DisplayName);
+        await LoadLayoutAsync();
+
         try
         {
             var d = await _api.GetAsync<DashboardDto>("api/dashboard");
@@ -75,18 +92,122 @@ public partial class DashboardViewModel : ObservableObject
         }
         catch (Exception ex) { Error = ex.Message; }
 
-        await LoadMyOpenTicketsAsync();
+        if (ShowMyTicketsWidget)
+            await LoadMyOpenTicketsAsync();
+        if (ShowCalendarWidget)
+            await LoadCalendarAsync();
+    }
 
+    private async Task LoadLayoutAsync()
+    {
+        try
+        {
+            var layout = await _api.GetAsync<DashboardLayoutDto>("api/me/preferences/dashboard");
+            _layout = layout.Widgets.OrderBy(w => w.Order).ToList();
+            LayoutStatus = null;
+        }
+        catch (Exception ex)
+        {
+            _layout = DashboardWidgetIds.All.Select((id, i) =>
+                new DashboardWidgetPreferenceDto(id, DashboardWidgetIds.DisplayName(id), true, i)).ToList();
+            LayoutStatus = $"Using default layout ({ex.Message})";
+        }
+        ApplyLayoutFlags();
+        RebuildEditableWidgets();
+    }
+
+    private void ApplyLayoutFlags()
+    {
+        bool On(string id) => _layout.FirstOrDefault(w =>
+            string.Equals(w.Id, id, StringComparison.OrdinalIgnoreCase))?.Visible ?? true;
+        ShowMyTicketsWidget = On(DashboardWidgetIds.MyTickets);
+        ShowSummaryCardsWidget = On(DashboardWidgetIds.SummaryCards);
+        ShowCalendarWidget = On(DashboardWidgetIds.Calendar);
+        ShowPipelineWidget = On(DashboardWidgetIds.Pipeline);
+        ShowWorkloadWidget = On(DashboardWidgetIds.Workload);
+        ShowLowStockWidget = On(DashboardWidgetIds.LowStock);
+        ShowActivityWidget = On(DashboardWidgetIds.Activity);
+    }
+
+    private void RebuildEditableWidgets()
+    {
+        EditableWidgets.Clear();
+        foreach (var w in _layout.OrderBy(x => x.Order))
+            EditableWidgets.Add(new DashboardWidgetEditVm(w.Id, w.Title, w.Visible, w.Order));
+    }
+
+    [RelayCommand]
+    private void ToggleCustomize()
+    {
+        IsCustomizing = !IsCustomizing;
+        if (IsCustomizing) RebuildEditableWidgets();
+    }
+
+    [RelayCommand]
+    private async Task SaveLayoutAsync()
+    {
+        try
+        {
+            var widgets = EditableWidgets
+                .Select((w, i) => new DashboardWidgetPreferenceDto(w.Id, w.Title, w.Visible, i))
+                .ToList();
+            var saved = await _api.PutAsync<UpdateDashboardLayoutRequest, DashboardLayoutDto>(
+                "api/me/preferences/dashboard", new UpdateDashboardLayoutRequest(widgets));
+            _layout = saved.Widgets.OrderBy(w => w.Order).ToList();
+            ApplyLayoutFlags();
+            IsCustomizing = false;
+            LayoutStatus = "Dashboard layout saved for your account.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { LayoutStatus = ex.Message; }
+    }
+
+    [RelayCommand]
+    private void ResetLayout()
+    {
+        _layout = DashboardWidgetIds.All.Select((id, i) =>
+            new DashboardWidgetPreferenceDto(id, DashboardWidgetIds.DisplayName(id), true, i)).ToList();
+        RebuildEditableWidgets();
+        ApplyLayoutFlags();
+        LayoutStatus = "Reset to defaults — tap Save layout to keep.";
+    }
+
+    [RelayCommand]
+    private void MoveWidgetUp(DashboardWidgetEditVm? widget)
+    {
+        if (widget is null) return;
+        var list = EditableWidgets.ToList();
+        var idx = list.FindIndex(w => w.Id == widget.Id);
+        if (idx <= 0) return;
+        (list[idx - 1], list[idx]) = (list[idx], list[idx - 1]);
+        EditableWidgets.Clear();
+        foreach (var w in list) EditableWidgets.Add(w);
+    }
+
+    [RelayCommand]
+    private void MoveWidgetDown(DashboardWidgetEditVm? widget)
+    {
+        if (widget is null) return;
+        var list = EditableWidgets.ToList();
+        var idx = list.FindIndex(w => w.Id == widget.Id);
+        if (idx < 0 || idx >= list.Count - 1) return;
+        (list[idx + 1], list[idx]) = (list[idx], list[idx + 1]);
+        EditableWidgets.Clear();
+        foreach (var w in list) EditableWidgets.Add(w);
+    }
+
+    private async Task LoadCalendarAsync()
+    {
         try
         {
             var from = DateTimeOffset.Now.Date;
-            var to = from.AddDays(7);
+            var to = from.AddDays(14);
             var fromUtc = from.ToUniversalTime();
             var toUtc = to.ToUniversalTime();
             var bookings = await _api.GetAsync<IReadOnlyList<BookingDto>>(
                 $"api/bookings?from={Uri.EscapeDataString(fromUtc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"))}&to={Uri.EscapeDataString(toUtc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"))}");
             UpcomingBookings.Clear();
-            foreach (var b in bookings.OrderBy(x => x.StartsAt).Take(12))
+            foreach (var b in bookings.OrderBy(x => x.StartsAt).Take(16))
             {
                 var when = b.StartsAt.ToLocalTime();
                 var label = when.Date == DateTime.Today
@@ -98,8 +219,8 @@ public partial class DashboardViewModel : ObservableObject
                     string.IsNullOrWhiteSpace(b.StaffName) ? b.Type : $"{b.Type} · {b.StaffName}", b.Notes));
             }
             CalendarStatus = UpcomingBookings.Count == 0
-                ? "No bookings in the next 7 days."
-                : $"{UpcomingBookings.Count} upcoming (next 7 days)";
+                ? "No bookings in the next 14 days."
+                : $"{UpcomingBookings.Count} upcoming (next 14 days)";
         }
         catch (Exception ex)
         {
@@ -161,6 +282,22 @@ public partial class DashboardViewModel : ObservableObject
 public sealed record DashboardCardVm(string Title, string Value, string? Filter);
 public sealed record DashboardBookingVm(Guid Id, string WhenLabel, string Status, string CustomerName, string TypeLine, string? Notes);
 public sealed record MyTicketVm(Guid Id, string TicketNumber, string CustomerName, string Status, string DueLabel, bool IsOverdue);
+
+public partial class DashboardWidgetEditVm : ObservableObject
+{
+    public DashboardWidgetEditVm(string id, string title, bool visible, int order)
+    {
+        Id = id;
+        Title = title;
+        Visible = visible;
+        Order = order;
+    }
+
+    public string Id { get; }
+    public string Title { get; }
+    [ObservableProperty] private bool _visible;
+    [ObservableProperty] private int _order;
+}
 
 public partial class InventoryViewModel : ObservableObject
 {

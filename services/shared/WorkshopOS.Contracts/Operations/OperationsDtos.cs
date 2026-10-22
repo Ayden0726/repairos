@@ -68,7 +68,8 @@ public sealed record QuoteDetailDto(
     decimal MarkupAmount = 0m,
     /// <summary>Single labour/service fee for the whole job.</summary>
     decimal LabourFee = 0m,
-    decimal AdditionalTotal = 0m);
+    decimal AdditionalTotal = 0m,
+    string? DeviceImei = null);
 
 public sealed record QuoteRevisionDto(Guid Id, int RevisionNumber, DateTimeOffset CreatedAt, string? Reason);
 public sealed record QuoteAuditDto(Guid Id, string Action, string? Detail, DateTimeOffset CreatedAt, Guid? ActorUserId);
@@ -124,7 +125,8 @@ public sealed record CreateQuoteRequest(
     string? DifficultyLevelKey = null,
     Guid? ServicePricingId = null,
     decimal? DiscountPercent = null,
-    decimal? DiscountAmount = null);
+    decimal? DiscountAmount = null,
+    string? DeviceImei = null);
 
 public sealed record UpdateQuoteRequest(
     string? Issue,
@@ -143,7 +145,8 @@ public sealed record UpdateQuoteRequest(
     string? DifficultyLevelKey = null,
     Guid? ServicePricingId = null,
     decimal? DiscountPercent = null,
-    decimal? DiscountAmount = null);
+    decimal? DiscountAmount = null,
+    string? DeviceImei = null);
 
 public sealed record QuoteStatusRequest(string Status);
 public sealed record QuoteSearchRequest(string? Q, string? Status, Guid? CustomerId, Guid? RepairTicketId, DateTimeOffset? From, DateTimeOffset? To);

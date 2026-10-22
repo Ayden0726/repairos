@@ -160,10 +160,21 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _deviceBrand = string.Empty;
     [ObservableProperty] private string _deviceModel = string.Empty;
     [ObservableProperty] private string _deviceSerial = string.Empty;
+    [ObservableProperty] private string _deviceImei = string.Empty;
     /// <summary>Catalogue device type: Phone, Tablet, Laptop, PC, Other.</summary>
     [ObservableProperty] private string _selectedDeviceType = "Phone";
     public ObservableCollection<string> DeviceTypes { get; } = new(["Phone", "Tablet", "Laptop", "PC", "Other"]);
     public Action<string>? DeviceTypeChanged { get; set; }
+    public Action? DeviceBrandModelChanged { get; set; }
+
+    // IMEI lookup (shown when Settings → Device ID → Show on quotes)
+    [ObservableProperty] private bool _showImeiLookup;
+    [ObservableProperty] private bool _imeiAdvancedLookupAvailable;
+    [ObservableProperty] private bool _imeiUseAdvanced;
+    [ObservableProperty] private bool _isLookingUpImei;
+    [ObservableProperty] private string? _imeiStatus;
+    [ObservableProperty] private string? _imeiResultSummary;
+    [ObservableProperty] private bool _hasImeiResult;
     [ObservableProperty] private string _issue = string.Empty;
     [ObservableProperty] private string _customerNotes = string.Empty;
     [ObservableProperty] private string _internalNotes = string.Empty;
@@ -277,6 +288,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
         try
         {
             await LoadPricingSettingsAsync();
+            await LoadImeiSettingsAsync();
 
             var services = await _api.GetAsync<ServicePricingDto[]>("api/pricing/services");
             Services.Clear();
@@ -317,6 +329,101 @@ public partial class QuoteBuilderViewModel : ObservableObject
             await RecalcAsync();
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+
+    private async Task LoadImeiSettingsAsync()
+    {
+        ShowImeiLookup = false;
+        ImeiAdvancedLookupAvailable = false;
+        try
+        {
+            var settings = await _api.GetAsync<DeviceIdentificationSettingsDto>("api/device-identification/settings");
+            ShowImeiLookup = settings.Enabled && settings.ShowOnQuotes;
+            ImeiAdvancedLookupAvailable = settings.AdvancedLookupEnabled;
+            if (!ImeiAdvancedLookupAvailable)
+                ImeiUseAdvanced = false;
+        }
+        catch
+        {
+            // Staff without settings.view still get lookup if tickets.create — try a soft validate later.
+            ShowImeiLookup = true;
+        }
+    }
+
+    [RelayCommand]
+    private async Task LookupImeiAsync()
+    {
+        ImeiStatus = null;
+        ImeiResultSummary = null;
+        HasImeiResult = false;
+        if (string.IsNullOrWhiteSpace(DeviceImei))
+        {
+            ImeiStatus = "Enter a 15-digit IMEI first.";
+            return;
+        }
+
+        IsLookingUpImei = true;
+        try
+        {
+            var validate = await _api.PostAsync<ImeiValidateRequest, ImeiValidateResultDto>(
+                "api/device-identification/validate", new ImeiValidateRequest(DeviceImei.Trim()));
+            if (!validate.IsValid)
+            {
+                ImeiStatus = validate.Message ?? "IMEI failed Luhn check.";
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(validate.NormalizedImei))
+                DeviceImei = validate.NormalizedImei;
+
+            var result = await _api.PostAsync<ImeiLookupRequest, ImeiLookupResultDto>(
+                "api/device-identification/lookup",
+                new ImeiLookupRequest(DeviceImei.Trim(), ImeiUseAdvanced && ImeiAdvancedLookupAvailable));
+
+            if (!result.Success && string.Equals(result.VerificationStatus, "Manual", StringComparison.OrdinalIgnoreCase) == false)
+            {
+                ImeiStatus = result.Message ?? result.ErrorCode ?? "Lookup failed.";
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Brand))
+                DeviceBrand = result.Brand!;
+            if (!string.IsNullOrWhiteSpace(result.Model))
+                DeviceModel = result.Model!;
+            if (!string.IsNullOrWhiteSpace(result.DeviceCategory))
+            {
+                SelectedDeviceType = result.DeviceCategory.Trim() switch
+                {
+                    "Phone" or "Smartphone" or "Mobile" => "Phone",
+                    "Tablet" => "Tablet",
+                    "Laptop" or "Notebook" => "Laptop",
+                    "PC" or "Desktop" => "PC",
+                    _ => SelectedDeviceType
+                };
+            }
+
+            DeviceBrandModelChanged?.Invoke();
+
+            var dup = result.Duplicates is { Count: > 0 }
+                ? $" · {result.Duplicates.Count} possible duplicate(s) in shop"
+                : "";
+            ImeiResultSummary =
+                $"{result.Brand} {result.Model}".Trim() +
+                (string.IsNullOrWhiteSpace(result.ModelNumber) ? "" : $" ({result.ModelNumber})") +
+                $" · {result.VerificationStatus}" +
+                (result.FromCache ? " · cached" : "") +
+                dup;
+            HasImeiResult = !string.IsNullOrWhiteSpace(ImeiResultSummary);
+            ImeiStatus = result.Message ?? (result.Success ? "Lookup complete — brand/model filled where available." : "Manual entry may still be needed.");
+        }
+        catch (Exception ex)
+        {
+            ImeiStatus = ex.Message;
+        }
+        finally
+        {
+            IsLookingUpImei = false;
+        }
     }
 
     private async Task LoadPricingSettingsAsync()
@@ -415,6 +522,7 @@ public partial class QuoteBuilderViewModel : ObservableObject
         DeviceBrand = q.DeviceBrand ?? string.Empty;
         DeviceModel = q.DeviceModel ?? string.Empty;
         DeviceSerial = q.DeviceSerial ?? string.Empty;
+        DeviceImei = q.DeviceImei ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(q.DeviceCategory))
         {
             SelectedDeviceType = q.DeviceCategory.Trim() switch
@@ -745,9 +853,10 @@ public partial class QuoteBuilderViewModel : ObservableObject
             {
                 var deviceCat = string.Equals(SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
                     ? null : SelectedDeviceType;
+                var imei = string.IsNullOrWhiteSpace(DeviceImei) ? null : DeviceImei.Trim();
                 var updated = await _api.PutAsync<UpdateQuoteRequest, QuoteDetailDto>($"api/quotes/{id}",
                     new UpdateQuoteRequest(Issue, CustomerNotes, InternalNotes, DeviceBrand, DeviceModel, DeviceSerial,
-                        deviceCat, null, lines, "Save", labour, markup));
+                        deviceCat, null, lines, "Save", labour, markup, DeviceImei: imei));
                 await LoadQuoteAsync(updated.Id);
                 StatusMessage = "Quote saved.";
             }
@@ -755,10 +864,11 @@ public partial class QuoteBuilderViewModel : ObservableObject
             {
                 var deviceCat = string.Equals(SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
                     ? null : SelectedDeviceType;
+                var imei = string.IsNullOrWhiteSpace(DeviceImei) ? null : DeviceImei.Trim();
                 var created = await _api.PostAsync<CreateQuoteRequest, QuoteDetailDto>("api/quotes",
                     new CreateQuoteRequest(customerId, RepairTicketId, Issue, CustomerNotes, InternalNotes,
                         DeviceBrand, DeviceModel, DeviceSerial, deviceCat, DefaultValidityDays, lines,
-                        null, labour, markup));
+                        null, labour, markup, DeviceImei: imei));
                 await LoadQuoteAsync(created.Id);
                 StatusMessage = $"Created {created.Number}";
             }

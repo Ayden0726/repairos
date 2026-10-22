@@ -97,7 +97,8 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
             DailyLookupLimit = Math.Clamp(request.DailyLookupLimit, 0, 100_000),
             EstimatedBasicCost = request.EstimatedBasicCost,
             EstimatedAdvancedCost = request.EstimatedAdvancedCost,
-            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim()
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+            ShowOnQuotes = request.ShowOnQuotes
         };
 
         await DbSeed.SetSettingAsync(_db, SettingKeys.DeviceIdentification, stored, actorId, ct);
@@ -122,7 +123,8 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
                 stored.AdvancedServiceId,
                 stored.CacheEnabled,
                 stored.CacheTtlDays,
-                stored.DailyLookupLimit
+                stored.DailyLookupLimit,
+                stored.ShowOnQuotes
             },
             ct: ct);
 
@@ -703,7 +705,7 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
         new(s.Enabled, s.Provider, !string.IsNullOrWhiteSpace(s.ApiKeyEncrypted),
             s.BasicLookupEnabled, s.AdvancedLookupEnabled, s.BasicServiceId, s.AdvancedServiceId,
             s.CacheEnabled, s.CacheTtlDays, s.DailyLookupLimit, lookupsToday,
-            s.EstimatedBasicCost, s.EstimatedAdvancedCost, s.Notes);
+            s.EstimatedBasicCost, s.EstimatedAdvancedCost, s.Notes, s.ShowOnQuotes);
 
     public static string? NormalizeImei(string? raw)
     {
@@ -754,6 +756,7 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
         public decimal? EstimatedBasicCost { get; set; } = 0.02m;
         public decimal? EstimatedAdvancedCost { get; set; }
         public string? Notes { get; set; }
+        public bool ShowOnQuotes { get; set; } = true;
     }
 
     private sealed record MappedFields(

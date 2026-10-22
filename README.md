@@ -2,7 +2,7 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Current version: 1.2.34** (API + Windows client) · Repo: [Ayden0726/repairos](https://github.com/Ayden0726/repairos)
+**Current version: 1.2.35** (API + Windows client) · Repo: [Ayden0726/repairos](https://github.com/Ayden0726/repairos)
 
 Australian English, **AUD**, **GST**, financial year **July–June**.
 
@@ -20,7 +20,7 @@ WorkshopOS runs your shop’s day-to-day work on **your own server**:
 
 Nothing is required from a SaaS cloud — data stays on your machine / LAN.
 
-### What’s new in 1.2.34
+### What’s new in 1.2.35
 
 | Area | Change |
 | --- | --- |
@@ -29,7 +29,9 @@ Nothing is required from a SaaS cloud — data stays on your machine / LAN.
 | Expenses | Full expenses module (GST-aware, recurring, reports, WinUI) |
 | Raspberry Pi | Multi-arch Docker images + low-memory compose overlay + swap helper for Pi 3B+ |
 | GitHub sync | One-shot PowerShell: overlay → push `main` + tag → client zip + `Setup.exe` |
-| Version | API + client unified at **1.2.34**; connect banner no longer stuck on 1.2.25 |
+| Version | API + client unified at **1.2.35**; connect banner no longer stuck on 1.2.25 |
+| Quotes | Configurable **IMEI lookup** on the quote builder (Settings → Device ID) |
+| Dashboard | Per-user modular layout + calendar widget |
 
 ## How it works
 
@@ -62,9 +64,9 @@ Features: **[docs/FEATURES.md](docs/FEATURES.md)** · Pricing & quotes: **[docs/
 
 ```powershell
 $r = 'C:\Users\ayden\src\repairos'
-$z = "$env:TEMP\WorkshopOS-1.2.34-github-sync.zip"
+$z = "$env:TEMP\WorkshopOS-1.2.35-github-sync.zip"
 New-Item -ItemType Directory -Force -Path $r | Out-Null
-Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.34-github-sync.zip' -OutFile $z
+Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip' -OutFile $z
 Expand-Archive -Path $z -DestinationPath $r -Force
 powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1"
 ```
@@ -73,16 +75,16 @@ What that does:
 
 1. Overlays the agent sync zip onto your local clone  
 2. Commits and pushes to `https://github.com/Ayden0726/repairos` (`main`)  
-3. Tags **`v1.2.34`** (release workflow may run)  
+3. Tags **`v1.2.35`** (release workflow may run)  
 4. Builds the Windows client zip **and** `Setup.exe`
 
 Outputs:
 
 | Artifact | Path |
 | --- | --- |
-| Client zip | `packaging\dist\WorkshopOS-Client-win-x64-v1.2.34.zip` |
-| Installer | `packaging\dist\WorkshopOS-Setup-1.2.34.exe` |
-| Extracted run | `%USERPROFILE%\Desktop\WorkshopOS-Client-1.2.34\` |
+| Client zip | `packaging\dist\WorkshopOS-Client-win-x64-v1.2.35.zip` |
+| Installer | `packaging\dist\WorkshopOS-Setup-1.2.35.exe` |
+| Extracted run | `%USERPROFILE%\Desktop\WorkshopOS-Client-1.2.35\` |
 
 Useful flags:
 
@@ -190,7 +192,7 @@ chmod +x scripts/*.sh
 ### Shop PCs (prebuilt installer)
 
 1. Go to **[GitHub Releases](https://github.com/Ayden0726/repairos/releases)**
-2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.34.exe`)
+2. Download **`WorkshopOS-Setup-x.y.z.exe`** (e.g. `WorkshopOS-Setup-1.2.35.exe`)
 3. Run the installer on each Windows 10/11 **x64** PC
 4. Enter the pairing code from `/connect`, or tap **Find on this network**
 
@@ -207,7 +209,7 @@ Then relaunch and pair again.
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\install-client-windows.ps1 -WithInstaller
 # or:
-powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\packaging\build-client.ps1 -Configuration Release -Version 1.2.34
+powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\packaging\build-client.ps1 -Configuration Release -Version 1.2.35
 ```
 
 ---
@@ -222,7 +224,7 @@ powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\packaging\b
 | Accountant export | Expenses toolbar → CSV |
 | Pricing / tax / services | **Settings → Pricing / Tax / Services** |
 
-If keys used to “disappear” after a redeploy, that was usually a missing or rotated encryption key — fixed in 1.2.34. Read **[docs/SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md)**.
+If keys used to “disappear” after a redeploy, that was usually a missing or rotated encryption key — fixed in 1.2.35. Read **[docs/SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md)**.
 
 ## First-run wizard & staff
 

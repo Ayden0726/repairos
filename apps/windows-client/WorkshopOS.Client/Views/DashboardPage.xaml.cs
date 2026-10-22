@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WorkshopOS.Client.Services;
 using WorkshopOS.Contracts.Operations;
@@ -34,5 +35,20 @@ public sealed partial class DashboardPage : Page
     {
         if (e.ClickedItem is MyTicketVm ticket)
             Frame.Navigate(typeof(RepairDetailPage), ticket.Id);
+    }
+
+    private void OpenCalendar_Click(object sender, RoutedEventArgs e) =>
+        Frame.Navigate(typeof(CalendarPage));
+
+    private void MoveUp_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: DashboardWidgetEditVm widget })
+            ViewModel.MoveWidgetUpCommand.Execute(widget);
+    }
+
+    private void MoveDown_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: DashboardWidgetEditVm widget })
+            ViewModel.MoveWidgetDownCommand.Execute(widget);
     }
 }

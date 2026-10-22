@@ -25,6 +25,7 @@ public sealed partial class SettingsPage : Page
     private bool _taxLoaded;
     private bool _posLoaded;
     private bool _credentialsLoaded;
+    private bool _deviceIdLoaded;
     private bool _connectionHealthLoaded;
     private string? _initialSection;
     private readonly ObservableCollection<ModuleToggleItem> _moduleToggles = new();
@@ -110,6 +111,9 @@ public sealed partial class SettingsPage : Page
             SelectPivotTag("pos");
         else if (string.Equals(_initialSection, "integrations", StringComparison.OrdinalIgnoreCase))
             SelectPivotTag("integrations");
+        else if (string.Equals(_initialSection, "deviceid", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(_initialSection, "device", StringComparison.OrdinalIgnoreCase))
+            SelectPivotTag("deviceid");
         else if (string.Equals(_initialSection, "users", StringComparison.OrdinalIgnoreCase))
             SelectPivotTag("users");
         else if (string.Equals(_initialSection, "backups", StringComparison.OrdinalIgnoreCase))
@@ -205,6 +209,11 @@ public sealed partial class SettingsPage : Page
         {
             _credentialsLoaded = true;
             await LoadCredentialsAsync();
+        }
+        else if (string.Equals(tag, "deviceid", StringComparison.OrdinalIgnoreCase))
+        {
+            _deviceIdLoaded = true;
+            await LoadDeviceIdAsync();
         }
         else if (string.Equals(tag, "users", StringComparison.OrdinalIgnoreCase) && !_usersLoaded)
         {
@@ -1159,6 +1168,94 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             CredErrorText.Text = ex.Message;
+        }
+    }
+
+    private async void ReloadDeviceId_Click(object sender, RoutedEventArgs e) => await LoadDeviceIdAsync();
+
+    private async Task LoadDeviceIdAsync()
+    {
+        DeviceIdErrorText.Text = string.Empty;
+        DeviceIdStatusText.Text = "Loading Device ID settings…";
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var s = await api.GetAsync<DeviceIdentificationSettingsDto>("api/device-identification/settings");
+            DeviceIdEnabledToggle.IsOn = s.Enabled;
+            DeviceIdShowOnQuotesToggle.IsOn = s.ShowOnQuotes;
+            DeviceIdBasicToggle.IsOn = s.BasicLookupEnabled;
+            DeviceIdAdvancedToggle.IsOn = s.AdvancedLookupEnabled;
+            DeviceIdCacheToggle.IsOn = s.CacheEnabled;
+            DeviceIdCacheDaysBox.Text = s.CacheTtlDays.ToString();
+            DeviceIdDailyLimitBox.Text = s.DailyLookupLimit.ToString();
+            DeviceIdNotesBox.Text = s.Notes ?? string.Empty;
+            DeviceIdApiKeyBox.Password = string.Empty;
+            DeviceIdClearKeyCheck.IsChecked = false;
+            DeviceIdConfiguredText.Text = s.ApiKeyConfigured
+                ? $"API key configured · provider {s.Provider} · {s.LookupsToday} lookup(s) today"
+                : $"No API key stored · provider {s.Provider}";
+            DeviceIdStatusText.Text = "Loaded Device ID settings.";
+        }
+        catch (Exception ex)
+        {
+            DeviceIdErrorText.Text = ex.Message;
+            DeviceIdStatusText.Text = string.Empty;
+        }
+    }
+
+    private async void SaveDeviceId_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceIdErrorText.Text = string.Empty;
+        try
+        {
+            _ = int.TryParse(DeviceIdCacheDaysBox.Text, out var cacheDays);
+            _ = int.TryParse(DeviceIdDailyLimitBox.Text, out var dailyLimit);
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var saved = await api.PutAsync<UpdateDeviceIdentificationSettingsRequest, DeviceIdentificationSettingsDto>(
+                "api/device-identification/settings",
+                new UpdateDeviceIdentificationSettingsRequest(
+                    DeviceIdEnabledToggle.IsOn,
+                    "imei.info",
+                    string.IsNullOrWhiteSpace(DeviceIdApiKeyBox.Password) ? null : DeviceIdApiKeyBox.Password,
+                    DeviceIdClearKeyCheck.IsChecked == true,
+                    DeviceIdBasicToggle.IsOn,
+                    DeviceIdAdvancedToggle.IsOn,
+                    0,
+                    null,
+                    DeviceIdCacheToggle.IsOn,
+                    cacheDays <= 0 ? 90 : cacheDays,
+                    dailyLimit < 0 ? 0 : dailyLimit,
+                    null,
+                    null,
+                    string.IsNullOrWhiteSpace(DeviceIdNotesBox.Text) ? null : DeviceIdNotesBox.Text.Trim(),
+                    DeviceIdShowOnQuotesToggle.IsOn));
+            DeviceIdStatusText.Text = saved.ShowOnQuotes
+                ? "Saved. IMEI lookup panel is shown on the quote builder."
+                : "Saved. IMEI lookup panel is hidden on quotes.";
+            DeviceIdApiKeyBox.Password = string.Empty;
+            DeviceIdClearKeyCheck.IsChecked = false;
+            await LoadDeviceIdAsync();
+        }
+        catch (Exception ex)
+        {
+            DeviceIdErrorText.Text = ex.Message;
+        }
+    }
+
+    private async void TestDeviceId_Click(object sender, RoutedEventArgs e)
+    {
+        DeviceIdErrorText.Text = string.Empty;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var result = await api.PostAsync<DeviceIdentificationTestResultDto>("api/device-identification/test");
+            DeviceIdStatusText.Text = result.Success
+                ? result.Message
+                : $"Test failed: {result.Message}";
+        }
+        catch (Exception ex)
+        {
+            DeviceIdErrorText.Text = ex.Message;
         }
     }
 

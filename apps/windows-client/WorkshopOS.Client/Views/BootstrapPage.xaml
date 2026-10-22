@@ -21,7 +21,7 @@
         </StackPanel>
       </Grid>
       <Border Background="{ThemeResource WorkshopAccentSoftBrush}" Padding="10,6" CornerRadius="4" HorizontalAlignment="Center">
-        <TextBlock x:Name="BuildBanner" Text="Client 1.2.34" FontSize="14" FontWeight="SemiBold"
+        <TextBlock x:Name="BuildBanner" Text="Client 1.2.35" FontSize="14" FontWeight="SemiBold"
                    Foreground="{ThemeResource WorkshopAccentBrush}" />
       </Border>
       <TextBlock x:Name="StatusText" Text="Opening connect screen…"

@@ -24,6 +24,7 @@ public class Quote : SoftDeleteEntity
     public string? DeviceBrand { get; set; }
     public string? DeviceModel { get; set; }
     public string? DeviceSerial { get; set; }
+    public string? DeviceImei { get; set; }
     public string? DeviceCategory { get; set; }
     /// <summary>Parts sell after job markup (synced with PartsSellTotal).</summary>
     public decimal PartsSubtotal { get; set; }
