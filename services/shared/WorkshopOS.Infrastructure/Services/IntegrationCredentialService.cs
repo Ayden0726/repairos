@@ -31,13 +31,16 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
     private readonly IAuditService _audit;
     private readonly IHttpClientFactory _http;
     private readonly ILogger<IntegrationCredentialService> _log;
+    private readonly IIntegrationHealthService _health;
 
     public IntegrationCredentialService(
         WorkshopDbContext db, SecretProtector protector, IAuditService audit,
-        IHttpClientFactory http, ILogger<IntegrationCredentialService> log)
+        IHttpClientFactory http, ILogger<IntegrationCredentialService> log,
+        IIntegrationHealthService health)
     {
         _db = db;
         _protector = protector;
+        _health = health;
         _audit = audit;
         _http = http;
         _log = log;
@@ -142,7 +145,7 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             return new TestIntegrationCredentialResponse(false, row.LastError, row.LastTestedAt.Value);
         }
 
-        if (!_protector.TryDecrypt(row.SecretCipher, out var secretsJson, out var decryptError))
+        if (!_protector.TryDecrypt(row.SecretCipher, out var secretsJson, out var decryptError, out var usedLegacy))
         {
             row.LastError = decryptError;
             row.ConnectionStatus = "Error";
@@ -150,6 +153,19 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             await _audit.WriteAsync(actorId, "integrations.credential.test_fail", "IntegrationCredential", row.Id.ToString(),
                 newValue: new { row.ProviderKey, reason = "decrypt_failed" }, ct: ct);
             return new TestIntegrationCredentialResponse(false, decryptError!, row.LastTestedAt.Value);
+        }
+
+        if (usedLegacy && secretsJson is not null)
+        {
+            try
+            {
+                row.SecretCipher = _protector.Encrypt(secretsJson);
+                _log.LogInformation("Re-wrapped integration credential {Provider} under Encryption:Key after legacy decrypt.", key);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Legacy decrypt ok for {Provider} but rewrap failed", key);
+            }
         }
 
         var (ok, message) = await RunTestAsync(key, row.PublicConfigJson, secretsJson!, ct);
@@ -168,6 +184,7 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, ok ? "integrations.credential.test_ok" : "integrations.credential.test_fail",
             "IntegrationCredential", row.Id.ToString(), newValue: new { row.ProviderKey, ok }, ct: ct);
+        await _health.RecordAsync(key, ok, message, actorId, ct);
         return new TestIntegrationCredentialResponse(ok, message, row.LastTestedAt.Value);
     }
 
@@ -177,11 +194,33 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         var row = await _db.IntegrationCredentials.AsNoTracking()
             .FirstOrDefaultAsync(c => c.ProviderKey == key && c.ArchivedAt == null && c.IsEnabled, ct);
         if (row is null || !row.HasSecret) return null;
-        if (!_protector.TryDecrypt(row.SecretCipher, out var json, out _))
+        if (!_protector.TryDecrypt(row.SecretCipher, out var json, out _, out var usedLegacy) || json is null)
             return null;
+
+        if (usedLegacy)
+        {
+            try
+            {
+                var tracked = await _db.IntegrationCredentials
+                    .FirstOrDefaultAsync(c => c.Id == row.Id, ct);
+                if (tracked is not null)
+                {
+                    tracked.SecretCipher = _protector.Encrypt(json);
+                    await _db.SaveChangesAsync(ct);
+                    _log.LogInformation(
+                        "Re-wrapped integration credential {Provider} under Encryption:Key after legacy decrypt.",
+                        key);
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Legacy decrypt ok for {Provider} but rewrap failed", key);
+            }
+        }
+
         try
         {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json!)
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(json)
                    ?? new Dictionary<string, string>();
         }
         catch

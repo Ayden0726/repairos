@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Workshop;
 
 namespace WorkshopOS.Client.Views;
@@ -233,6 +234,9 @@ public partial class NewRepairViewModel : ObservableObject
     [ObservableProperty] private string _model = string.Empty;
     [ObservableProperty] private string _issue = string.Empty;
     [ObservableProperty] private string _serial = string.Empty;
+    [ObservableProperty] private string _imei = string.Empty;
+    [ObservableProperty] private string? _repeatRepairBanner;
+    [ObservableProperty] private bool _hasRepeatRepair;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isSaving;
     /// <summary>Catalogue device type label shown in the combo: Phone, Tablet, Laptop, PC, Other.</summary>
@@ -420,7 +424,7 @@ public partial class NewRepairViewModel : ObservableObject
                 string.IsNullOrWhiteSpace(Brand) ? "Unknown" : Brand.Trim(),
                 string.IsNullOrWhiteSpace(Model) ? "Device" : Model.Trim(),
                 string.IsNullOrWhiteSpace(Serial) ? null : Serial.Trim(),
-                null,
+                string.IsNullOrWhiteSpace(Imei) ? null : Imei.Trim(),
                 SelectedServiceIds.Count == 0 ? null : SelectedServiceIds,
                 SelectedServiceIds.Count == 0 ? null : SelectedServiceIds.Select(id =>
                     new RepairServiceSelectionDto(id, ServiceNotes, string.IsNullOrWhiteSpace(ServicePartsNotes) ? null : ServicePartsNotes)).ToList()));
@@ -428,6 +432,44 @@ public partial class NewRepairViewModel : ObservableObject
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { IsSaving = false; }
+    }
+
+    [RelayCommand]
+    private async Task CheckImeiHistoryAsync()
+    {
+        RepeatRepairBanner = null;
+        HasRepeatRepair = false;
+        if (string.IsNullOrWhiteSpace(Imei))
+            return;
+        try
+        {
+            var validate = await _api.PostAsync<ImeiValidateRequest, ImeiValidateResultDto>(
+                "api/device-identification/validate", new ImeiValidateRequest(Imei.Trim()));
+            if (!string.IsNullOrWhiteSpace(validate.NormalizedImei))
+                Imei = validate.NormalizedImei;
+            if (!validate.IsValid)
+            {
+                RepeatRepairBanner = validate.Message ?? "IMEI failed validation.";
+                HasRepeatRepair = true;
+                return;
+            }
+            var hits = validate.Duplicates?.Take(8).ToList() ?? [];
+            if (hits.Count == 0)
+            {
+                RepeatRepairBanner = "No prior jobs or stock records for this IMEI.";
+                HasRepeatRepair = false;
+                return;
+            }
+            RepeatRepairBanner = "Repeat / known device — prior history: " +
+                string.Join(" · ", hits.Select(h =>
+                    $"{h.Source}: {h.TicketNumber ?? h.Label}{(h.CreatedAt is DateTimeOffset t ? $" ({t:d})" : "")}"));
+            HasRepeatRepair = true;
+        }
+        catch (Exception ex)
+        {
+            RepeatRepairBanner = ex.Message;
+            HasRepeatRepair = true;
+        }
     }
 }
 
@@ -446,6 +488,11 @@ public partial class RepairDetailViewModel : ObservableObject
     public ObservableCollection<LookupDto> Statuses { get; } = new();
     public ObservableCollection<LookupDto> Priorities { get; } = new();
     public ObservableCollection<StaffLookupDto> Technicians { get; } = new();
+    public ObservableCollection<QaRowVm> QaItems { get; } = new();
+    public ObservableCollection<RepairAttachmentDto> Attachments { get; } = new();
+    public ObservableCollection<RepairSignatureDto> Signatures { get; } = new();
+    [ObservableProperty] private string _signerName = string.Empty;
+    [ObservableProperty] private string _photoCaption = string.Empty;
     [ObservableProperty] private LookupDto? _selectedStatus;
     [ObservableProperty] private LookupDto? _selectedPriority;
     [ObservableProperty] private StaffLookupDto? _selectedTechnician;
@@ -471,8 +518,42 @@ public partial class RepairDetailViewModel : ObservableObject
             Diagnosis = Repair.Diagnosis ?? string.Empty;
             Recommended = Repair.RecommendedRepair ?? string.Empty;
             AccessoriesSummary = BuildAccessories(Repair);
+            await LoadQaAsync(id);
+            await LoadMediaAsync(id);
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+
+    private async Task LoadQaAsync(Guid ticketId)
+    {
+        QaItems.Clear();
+        try
+        {
+            var items = await _api.GetAsync<IReadOnlyList<QaItemDto>>($"api/repairs/{ticketId}/qa");
+            foreach (var i in items)
+                QaItems.Add(new QaRowVm(i));
+        }
+        catch
+        {
+            /* QA optional on older servers */
+        }
+    }
+
+    private async Task LoadMediaAsync(Guid ticketId)
+    {
+        Attachments.Clear();
+        Signatures.Clear();
+        try
+        {
+            var atts = await _api.GetAsync<IReadOnlyList<RepairAttachmentDto>>($"api/repairs/{ticketId}/media/attachments");
+            foreach (var a in atts) Attachments.Add(a);
+            var sigs = await _api.GetAsync<IReadOnlyList<RepairSignatureDto>>($"api/repairs/{ticketId}/media/signatures");
+            foreach (var s in sigs) Signatures.Add(s);
+        }
+        catch
+        {
+            /* media optional on older servers */
+        }
     }
 
     private static string BuildAccessories(RepairDetailDto r)
@@ -593,4 +674,124 @@ public partial class RepairDetailViewModel : ObservableObject
             Error = ex.Message;
         }
     }
+
+    [RelayCommand]
+    private async Task PrintLabelAsync()
+    {
+        if (Repair is null) return;
+        Error = null;
+        try
+        {
+            var html = await _api.GetRawAsync($"api/labels/repair/{Repair.Id}");
+            var dir = Path.Combine(Path.GetTempPath(), "WorkshopOS");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{Repair.TicketNumber.Replace('/', '-')}-label.html");
+            await File.WriteAllTextAsync(path, html);
+            var success = await Windows.System.Launcher.LaunchUriAsync(new Uri(path));
+            StatusMessage = success ? "Opened repair label for printing." : $"Label saved: {path}";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task SetQaAsync(QaRowVm? row)
+    {
+        if (Repair is null || row is null || string.IsNullOrWhiteSpace(row.SelectedResult)) return;
+        Error = null;
+        try
+        {
+            var updated = await _api.PostAsync<SetQaResultRequest, QaItemDto>(
+                $"api/repairs/{Repair.Id}/qa/{row.Id}",
+                new SetQaResultRequest(row.SelectedResult));
+            row.Apply(updated);
+            StatusMessage = $"QA “{row.Item}” → {row.SelectedResult}";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task AddPhotoNoteAsync()
+    {
+        if (Repair is null) return;
+        Error = null;
+        try
+        {
+            // Placeholder 1×1 PNG so staff can log a photo note without a file picker on this build.
+            const string tinyPng =
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+            var caption = string.IsNullOrWhiteSpace(PhotoCaption) ? "Intake photo note" : PhotoCaption.Trim();
+            await _api.PostAsync<UploadRepairAttachmentRequest, RepairAttachmentDto>(
+                $"api/repairs/{Repair.Id}/media/attachments",
+                new UploadRepairAttachmentRequest($"photo-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.png", "image/png", tinyPng, caption, "Photo"));
+            PhotoCaption = string.Empty;
+            StatusMessage = "Photo attachment recorded.";
+            await LoadMediaAsync(Repair.Id);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CaptureSignatureAsync()
+    {
+        if (Repair is null) return;
+        if (string.IsNullOrWhiteSpace(SignerName))
+        {
+            Error = "Enter the signer name.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            const string tinyPng =
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+            await _api.PostAsync<CaptureRepairSignatureRequest, RepairSignatureDto>(
+                $"api/repairs/{Repair.Id}/media/signatures",
+                new CaptureRepairSignatureRequest(SignerName.Trim(), "Intake", tinyPng));
+            SignerName = string.Empty;
+            StatusMessage = "Intake signature captured.";
+            await LoadMediaAsync(Repair.Id);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task OpenConditionReportAsync()
+    {
+        if (Repair is null) return;
+        Error = null;
+        try
+        {
+            var html = await _api.GetRawAsync($"api/repairs/{Repair.Id}/media/condition-report");
+            var dir = Path.Combine(Path.GetTempPath(), "WorkshopOS");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{Repair.TicketNumber.Replace('/', '-')}-condition.html");
+            await File.WriteAllTextAsync(path, html);
+            var ok = await Windows.System.Launcher.LaunchUriAsync(new Uri(path));
+            StatusMessage = ok ? "Opened condition report." : $"Saved: {path}";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public sealed partial class QaRowVm : ObservableObject
+{
+    public Guid Id { get; }
+    public string Item { get; }
+    public ObservableCollection<string> ResultOptions { get; } = new(["NotTested", "Pass", "Fail", "NotApplicable"]);
+    [ObservableProperty] private string _selectedResult = "NotTested";
+
+    public QaRowVm(QaItemDto dto)
+    {
+        Id = dto.Id;
+        Item = dto.Item;
+        SelectedResult = dto.Result;
+    }
+
+    public void Apply(QaItemDto dto) => SelectedResult = dto.Result;
 }

@@ -55,10 +55,21 @@ Encryption__Key: ${Encryption__Key}
 
 **Do not** change `Encryption__Key` after credentials have been saved unless you run a planned key-rotation procedure. Changing it without re-encrypting makes existing ciphertexts unreadable.
 
+### Legacy JWT → Encryption__Key migration (automatic)
+
+Older installs encrypted secrets with `Jwt:SigningKey` when `Encryption__Key` was missing. After you add a dedicated `Encryption__Key`, Workshop OS still decrypts those ciphertexts by trying:
+
+1. `Encryption__Key` (primary)
+2. `Encryption__PreviousKey` (optional, planned rotation)
+3. `Jwt:SigningKey` (legacy fallback)
+
+On a successful legacy decrypt (IMEI Device ID settings, integration credential test/use), the secret is **re-wrapped** under `Encryption__Key` so the problem does not recur. Keep both keys stable during that first post-upgrade period.
+
 ### Recovery if the key is lost
 
 1. Restore `Encryption__Key` from your secrets backup / password manager.
-2. If the key is permanently lost, encrypted credentials cannot be recovered — re-enter each integration key via **Settings → Integrations → API Credentials**. Existing ciphertexts are left untouched (never auto-deleted).
+2. If you rotated keys, set `Encryption__PreviousKey` to the old value temporarily, restart, open **Settings → Device ID** (or Test connection) so secrets rewrap, then remove `Encryption__PreviousKey`.
+3. If the key is permanently lost, encrypted credentials cannot be recovered — re-enter each integration key via **Settings → Integrations → API Credentials** and **Settings → Device ID**. Existing ciphertexts are left untouched (never auto-deleted).
 
 ## Using API Credentials
 

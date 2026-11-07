@@ -80,13 +80,12 @@ public sealed class DashboardService : IDashboardService
             .Where(p => p.PaidAt >= since30)
             .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
 
-        // COGS proxy: cost of consumed stock (negative deltas) in window; else interim 45% COGS (55% GP).
+        // COGS from consumed stock only — never invent a percentage when costs are unknown.
         var consumeCost = await _db.InventoryTransactions.AsNoTracking()
             .Include(t => t.Item)
             .Where(t => t.CreatedAt >= since30 && t.QuantityDelta < 0)
             .SumAsync(t => (decimal?)(Math.Abs(t.QuantityDelta) * t.Item.Cost), ct) ?? 0m;
-        // Interim until stock costs land on invoices: when no consume txs, GrossProfit ≈ Revenue * 0.55.
-        var grossProfit30 = consumeCost > 0 ? revenue30 - consumeCost : Math.Round(revenue30 * 0.55m, 2, MidpointRounding.AwayFromZero);
+        var grossProfit30 = revenue30 - consumeCost;
 
         var cards = new DashboardCardsDto(openJobs, dueToday, awaitingApproval, waitingParts, readyPickup, overdue, revenue30, grossProfit30);
 
@@ -320,15 +319,16 @@ public sealed class InventoryService : IInventoryService
         }
 
         if (availableOnly)
-            query = query.Where(i => (i.QuantityOnHand - i.QuantityReserved) > 0);
+            query = query.Where(i => (i.QuantityOnHand - i.QuantityReserved - i.QuantityQuarantined) > 0);
 
         return await query
             .OrderBy(i => i.Sku)
             .Select(i => new InventoryListItemDto(
                 i.Id, i.Sku, i.Name, i.Category, i.QuantityOnHand, i.QuantityReserved,
-                Math.Max(0, i.QuantityOnHand - i.QuantityReserved), i.MinimumStock, i.SellPrice,
-                (i.QuantityOnHand - i.QuantityReserved) <= i.MinimumStock,
-                i.Cost, i.Supplier != null ? i.Supplier.Name : null, i.ComponentType))
+                Math.Max(0, i.QuantityOnHand - i.QuantityReserved - i.QuantityQuarantined), i.MinimumStock, i.SellPrice,
+                (i.QuantityOnHand - i.QuantityReserved - i.QuantityQuarantined) <= i.MinimumStock,
+                i.Cost, i.Supplier != null ? i.Supplier.Name : null, i.ComponentType,
+                i.QuantityQuarantined, i.LocationBin, i.Barcode))
             .ToListAsync(ct);
     }
 
@@ -487,6 +487,86 @@ public sealed class InventoryService : IInventoryService
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "inventory.release", "InventoryReservation", reservationId.ToString(), ct: ct);
     }
+
+    public async Task<InventoryListItemDto> TransferBinAsync(Guid id, TransferBinRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == id && i.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+        var previous = item.LocationBin;
+        item.LocationBin = string.IsNullOrWhiteSpace(request.LocationBin) ? null : request.LocationBin.Trim();
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Transfer",
+            QuantityDelta = 0,
+            Reason = $"Bin {previous ?? "—"} → {item.LocationBin ?? "—"}",
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "inventory.transfer", "InventoryItem", id.ToString(),
+            newValue: new { previous, item.LocationBin }, ct: ct);
+        return (await ListAsync(ct: ct)).First(x => x.Id == id);
+    }
+
+    public async Task<InventoryListItemDto> QuarantineAsync(Guid id, QuarantineStockRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.Quantity == 0) throw new ValidationAppException("Quantity cannot be zero.");
+        var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == id && i.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Inventory item was not found.", 404);
+        if (request.Quantity > 0)
+        {
+            if (item.Available < request.Quantity)
+                throw new ValidationAppException("Not enough available stock to quarantine.");
+            item.QuantityQuarantined += request.Quantity;
+        }
+        else
+        {
+            var release = Math.Abs(request.Quantity);
+            if (item.QuantityQuarantined < release)
+                throw new ValidationAppException("Cannot release more than quarantined quantity.");
+            item.QuantityQuarantined -= release;
+        }
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        _db.InventoryTransactions.Add(new InventoryTransaction
+        {
+            ItemId = item.Id,
+            Type = "Quarantine",
+            QuantityDelta = 0,
+            Reason = string.IsNullOrWhiteSpace(request.Reason) ? "Quarantine adjustment" : request.Reason.Trim(),
+            ActorUserId = actorId
+        });
+        await _db.SaveChangesAsync(ct);
+        return (await ListAsync(ct: ct)).First(x => x.Id == id);
+    }
+
+    public async Task<InventoryListItemDto?> FindByBarcodeAsync(string code, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+        var c = code.Trim();
+        var item = await _db.InventoryItems.AsNoTracking()
+            .Include(i => i.Supplier)
+            .FirstOrDefaultAsync(i => i.ArchivedAt == null &&
+                (i.Barcode == c || i.Sku == c), ct);
+        if (item is null) return null;
+        return new InventoryListItemDto(
+            item.Id, item.Sku, item.Name, item.Category, item.QuantityOnHand, item.QuantityReserved,
+            item.Available, item.MinimumStock, item.SellPrice,
+            item.Available <= item.MinimumStock, item.Cost, item.Supplier?.Name, item.ComponentType,
+            item.QuantityQuarantined, item.LocationBin, item.Barcode);
+    }
+
+    public async Task<IReadOnlyList<InventoryReservationDto>> ListReservationsAsync(Guid? itemId = null, CancellationToken ct = default)
+    {
+        var q = _db.InventoryReservations.AsNoTracking().Include(r => r.Item)
+            .Where(r => r.Status == "Reserved");
+        if (itemId is Guid id) q = q.Where(r => r.ItemId == id);
+        return await q.OrderByDescending(r => r.CreatedAt).Take(100)
+            .Select(r => new InventoryReservationDto(
+                r.Id, r.ItemId, r.Item.Sku, r.Item.Name, r.Quantity, r.Status,
+                r.TicketId, r.PcBuildId, r.CreatedAt))
+            .ToListAsync(ct);
+    }
 }
 
 public sealed class PurchasingService : IPurchasingService
@@ -537,6 +617,22 @@ public sealed class PurchasingService : IPurchasingService
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new PurchaseOrderListItemDto(p.Id, p.Number, p.Supplier.Name, p.Status, p.Total, p.ExpectedAt))
             .ToListAsync(ct);
+
+    public async Task<PurchaseOrderDetailDto> GetPurchaseOrderAsync(Guid id, CancellationToken ct = default)
+    {
+        var po = await _db.PurchaseOrders.AsNoTracking()
+            .Include(p => p.Supplier)
+            .Include(p => p.Lines)
+            .FirstOrDefaultAsync(p => p.Id == id && p.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Purchase order was not found.", 404);
+        return MapPoDetail(po);
+    }
+
+    private static PurchaseOrderDetailDto MapPoDetail(PurchaseOrder po) =>
+        new(po.Id, po.Number, po.SupplierId, po.Supplier.Name, po.Status, po.Total, po.Shipping,
+            po.ExpectedAt, po.ReceivedAt,
+            po.Lines.OrderBy(l => l.Description).Select(l =>
+                new PurchaseOrderLineDto(l.Id, l.ItemId, l.Description, l.QuantityOrdered, l.QuantityReceived, l.UnitCost)).ToList());
 
     public async Task<PurchaseOrderListItemDto> CreatePurchaseOrderAsync(CreatePurchaseOrderRequest request, Guid actorId, CancellationToken ct = default)
     {
@@ -612,8 +708,166 @@ public sealed class PurchasingService : IPurchasingService
         if (allReceived) po.ReceivedAt = DateTimeOffset.UtcNow;
         po.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "po.receive", "PurchaseOrder", po.Id.ToString(),
+            newValue: new { line.Id, request.Quantity, po.Status }, ct: ct);
         return new PurchaseOrderListItemDto(po.Id, po.Number, po.Supplier.Name, po.Status, po.Total, po.ExpectedAt);
     }
+}
+
+public sealed class StocktakeService : IStocktakeService
+{
+    private readonly WorkshopDbContext _db;
+    private readonly IAuditService _audit;
+
+    public StocktakeService(WorkshopDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<StocktakeListItemDto>> ListAsync(CancellationToken ct = default)
+    {
+        var rows = await _db.StocktakeSessions.AsNoTracking()
+            .Where(s => s.ArchivedAt == null)
+            .OrderByDescending(s => s.StartedAt)
+            .Take(50)
+            .Select(s => new
+            {
+                s.Id,
+                s.Number,
+                s.Status,
+                LineCount = s.Lines.Count,
+                CountedLines = s.Lines.Count(l => l.CountedQty != null),
+                s.StartedAt,
+                s.CompletedAt,
+                s.Notes
+            })
+            .ToListAsync(ct);
+        return rows.Select(s => new StocktakeListItemDto(
+            s.Id, s.Number, s.Status, s.LineCount, s.CountedLines, s.StartedAt, s.CompletedAt, s.Notes)).ToList();
+    }
+
+    public async Task<StocktakeDetailDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var s = await _db.StocktakeSessions.AsNoTracking()
+            .Include(x => x.Lines).ThenInclude(l => l.InventoryItem)
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Stocktake was not found.", 404);
+        return Map(s);
+    }
+
+    public async Task<StocktakeDetailDto> CreateAsync(CreateStocktakeRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var open = await _db.StocktakeSessions.AnyAsync(s => s.ArchivedAt == null && s.Status == "Open", ct);
+        if (open)
+            throw new ValidationAppException("An open stocktake already exists. Complete or cancel it first.");
+
+        var items = await _db.InventoryItems.AsNoTracking()
+            .Where(i => i.ArchivedAt == null)
+            .OrderBy(i => i.Sku)
+            .ToListAsync(ct);
+        if (items.Count == 0)
+            throw new ValidationAppException("No inventory items to count.");
+
+        var number = await DocumentNumbering.NextAsync(_db, "STK", ct);
+        var session = new StocktakeSession
+        {
+            Number = number,
+            Status = "Open",
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+            StartedById = actorId,
+            StartedAt = DateTimeOffset.UtcNow
+        };
+        foreach (var item in items)
+        {
+            session.Lines.Add(new StocktakeLine
+            {
+                InventoryItemId = item.Id,
+                ExpectedQty = item.QuantityOnHand
+            });
+        }
+        _db.StocktakeSessions.Add(session);
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "stocktake.create", "StocktakeSession", session.Id.ToString(),
+            newValue: new { session.Number, lines = session.Lines.Count }, ct: ct);
+        return await GetAsync(session.Id, ct);
+    }
+
+    public async Task<StocktakeLineDto> SetCountAsync(Guid sessionId, Guid lineId, SetStocktakeCountRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        if (request.CountedQty < 0)
+            throw new ValidationAppException("Counted quantity cannot be negative.");
+        var session = await _db.StocktakeSessions.Include(s => s.Lines).ThenInclude(l => l.InventoryItem)
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Stocktake was not found.", 404);
+        if (session.Status != "Open")
+            throw new ValidationAppException("Stocktake is not open.");
+        var line = session.Lines.FirstOrDefault(l => l.Id == lineId)
+            ?? throw new AppException("not_found", "Stocktake line was not found.", 404);
+        line.CountedQty = request.CountedQty;
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return MapLine(line);
+    }
+
+    public async Task<StocktakeDetailDto> CompleteAsync(Guid id, Guid actorId, CancellationToken ct = default)
+    {
+        var session = await _db.StocktakeSessions.Include(s => s.Lines).ThenInclude(l => l.InventoryItem)
+            .FirstOrDefaultAsync(s => s.Id == id && s.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Stocktake was not found.", 404);
+        if (session.Status != "Open")
+            throw new ValidationAppException("Stocktake is not open.");
+        if (session.Lines.Any(l => l.CountedQty is null))
+            throw new ValidationAppException("Count every line before completing the stocktake.");
+
+        foreach (var line in session.Lines)
+        {
+            var counted = line.CountedQty!.Value;
+            var delta = counted - line.ExpectedQty;
+            if (delta == 0) continue;
+            var item = await _db.InventoryItems.FirstAsync(i => i.Id == line.InventoryItemId, ct);
+            item.QuantityOnHand = counted;
+            item.UpdatedAt = DateTimeOffset.UtcNow;
+            _db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                ItemId = item.Id,
+                Type = "Stocktake",
+                QuantityDelta = delta,
+                Reason = $"Stocktake {session.Number}",
+                ActorUserId = actorId
+            });
+        }
+
+        session.Status = "Completed";
+        session.CompletedAt = DateTimeOffset.UtcNow;
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "stocktake.complete", "StocktakeSession", session.Id.ToString(),
+            newValue: new { session.Number }, ct: ct);
+        return await GetAsync(session.Id, ct);
+    }
+
+    public async Task<StocktakeDetailDto> CancelAsync(Guid id, Guid actorId, CancellationToken ct = default)
+    {
+        var session = await _db.StocktakeSessions.FirstOrDefaultAsync(s => s.Id == id && s.ArchivedAt == null, ct)
+            ?? throw new AppException("not_found", "Stocktake was not found.", 404);
+        if (session.Status != "Open")
+            throw new ValidationAppException("Only open stocktakes can be cancelled.");
+        session.Status = "Cancelled";
+        session.CompletedAt = DateTimeOffset.UtcNow;
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "stocktake.cancel", "StocktakeSession", session.Id.ToString(), ct: ct);
+        return await GetAsync(session.Id, ct);
+    }
+
+    private static StocktakeDetailDto Map(StocktakeSession s) =>
+        new(s.Id, s.Number, s.Status, s.Notes, s.StartedAt, s.CompletedAt,
+            s.Lines.OrderBy(l => l.InventoryItem.Sku).Select(MapLine).ToList());
+
+    private static StocktakeLineDto MapLine(StocktakeLine l) =>
+        new(l.Id, l.InventoryItemId, l.InventoryItem.Sku, l.InventoryItem.Name, l.InventoryItem.LocationBin,
+            l.ExpectedQty, l.CountedQty, l.CountedQty is int c ? c - l.ExpectedQty : null);
 }
 
 public sealed class NotificationService : INotificationService
@@ -1234,7 +1488,7 @@ public sealed class UsedTechService : IUsedTechService
     private static readonly string[] AllowedStatuses =
     [
         "Purchased", "Inspection", "Parts Required", "Repair", "Testing", "Cleaning",
-        "Final Quality Check", "Ready for Sale", "Listed", "Reserved", "Sold",
+        "Final Quality Check", "Ready for Sale", "Listed", "Reserved", "Sold", "Parts Only",
         // Legacy aliases kept for existing Windows client rows
         "In stock", "Refurbishing"
     ];
@@ -1294,7 +1548,7 @@ public sealed class UsedTechService : IUsedTechService
             throw new ValidationAppException("Brand/model or summary is required.");
 
         var condition = NormalizeCondition(request.ConditionGrade);
-        var status = string.IsNullOrWhiteSpace(request.Status) ? "In stock" : NormalizeStatus(request.Status);
+        var status = string.IsNullOrWhiteSpace(request.Status) ? "Purchased" : NormalizeStatus(request.Status);
 
         var stockId = await NextRefurbStockIdAsync(ct);
         var d = new UsedDevice
@@ -1321,7 +1575,10 @@ public sealed class UsedTechService : IUsedTechService
             RepairTicketId = request.RepairTicketId,
             StockId = stockId,
             Sku = stockId,
-            PurchaseDate = DateTimeOffset.UtcNow
+            PurchaseDate = DateTimeOffset.UtcNow,
+            BatteryHealthPercent = NormalizeBattery(request.BatteryHealthPercent),
+            FunctionalGrade = Norm(request.FunctionalGrade),
+            IsPartsOnly = request.IsPartsOnly
         };
         _db.UsedDevices.Add(d);
         await _db.SaveChangesAsync(ct);
@@ -1361,11 +1618,22 @@ public sealed class UsedTechService : IUsedTechService
         d.SellerCustomerId = request.SellerCustomerId;
         d.CustomerId = request.CustomerId;
         d.RepairTicketId = request.RepairTicketId;
+        d.BatteryHealthPercent = NormalizeBattery(request.BatteryHealthPercent);
+        d.FunctionalGrade = Norm(request.FunctionalGrade);
+        d.IsPartsOnly = request.IsPartsOnly;
         d.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(ct);
         await _audit.WriteAsync(actorId, "used.update", "UsedDevice", id.ToString(), ct: ct);
         return await MapDetailAsync(d, ct);
+    }
+
+    private static int? NormalizeBattery(int? pct)
+    {
+        if (pct is null) return null;
+        if (pct < 0 || pct > 100)
+            throw new ValidationAppException("Battery health must be between 0 and 100, or left blank when untested.");
+        return pct;
     }
 
     public async Task<UsedDeviceDetailDto> UpdateStatusAsync(Guid id, UpdateUsedStatusRequest request, Guid actorId, CancellationToken ct = default)
@@ -1495,7 +1763,7 @@ public sealed class UsedTechService : IUsedTechService
         var match = AllowedStatuses.FirstOrDefault(a => a.Equals(v, StringComparison.OrdinalIgnoreCase));
         if (match is null)
             throw new ValidationAppException(
-                "Status must be one of: Purchased, Inspection, Parts Required, Repair, Testing, Cleaning, Final Quality Check, Ready for Sale, Listed, Reserved, Sold.");
+                "Status must be one of: Purchased, Inspection, Parts Required, Repair, Testing, Cleaning, Final Quality Check, Ready for Sale, Listed, Reserved, Sold, Parts Only.");
         return match;
     }
 
@@ -1525,9 +1793,7 @@ public sealed class QaService : IQaService
             .FirstOrDefaultAsync(t => t.Id == ticketId && t.ArchivedAt == null, ct)
             ?? throw new AppException("not_found", "Repair was not found.", 404);
 
-        if (ticket.Status.Key is not ("testing" or "ready_pickup"))
-            return;
-
+        // Seed whenever empty so WinUI QA can run before the job reaches testing.
         if (await _db.QaChecklists.AnyAsync(q => q.TicketId == ticketId, ct))
             return;
 
@@ -1584,8 +1850,12 @@ public sealed class ReportService : IReportService
         var cogs = await _db.InventoryTransactions.AsNoTracking().Include(t => t.Item)
             .Where(t => t.CreatedAt >= start && t.CreatedAt <= end && t.QuantityDelta < 0)
             .SumAsync(t => (decimal?)(Math.Abs(t.QuantityDelta) * t.Item.Cost), ct) ?? 0m;
-        if (cogs == 0 && revenue > 0)
-            cogs = Math.Round(revenue * 0.45m, 2, MidpointRounding.AwayFromZero); // interim
+        var hasConsumeTx = await _db.InventoryTransactions.AsNoTracking()
+            .AnyAsync(t => t.CreatedAt >= start && t.CreatedAt <= end && t.QuantityDelta < 0, ct);
+        var cogsKnown = hasConsumeTx;
+        var cogsNote = cogsKnown
+            ? null
+            : "No stock-consume costs in this period — COGS shown as $0 (not estimated). Gross profit equals revenue until inventory costs are recorded.";
 
         var completed = await _db.RepairTickets.AsNoTracking()
             .CountAsync(t => t.ArchivedAt == null && t.CompletedAt >= start && t.CompletedAt <= end, ct);
@@ -1602,7 +1872,7 @@ public sealed class ReportService : IReportService
             .Select(g => new NamedMoneyDto(g.Key, g.Sum(x => x.Amount)))
             .OrderByDescending(x => x.Amount).ToList();
 
-        return new ReportSummaryDto(start, end, revenue, cogs, revenue - cogs, completed, opened, byStatus, byMethod);
+        return new ReportSummaryDto(start, end, revenue, cogs, revenue - cogs, completed, opened, byStatus, byMethod, cogsKnown, cogsNote);
     }
 }
 
@@ -1695,7 +1965,8 @@ public sealed class BackupService : IBackupService
 
     public async Task<IReadOnlyList<BackupDto>> ListAsync(CancellationToken ct = default) =>
         await _db.BackupRecords.AsNoTracking().OrderByDescending(b => b.StartedAt).Take(50)
-            .Select(b => new BackupDto(b.Id, b.Type, b.Status, b.Path, b.StartedAt, b.FinishedAt))
+            .Select(b => new BackupDto(b.Id, b.Type, b.Status, b.Path, b.StartedAt, b.FinishedAt,
+                b.Method, b.SizeBytes, b.Verified, b.Sha256, b.Detail))
             .ToListAsync(ct);
 
     public async Task<BackupDto> CreateAsync(Guid actorId, CancellationToken ct = default)
@@ -1708,13 +1979,11 @@ public sealed class BackupService : IBackupService
         Directory.CreateDirectory(dir);
 
         var started = DateTimeOffset.UtcNow;
-        var fileName = $"workshopos-backup-{started:yyyyMMdd-HHmmss}.sql.marker";
-        var path = Path.Combine(dir, fileName);
+        var stamp = started.ToString("yyyyMMdd-HHmmss");
         var record = new BackupRecord
         {
             Type = "Manual",
             Status = "Running",
-            Path = path,
             StartedById = actorId,
             StartedAt = started
         };
@@ -1723,31 +1992,179 @@ public sealed class BackupService : IBackupService
 
         try
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("-- WorkshopOS backup marker (logical dump placeholder)");
-            sb.AppendLine($"-- StartedAt: {started:O}");
-            sb.AppendLine($"-- Actor: {actorId}");
-            sb.AppendLine($"-- Database: {_db.Database.GetDbConnection().Database}");
-            sb.AppendLine("-- NOTE: Full pg_dump integration lands with hardened ops; this marker proves backup plumbing.");
-            await File.WriteAllTextAsync(path, sb.ToString(), ct);
+            var pgPath = Path.Combine(dir, $"workshopos-backup-{stamp}.dump");
+            var (pgOk, pgDetail) = await TryPgDumpAsync(pgPath, ct);
+            string path;
+            string method;
+            string detail;
+            if (pgOk)
+            {
+                path = pgPath;
+                method = "pg_dump";
+                detail = pgDetail;
+            }
+            else
+            {
+                path = Path.Combine(dir, $"workshopos-backup-{stamp}.json.gz");
+                await WriteLogicalDumpAsync(path, actorId, started, ct);
+                method = "LogicalJsonGzip";
+                detail = string.IsNullOrWhiteSpace(pgDetail)
+                    ? "Logical JSON gzip dump (pg_dump unavailable)."
+                    : $"Logical JSON gzip dump. pg_dump skipped: {pgDetail}";
+            }
 
-            record.Status = "Completed";
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length <= 0)
+                throw new InvalidOperationException("Backup file was not written or is empty.");
+
+            var hash = await Sha256FileAsync(path, ct);
+            record.Path = path;
+            record.Method = method;
+            record.SizeBytes = info.Length;
+            record.Sha256 = hash;
+            record.Verified = await VerifyBackupFileAsync(path, hash, ct);
+            record.Status = record.Verified ? "Completed" : "Failed";
+            record.Detail = record.Verified
+                ? detail
+                : "File written but verification failed (hash/size mismatch).";
             record.FinishedAt = DateTimeOffset.UtcNow;
-            record.Detail = "Marker file written";
             await _db.SaveChangesAsync(ct);
-            await _audit.WriteAsync(actorId, "backup.create", "BackupRecord", record.Id.ToString(), newValue: new { path }, ct: ct);
+
+            if (!record.Verified)
+                throw new AppException("backup_unverified", "Backup file failed verification.", 500);
+
+            await _audit.WriteAsync(actorId, "backup.create", "BackupRecord", record.Id.ToString(),
+                newValue: new { path, method, record.SizeBytes, record.Sha256, record.Verified }, ct: ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not AppException)
         {
             record.Status = "Failed";
             record.Detail = ex.Message;
             record.FinishedAt = DateTimeOffset.UtcNow;
+            record.Verified = false;
             await _db.SaveChangesAsync(ct);
             throw new AppException("backup_failed", $"Backup failed: {ex.Message}", 500);
         }
 
-        return new BackupDto(record.Id, record.Type, record.Status, record.Path, record.StartedAt, record.FinishedAt);
+        return MapBackup(record);
     }
+
+    private static BackupDto MapBackup(BackupRecord b) =>
+        new(b.Id, b.Type, b.Status, b.Path, b.StartedAt, b.FinishedAt, b.Method, b.SizeBytes, b.Verified, b.Sha256, b.Detail);
+
+    private async Task<(bool Ok, string Detail)> TryPgDumpAsync(string path, CancellationToken ct)
+    {
+        var cs = _config.GetConnectionString("Default");
+        if (string.IsNullOrWhiteSpace(cs))
+            return (false, "ConnectionStrings:Default missing.");
+
+        try
+        {
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder(cs);
+            var pgDump = FindOnPath("pg_dump");
+            if (pgDump is null)
+                return (false, "pg_dump not found on PATH (install postgresql-client on the API host).");
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = pgDump,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            psi.ArgumentList.Add("-h");
+            psi.ArgumentList.Add(string.IsNullOrWhiteSpace(builder.Host) ? "127.0.0.1" : builder.Host);
+            psi.ArgumentList.Add("-p");
+            psi.ArgumentList.Add(builder.Port.ToString());
+            psi.ArgumentList.Add("-U");
+            psi.ArgumentList.Add(builder.Username ?? "workshopos");
+            psi.ArgumentList.Add("-d");
+            psi.ArgumentList.Add(builder.Database ?? "workshopos");
+            psi.ArgumentList.Add("-F");
+            psi.ArgumentList.Add("c");
+            psi.ArgumentList.Add("-f");
+            psi.ArgumentList.Add(path);
+            if (!string.IsNullOrEmpty(builder.Password))
+                psi.Environment["PGPASSWORD"] = builder.Password;
+
+            using var proc = System.Diagnostics.Process.Start(psi)
+                ?? throw new InvalidOperationException("Failed to start pg_dump.");
+            var stderr = await proc.StandardError.ReadToEndAsync(ct);
+            await proc.WaitForExitAsync(ct);
+            if (proc.ExitCode != 0)
+                return (false, $"pg_dump exit {proc.ExitCode}: {Truncate(stderr, 240)}");
+            return (true, "Custom-format pg_dump completed.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private async Task WriteLogicalDumpAsync(string path, Guid actorId, DateTimeOffset started, CancellationToken ct)
+    {
+        var payload = new
+        {
+            product = "WorkshopOS",
+            format = "LogicalJsonGzip",
+            startedAt = started,
+            actorId,
+            database = _db.Database.GetDbConnection().Database,
+            note = "Logical export when pg_dump is unavailable. Prefer pg_dump for full disaster recovery.",
+            counts = new
+            {
+                customers = await _db.Customers.AsNoTracking().CountAsync(ct),
+                repairs = await _db.RepairTickets.AsNoTracking().CountAsync(ct),
+                inventory = await _db.InventoryItems.AsNoTracking().CountAsync(ct),
+                invoices = await _db.Invoices.AsNoTracking().CountAsync(ct),
+                quotes = await _db.Quotes.AsNoTracking().CountAsync(ct),
+                usedDevices = await _db.UsedDevices.AsNoTracking().CountAsync(ct),
+                payments = await _db.Payments.AsNoTracking().CountAsync(ct),
+                users = await _db.Users.AsNoTracking().CountAsync(ct)
+            },
+            customers = await _db.Customers.AsNoTracking().OrderBy(c => c.CreatedAt).Take(5000)
+                .Select(c => new { c.Id, c.DisplayName, c.Email, c.Phone, c.CreatedAt, c.ArchivedAt }).ToListAsync(ct),
+            repairs = await _db.RepairTickets.AsNoTracking().OrderByDescending(t => t.CreatedAt).Take(5000)
+                .Select(t => new { t.Id, t.TicketNumber, t.CustomerId, t.DeviceId, t.StatusId, t.ReportedIssue, t.CreatedAt, t.CompletedAt }).ToListAsync(ct),
+            inventory = await _db.InventoryItems.AsNoTracking().OrderBy(i => i.Sku).Take(10000)
+                .Select(i => new { i.Id, i.Sku, i.Name, i.QuantityOnHand, i.Cost, i.SellPrice, i.LocationBin }).ToListAsync(ct)
+        };
+
+        await using var fs = File.Create(path);
+        await using var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionLevel.Optimal);
+        await JsonSerializer.SerializeAsync(gz, payload, new JsonSerializerOptions { WriteIndented = false }, ct);
+    }
+
+    private static async Task<string> Sha256FileAsync(string path, CancellationToken ct)
+    {
+        await using var fs = File.OpenRead(path);
+        var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fs, ct);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static async Task<bool> VerifyBackupFileAsync(string path, string expectedSha, CancellationToken ct)
+    {
+        if (!File.Exists(path)) return false;
+        var info = new FileInfo(path);
+        if (info.Length <= 0) return false;
+        var actual = await Sha256FileAsync(path, ct);
+        return string.Equals(actual, expectedSha, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? FindOnPath(string fileName)
+    {
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(dir, fileName);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    private static string Truncate(string s, int max) =>
+        string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..max] + "…";
 
     public async Task<SystemHealthDetailDto> HealthDetailAsync(CancellationToken ct = default)
     {
@@ -1756,6 +2173,11 @@ public sealed class BackupService : IBackupService
 
         var lastBackup = await _db.BackupRecords.AsNoTracking()
             .Where(b => b.Status == "Completed")
+            .OrderByDescending(b => b.FinishedAt)
+            .Select(b => (DateTimeOffset?)b.FinishedAt)
+            .FirstOrDefaultAsync(ct);
+        var lastVerified = await _db.BackupRecords.AsNoTracking()
+            .Where(b => b.Status == "Completed" && b.Verified)
             .OrderByDescending(b => b.FinishedAt)
             .Select(b => (DateTimeOffset?)b.FinishedAt)
             .FirstOrDefaultAsync(ct);
@@ -1769,6 +2191,35 @@ public sealed class BackupService : IBackupService
             WorkshopOS.Contracts.Common.ProductVersions.Api,
             WorkshopOS.Contracts.Common.ProductVersions.ClientMinimum,
             lastBackup,
-            backupCount);
+            backupCount,
+            lastVerified);
+    }
+
+    public async Task<BackupRestoreTestDto> RestoreTestAsync(Guid backupId, Guid actorId, CancellationToken ct = default)
+    {
+        var record = await _db.BackupRecords.FirstOrDefaultAsync(b => b.Id == backupId, ct)
+            ?? throw new AppException("not_found", "Backup was not found.", 404);
+        var exists = !string.IsNullOrWhiteSpace(record.Path) && File.Exists(record.Path);
+        long? size = exists ? new FileInfo(record.Path!).Length : null;
+        var rehash = exists ? await Sha256FileAsync(record.Path!, ct) : null;
+        var hashOk = exists && !string.IsNullOrWhiteSpace(record.Sha256) &&
+                     string.Equals(rehash, record.Sha256, StringComparison.OrdinalIgnoreCase);
+        var verified = exists && size is > 0 && hashOk;
+        record.Verified = verified;
+        if (verified && record.Status != "Completed")
+            record.Status = "Completed";
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(actorId, "backup.restore_test", "BackupRecord", backupId.ToString(),
+            newValue: new { verified, size, rehash }, ct: ct);
+
+        var detail = !exists
+            ? "Backup file missing on disk — restore drill cannot proceed."
+            : !hashOk
+                ? "File present but SHA-256 does not match recorded hash."
+                : record.Method == "pg_dump"
+                    ? "Verified custom-format dump on disk. Full restore drill: create an isolated DB and run pg_restore -d <drill_db> <file> (not executed automatically against production)."
+                    : "Verified logical JSON gzip dump on disk. Prefer pg_dump backups for full disaster recovery restores.";
+
+        return new BackupRestoreTestDto(record.Id, verified, exists, size, rehash ?? record.Sha256, detail, DateTimeOffset.UtcNow);
     }
 }

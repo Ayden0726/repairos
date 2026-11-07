@@ -192,7 +192,7 @@ public sealed class PosService : IPosService
         var (discountPercent, discountLabel) = ResolveDiscount(request, posSettings);
 
         // --- Retail cart lines ---
-        var prepared = new List<(Guid? ItemId, InventoryItem? Item, string Description, string? Sku, decimal Qty, decimal UnitPrice, decimal LineTotal)>();
+        var prepared = new List<(Guid? ItemId, InventoryItem? Item, Guid? UsedId, UsedDevice? Used, string Description, string? Sku, decimal Qty, decimal UnitPrice, decimal LineTotal)>();
         if (hasLines)
         {
             foreach (var line in request.Lines!)
@@ -201,15 +201,30 @@ public sealed class PosService : IPosService
                     throw new ValidationAppException("Line quantity must be positive.");
 
                 InventoryItem? item = null;
+                UsedDevice? used = null;
                 string description;
                 string? sku = null;
                 decimal unitPrice;
 
-                if (line.InventoryItemId is Guid itemId)
+                if (line.UsedDeviceId is Guid usedId)
+                {
+                    used = await _db.UsedDevices.FirstOrDefaultAsync(u => u.Id == usedId && u.ArchivedAt == null, ct)
+                        ?? throw new AppException("not_found", "Refurbished device was not found.", 404);
+                    if (used.Status is "Sold")
+                        throw new ValidationAppException($"{used.Brand} {used.Model} is already sold.");
+                    if (line.Quantity != 1)
+                        throw new ValidationAppException("Refurbished devices sell as quantity 1.");
+                    description = string.IsNullOrWhiteSpace(line.Description)
+                        ? $"{used.Brand} {used.Model}".Trim()
+                        : line.Description.Trim();
+                    sku = used.StockId ?? used.Sku;
+                    unitPrice = line.UnitPrice ?? used.ExpectedResale;
+                }
+                else if (line.InventoryItemId is Guid itemId)
                 {
                     item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == itemId && i.ArchivedAt == null, ct)
                         ?? throw new AppException("not_found", "Inventory item was not found.", 404);
-                    var available = item.QuantityOnHand - item.QuantityReserved;
+                    var available = item.Available;
                     if (available < (int)Math.Ceiling(line.Quantity))
                         throw new ValidationAppException($"Not enough stock for {item.Sku} (available {available}).");
                     description = string.IsNullOrWhiteSpace(line.Description) ? item.Name : line.Description.Trim();
@@ -228,7 +243,7 @@ public sealed class PosService : IPosService
 
                 if (unitPrice < 0) throw new ValidationAppException("Unit price cannot be negative.");
                 var lineTotal = PricingCalculator.RoundMoney(line.Quantity * unitPrice);
-                prepared.Add((item?.Id, item, description, sku, line.Quantity, PricingCalculator.RoundMoney(unitPrice), lineTotal));
+                prepared.Add((item?.Id, item, used?.Id, used, description, sku, line.Quantity, PricingCalculator.RoundMoney(unitPrice), lineTotal));
             }
         }
 
@@ -499,6 +514,7 @@ public sealed class PosService : IPosService
             sale.Lines.Add(new PosSaleLine
             {
                 InventoryItemId = p.ItemId,
+                UsedDeviceId = p.UsedId,
                 Description = p.Description,
                 Sku = p.Sku,
                 Quantity = p.Qty,
@@ -523,6 +539,16 @@ public sealed class PosService : IPosService
                 Reason = $"POS {posNumber}",
                 ActorUserId = actorId
             });
+        }
+
+        foreach (var usedId in prepared.Where(p => p.UsedId.HasValue).Select(p => p.UsedId!.Value).Distinct())
+        {
+            var used = await _db.UsedDevices.FirstAsync(u => u.Id == usedId, ct);
+            var line = prepared.First(p => p.UsedId == usedId);
+            used.Status = "Sold";
+            used.ActualSalePrice = line.UnitPrice;
+            used.SoldAt = DateTimeOffset.UtcNow;
+            used.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
         if (repairId is not null && repairPayAmount > 0)
@@ -582,6 +608,19 @@ public sealed class PosService : IPosService
                 Reason = $"Void {sale.Number}",
                 ActorUserId = actorId
             });
+        }
+
+        foreach (var line in sale.Lines.Where(l => l.UsedDeviceId.HasValue))
+        {
+            var used = await _db.UsedDevices.FirstOrDefaultAsync(u => u.Id == line.UsedDeviceId, ct);
+            if (used is null) continue;
+            if (string.Equals(used.Status, "Sold", StringComparison.OrdinalIgnoreCase))
+            {
+                used.Status = "Ready for Sale";
+                used.ActualSalePrice = null;
+                used.SoldAt = null;
+                used.UpdatedAt = DateTimeOffset.UtcNow;
+            }
         }
 
         sale.Status = "Voided";
@@ -773,7 +812,7 @@ public sealed class PosService : IPosService
             s.Status, s.PaymentMethod, s.PaymentProvider, s.ProviderReference, s.ProviderStatus,
             s.Subtotal, s.GstAmount, s.Total, s.AmountPaid, s.Notes, s.CreatedAt,
             s.Lines.OrderBy(l => l.SortOrder).Select(l => new PosSaleLineDto(
-                l.Id, l.InventoryItemId, l.Description, l.Sku, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
+                l.Id, l.InventoryItemId, l.Description, l.Sku, l.Quantity, l.UnitPrice, l.LineTotal, l.UsedDeviceId)).ToList(),
             s.RepairTicketId, s.RepairTicket?.TicketNumber,
             s.DiscountLabel, s.DiscountPercent, s.DiscountAmount, s.IsDeposit, invBalance);
     }

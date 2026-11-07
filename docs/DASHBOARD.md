@@ -23,4 +23,4 @@ Each signed-in user can customise their dashboard. Layout is stored per user on 
 
 ## Calendar on the dashboard
 
-The calendar widget lists upcoming bookings for the next 14 days. Use **Open full calendar** for the dedicated Calendar page (create/edit bookings).
+The calendar widget lists upcoming bookings for the next 14 days. Use **New booking** to open the Calendar ready to schedule, or **Open full calendar** to browse the month/week grid.

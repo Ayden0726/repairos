@@ -69,7 +69,10 @@ public sealed record QuoteDetailDto(
     /// <summary>Single labour/service fee for the whole job.</summary>
     decimal LabourFee = 0m,
     decimal AdditionalTotal = 0m,
-    string? DeviceImei = null);
+    string? DeviceImei = null,
+    string? DeviceColour = null,
+    string? DeviceStorage = null,
+    string? DeviceModelNumber = null);
 
 public sealed record QuoteRevisionDto(Guid Id, int RevisionNumber, DateTimeOffset CreatedAt, string? Reason);
 public sealed record QuoteAuditDto(Guid Id, string Action, string? Detail, DateTimeOffset CreatedAt, Guid? ActorUserId);
@@ -126,7 +129,10 @@ public sealed record CreateQuoteRequest(
     Guid? ServicePricingId = null,
     decimal? DiscountPercent = null,
     decimal? DiscountAmount = null,
-    string? DeviceImei = null);
+    string? DeviceImei = null,
+    string? DeviceColour = null,
+    string? DeviceStorage = null,
+    string? DeviceModelNumber = null);
 
 public sealed record UpdateQuoteRequest(
     string? Issue,
@@ -146,7 +152,10 @@ public sealed record UpdateQuoteRequest(
     Guid? ServicePricingId = null,
     decimal? DiscountPercent = null,
     decimal? DiscountAmount = null,
-    string? DeviceImei = null);
+    string? DeviceImei = null,
+    string? DeviceColour = null,
+    string? DeviceStorage = null,
+    string? DeviceModelNumber = null);
 
 public sealed record QuoteStatusRequest(string Status);
 public sealed record QuoteSearchRequest(string? Q, string? Status, Guid? CustomerId, Guid? RepairTicketId, DateTimeOffset? From, DateTimeOffset? To);
@@ -161,7 +170,7 @@ public sealed record PaymentDto(Guid Id, string Method, decimal Amount, string? 
 public sealed record InventoryListItemDto(
     Guid Id, string Sku, string Name, string Category, int OnHand, int Reserved, int Available,
     int Minimum, decimal SellPrice, bool IsLow, decimal Cost = 0m, string? SupplierName = null,
-    string ComponentType = "Other");
+    string ComponentType = "Other", int Quarantined = 0, string? LocationBin = null, string? Barcode = null);
 public sealed record UpsertInventoryRequest(
     Guid? Id, string Sku, string? Barcode, string Name, string Category, decimal Cost, decimal SellPrice,
     int QuantityOnHand, int MinimumStock, int ReorderQuantity, string? LocationBin, Guid? SupplierId,
@@ -169,6 +178,11 @@ public sealed record UpsertInventoryRequest(
 public sealed record AdjustStockRequest(int QuantityDelta, string Reason);
 /// <summary>Reserve stock for a repair ticket or a PC build (exactly one of TicketId / PcBuildId).</summary>
 public sealed record ReserveStockRequest(Guid ItemId, int Quantity, Guid? TicketId = null, Guid? PcBuildId = null);
+public sealed record TransferBinRequest(string? LocationBin);
+public sealed record QuarantineStockRequest(int Quantity, string Reason);
+public sealed record InventoryReservationDto(
+    Guid Id, Guid ItemId, string Sku, string Name, int Quantity, string Status,
+    Guid? TicketId, Guid? PcBuildId, DateTimeOffset CreatedAt);
 
 public sealed record SupplierDto(Guid Id, string Name, string? Phone, string? Email);
 public sealed record UpsertSupplierRequest(Guid? Id, string Name, string? Contact, string? Phone, string? Email, string? Website, string? AccountNumber, string? Notes);
@@ -293,7 +307,10 @@ public sealed record CreateUsedDeviceRequest(
     string? Source,
     Guid? SellerCustomerId,
     Guid? CustomerId,
-    Guid? RepairTicketId);
+    Guid? RepairTicketId,
+    int? BatteryHealthPercent = null,
+    string? FunctionalGrade = null,
+    bool IsPartsOnly = false);
 
 public sealed record UpdateUsedDeviceRequest(
     string? Summary,
@@ -316,22 +333,122 @@ public sealed record UpdateUsedDeviceRequest(
     string? Source,
     Guid? SellerCustomerId,
     Guid? CustomerId,
-    Guid? RepairTicketId);
+    Guid? RepairTicketId,
+    int? BatteryHealthPercent = null,
+    string? FunctionalGrade = null,
+    bool IsPartsOnly = false);
+
+public sealed record PurchaseOrderLineDto(
+    Guid Id,
+    Guid? ItemId,
+    string Description,
+    int QuantityOrdered,
+    int QuantityReceived,
+    decimal UnitCost);
+
+public sealed record PurchaseOrderDetailDto(
+    Guid Id,
+    string Number,
+    Guid SupplierId,
+    string SupplierName,
+    string Status,
+    decimal Total,
+    decimal Shipping,
+    DateTimeOffset? ExpectedAt,
+    DateTimeOffset? ReceivedAt,
+    IReadOnlyList<PurchaseOrderLineDto> Lines);
+
+public sealed record StocktakeListItemDto(
+    Guid Id,
+    string Number,
+    string Status,
+    int LineCount,
+    int CountedLines,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? Notes);
+
+public sealed record StocktakeLineDto(
+    Guid Id,
+    Guid InventoryItemId,
+    string Sku,
+    string Name,
+    string? LocationBin,
+    int ExpectedQty,
+    int? CountedQty,
+    int? Variance);
+
+public sealed record StocktakeDetailDto(
+    Guid Id,
+    string Number,
+    string Status,
+    string? Notes,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    IReadOnlyList<StocktakeLineDto> Lines);
+
+public sealed record CreateStocktakeRequest(string? Notes = null);
+public sealed record SetStocktakeCountRequest(int CountedQty);
 
 public sealed record UpdateUsedStatusRequest(string Status, decimal? ActualSalePrice);
 
 public sealed record QaItemDto(Guid Id, string Item, string Result, int SortOrder);
 public sealed record SetQaResultRequest(string Result);
 
-public sealed record ReportSummaryDto(DateTimeOffset From, DateTimeOffset To, decimal Revenue, decimal CostOfGoods, decimal GrossProfit, int RepairsCompleted, int RepairsOpened, IReadOnlyList<NamedCountDto> ByStatus, IReadOnlyList<NamedMoneyDto> PaymentsByMethod);
+public sealed record ReportSummaryDto(
+    DateTimeOffset From,
+    DateTimeOffset To,
+    decimal Revenue,
+    decimal CostOfGoods,
+    decimal GrossProfit,
+    int RepairsCompleted,
+    int RepairsOpened,
+    IReadOnlyList<NamedCountDto> ByStatus,
+    IReadOnlyList<NamedMoneyDto> PaymentsByMethod,
+    /// <summary>False when no stock-consume costs were recorded — GrossProfit then equals Revenue (COGS treated as unknown 0, not invented).</summary>
+    bool CogsKnown = true,
+    string? CogsNote = null);
 public sealed record NamedCountDto(string Name, int Count);
 public sealed record NamedMoneyDto(string Name, decimal Amount);
 
 public sealed record AiAssistRequest(string Prompt, Guid? TicketId);
 public sealed record AiAssistResponse(bool Enabled, string Provider, string Output, string Disclaimer);
 
-public sealed record BackupDto(Guid Id, string Type, string Status, string? Path, DateTimeOffset StartedAt, DateTimeOffset? FinishedAt);
-public sealed record SystemHealthDetailDto(string Status, bool Database, bool WorkerHeartbeat, string ApiVersion, string ClientMinVersion, DateTimeOffset? LastBackupAt, long? BackupCount);
+public sealed record BackupDto(
+    Guid Id,
+    string Type,
+    string Status,
+    string? Path,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? FinishedAt,
+    string? Method = null,
+    long? SizeBytes = null,
+    bool Verified = false,
+    string? Sha256 = null,
+    string? Detail = null);
+public sealed record SystemHealthDetailDto(
+    string Status,
+    bool Database,
+    bool WorkerHeartbeat,
+    string ApiVersion,
+    string ClientMinVersion,
+    DateTimeOffset? LastBackupAt,
+    long? BackupCount,
+    DateTimeOffset? LastVerifiedBackupAt = null);
+
+public sealed record AuditEventDto(
+    Guid Id,
+    DateTimeOffset CreatedAt,
+    Guid? ActorUserId,
+    string? ActorName,
+    string Action,
+    string? EntityType,
+    string? EntityId,
+    string? OldValueJson,
+    string? NewValueJson,
+    string? Ip);
+
+public sealed record AuditSearchResponse(IReadOnlyList<AuditEventDto> Items, int Total);
 
 // --- POS ---
 
@@ -377,7 +494,8 @@ public sealed record PosSaleLineInputDto(
     Guid? InventoryItemId,
     string? Description,
     decimal Quantity,
-    decimal? UnitPrice);
+    decimal? UnitPrice,
+    Guid? UsedDeviceId = null);
 
 /// <summary>
 /// Retail cart and/or repair payoff. When RepairTicketId is set, Lines may be empty
@@ -403,7 +521,8 @@ public sealed record PosSaleLineDto(
     string? Sku,
     decimal Quantity,
     decimal UnitPrice,
-    decimal LineTotal);
+    decimal LineTotal,
+    Guid? UsedDeviceId = null);
 
 public sealed record PosSaleListItemDto(
     Guid Id,
@@ -458,3 +577,132 @@ public sealed record PosPayableRepairDto(
     decimal AmountPaid,
     decimal Balance,
     decimal? EstimatedPrice);
+
+// --- V2 remaining ops ---
+
+public sealed record DonorDeviceDto(
+    Guid Id, string Number, string? Brand, string? Model, string? Imei, string Status,
+    int ComponentCount, Guid? SourceUsedDeviceId, DateTimeOffset CreatedAt);
+
+public sealed record HarvestedComponentDto(
+    Guid Id, string Description, string? ConditionGrade, int Quantity,
+    Guid? InventoryItemId, string? InventorySku, DateTimeOffset HarvestedAt);
+
+public sealed record DonorDeviceDetailDto(
+    Guid Id, string Number, string? Brand, string? Model, string? Imei, string? Serial,
+    string Status, string? Notes, Guid? SourceUsedDeviceId, Guid? CustomerId,
+    IReadOnlyList<HarvestedComponentDto> Components, DateTimeOffset CreatedAt);
+
+public sealed record CreateDonorDeviceRequest(
+    string? Brand, string? Model, string? Imei, string? Serial, string? Notes,
+    Guid? SourceUsedDeviceId = null, Guid? CustomerId = null);
+
+public sealed record HarvestComponentRequest(
+    string Description, string? ConditionGrade, int Quantity = 1,
+    string? NewSku = null, decimal? Cost = null, decimal? SellPrice = null,
+    string? LocationBin = null, Guid? ExistingInventoryItemId = null);
+
+public sealed record LoanDeviceDto(
+    Guid Id, string AssetTag, string? Brand, string? Model, string? Imei, string Status, string? Notes);
+
+public sealed record LoanAgreementDto(
+    Guid Id, Guid LoanDeviceId, string AssetTag, Guid CustomerId, string CustomerName,
+    Guid? RepairTicketId, string? TicketNumber, DateTimeOffset CheckedOutAt, DateTimeOffset? DueAt,
+    DateTimeOffset? ReturnedAt, string Status, string? Notes);
+
+public sealed record UpsertLoanDeviceRequest(
+    Guid? Id, string AssetTag, string? Brand, string? Model, string? Imei, string? Serial, string? Notes);
+
+public sealed record CheckoutLoanRequest(Guid LoanDeviceId, Guid CustomerId, Guid? RepairTicketId, DateTimeOffset? DueAt, string? Notes);
+public sealed record ReturnLoanRequest(string? Notes);
+
+public sealed record WarrantyClaimDto(
+    Guid Id, string Number, Guid WarrantyRecordId, Guid CustomerId, string CustomerName,
+    Guid? RepairTicketId, string? TicketNumber, string Status, string Summary,
+    string? ResolutionNotes, DateTimeOffset OpenedAt, DateTimeOffset? ClosedAt,
+    DateTimeOffset WarrantyExpiresAt);
+
+public sealed record CreateWarrantyClaimRequest(
+    Guid WarrantyRecordId, string Summary, Guid? RepairTicketId = null);
+
+public sealed record UpdateWarrantyClaimRequest(string Status, string? ResolutionNotes);
+
+public sealed record StaffWarrantyDto(
+    Guid Id, Guid CustomerId, string CustomerName, string CoverageSummary, int WarrantyDays,
+    DateTimeOffset StartsAt, DateTimeOffset ExpiresAt, string Status, Guid? RepairTicketId, string? TicketNumber);
+
+public sealed record RefundRequestDto(
+    Guid Id, string Number, Guid? PosSaleId, string? PosSaleNumber, Guid? InvoiceId,
+    string? InvoiceNumber, decimal Amount, string Reason, string Status,
+    string? DecisionNotes, DateTimeOffset RequestedAt, DateTimeOffset? DecidedAt,
+    string? RequestedByName);
+
+public sealed record CreateRefundRequestDto(Guid? PosSaleId, Guid? InvoiceId, decimal Amount, string Reason);
+public sealed record DecideRefundRequest(bool Approve, string? DecisionNotes);
+
+public sealed record RepairAttachmentDto(
+    Guid Id, string Kind, string FileName, string ContentType, long SizeBytes,
+    string? Caption, DateTimeOffset CreatedAt);
+
+public sealed record UploadRepairAttachmentRequest(
+    string FileName, string ContentType, string Base64Content, string? Caption = null, string Kind = "Photo");
+
+public sealed record RepairSignatureDto(
+    Guid Id, string SignerName, string Purpose, DateTimeOffset SignedAt);
+
+public sealed record CaptureRepairSignatureRequest(
+    string SignerName, string Purpose, string Base64Png);
+
+public sealed record PrinterProfileDto(
+    Guid Id, string Name, string Kind, string? Connection, string? DefaultTemplate, bool IsDefault);
+
+public sealed record UpsertPrinterProfileRequest(
+    Guid? Id, string Name, string Kind, string? Connection, string? DefaultTemplate, bool IsDefault);
+
+public sealed record BatchLabelRequest(string LabelType, IReadOnlyList<Guid> Ids, bool IncludePrice = false);
+public sealed record BatchLabelResult(string CombinedHtml, int Count);
+
+public sealed record IntegrationHealthEventDto(
+    Guid Id, string ProviderKey, bool Success, string Message, DateTimeOffset CreatedAt);
+
+public sealed record BackupRestoreTestDto(
+    Guid BackupId, bool Verified, bool FileExists, long? SizeBytes, string? Sha256,
+    string Detail, DateTimeOffset TestedAt);
+
+// --- Platform (fitment / offline / multi-site) — board-level repair intentionally excluded ---
+
+public sealed record PartFitmentDto(
+    Guid Id, Guid? InventoryItemId, string? InventorySku, string? PartSku, string PartName,
+    string Brand, string Model, string? DeviceType, string? Notes, bool IsVerified);
+
+public sealed record UpsertPartFitmentRequest(
+    Guid? Id, Guid? InventoryItemId, string? PartSku, string PartName,
+    string Brand, string Model, string? DeviceType, string? Notes, bool IsVerified = true);
+
+public sealed record SyncMutationDto(
+    Guid ClientMutationId, string Method, string Path, string? BodyJson);
+
+public sealed record SyncPushRequest(IReadOnlyList<SyncMutationDto> Mutations);
+
+public sealed record SyncMutationResultDto(
+    Guid ClientMutationId, string Status, string? Error, Guid? ServerEntryId);
+
+public sealed record SyncPushResponse(IReadOnlyList<SyncMutationResultDto> Results);
+
+public sealed record SyncOutboxListItemDto(
+    Guid Id, Guid ClientMutationId, string Method, string Path, string Status,
+    string? Error, DateTimeOffset CreatedAt, DateTimeOffset? AppliedAt);
+
+public sealed record WorkshopLocationDto(
+    Guid Id, string Name, string? Phone, string? Email, string? AddressLine1,
+    string? Suburb, string? State, string? Postcode, bool IsDefault);
+
+public sealed record UpsertWorkshopLocationRequest(
+    Guid? Id, string Name, string? Phone, string? Email, string? AddressLine1,
+    string? Suburb, string? State, string? Postcode, bool IsDefault);
+
+public sealed record InventoryBinDto(
+    Guid Id, Guid? LocationId, string? LocationName, Guid? ParentBinId, string Code, string? Name, string? Notes);
+
+public sealed record UpsertInventoryBinRequest(
+    Guid? Id, Guid? LocationId, Guid? ParentBinId, string Code, string? Name, string? Notes);

@@ -383,7 +383,12 @@ public partial class ShellViewModel : ObservableObject
         ("Finance", ["expenses"]),
         ("POS", ["pos"]),
         ("Inventory", ["inventory"]),
-        ("Refurbished", ["used"]),
+        ("Refurbished", ["used", "donors"]),
+        ("Loaners", ["loans"]),
+        ("Warranty", ["warranty_claims"]),
+        ("Refunds", ["refunds"]),
+        ("Website", ["website_inbox"]),
+        ("Fitment", ["fitment"]),
         ("Reports", ["reports"])
     ];
 
@@ -401,6 +406,12 @@ public partial class ShellViewModel : ObservableObject
             ["pos"] = "pos.view",
             ["inventory"] = "inventory.view",
             ["used"] = "used.view",
+            ["donors"] = "used.view",
+            ["loans"] = "tickets.view",
+            ["warranty_claims"] = "tickets.view",
+            ["refunds"] = "payments.view",
+            ["website_inbox"] = "selltech.view",
+            ["fitment"] = "inventory.view",
             ["reports"] = "reports.view"
         };
 

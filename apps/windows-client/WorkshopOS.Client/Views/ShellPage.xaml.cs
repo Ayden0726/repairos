@@ -124,6 +124,12 @@ public sealed partial class ShellPage : Page
         "inventory" => "Inventory",
         "purchasing" => "Purchasing",
         "used" => "Refurbished",
+        "donors" => "Donors",
+        "loans" => "Loaners",
+        "warranty_claims" => "Warranty claims",
+        "refunds" => "Refunds",
+        "website_inbox" => "Website inbox",
+        "fitment" => "Part fitment",
         "customers" => "Customers",
         "reports" => "Reports",
         "ai" => "AI Analyst",
@@ -247,13 +253,31 @@ public sealed partial class ShellPage : Page
                 ContentFrame.Navigate(typeof(PosPage));
                 return;
             case "purchasing":
-                ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Purchase Orders", "api/purchase-orders"));
+                ContentFrame.Navigate(typeof(PurchaseOrdersPage));
                 return;
             case "calendar":
                 ContentFrame.Navigate(typeof(CalendarPage));
                 return;
             case "used":
                 ContentFrame.Navigate(typeof(UsedTechPage));
+                return;
+            case "donors":
+                ContentFrame.Navigate(typeof(DonorsPage));
+                return;
+            case "loans":
+                ContentFrame.Navigate(typeof(LoansPage));
+                return;
+            case "warranty_claims":
+                ContentFrame.Navigate(typeof(WarrantyClaimsPage));
+                return;
+            case "refunds":
+                ContentFrame.Navigate(typeof(RefundsPage));
+                return;
+            case "website_inbox":
+                ContentFrame.Navigate(typeof(WebsiteInboxPage));
+                return;
+            case "fitment":
+                ContentFrame.Navigate(typeof(FitmentPage));
                 return;
             case "notifications":
                 ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Notifications", "api/notifications"));
@@ -345,7 +369,7 @@ public sealed partial class ShellPage : Page
         }
         if (path.StartsWith("/purchasing", StringComparison.OrdinalIgnoreCase))
         {
-            ContentFrame.Navigate(typeof(GenericListPage), new GenericListArgs("Purchase Orders", "api/purchase-orders"));
+            ContentFrame.Navigate(typeof(PurchaseOrdersPage));
             SelectNavKey("purchasing");
             return;
         }

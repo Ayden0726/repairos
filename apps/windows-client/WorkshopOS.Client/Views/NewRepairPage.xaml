@@ -98,7 +98,20 @@
                       IsEditable="True" PlaceholderText="iPhone 13, Galaxy S23…"
                       LostFocus="ModelBox_LostFocus" />
           </Grid>
-          <TextBox Header="Serial / IMEI (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
+          <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBox Header="Serial (optional)" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
+            <TextBox Grid.Column="1" Header="IMEI (optional)" Text="{x:Bind ViewModel.Imei, Mode=TwoWay}"
+                     PlaceholderText="15 digits" LostFocus="ImeiBox_LostFocus" />
+          </Grid>
+          <Border Padding="10" CornerRadius="6"
+                  Background="{ThemeResource WorkshopAccentSoftBrush}"
+                  Visibility="{x:Bind ViewModel.HasRepeatRepair, Mode=OneWay}">
+            <TextBlock Text="{x:Bind ViewModel.RepeatRepairBanner, Mode=OneWay}"
+                       TextWrapping="Wrap" FontWeight="SemiBold" />
+          </Border>
 
           <!-- Inline service catalogue — filtered by device type -->
           <TextBlock Text="Services for this device" FontWeight="SemiBold" FontSize="16"

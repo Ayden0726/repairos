@@ -22,8 +22,12 @@
                   HorizontalAlignment="Stretch" />
         <Button Grid.Column="1" Content="Refresh" VerticalAlignment="Bottom"
                 Command="{x:Bind ViewModel.RefreshCommand}" />
+        <Button Grid.Column="2" Content="Stocktake" VerticalAlignment="Bottom"
+                Click="Stocktake_Click" />
       </Grid>
-      <ListView ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
+      <ListView ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=TwoWay}"
+                SelectionMode="Single">
         <ListView.ItemTemplate>
           <DataTemplate x:DataType="ops:InventoryListItemDto">
             <Grid Padding="4,8" ColumnSpacing="8">
@@ -51,29 +55,55 @@
     <Border Grid.Column="1" Padding="16" CornerRadius="8"
             Background="{ThemeResource WorkshopSurfaceBrush}"
             BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
-      <StackPanel Spacing="8">
-        <TextBlock Text="Add item" FontWeight="SemiBold"
-                   Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-        <TextBox Header="SKU" Text="{x:Bind ViewModel.Sku, Mode=TwoWay}" />
-        <TextBox Header="Name" Text="{x:Bind ViewModel.Name, Mode=TwoWay}" />
-        <ComboBox Header="Component type"
-                  ItemsSource="{x:Bind ViewModel.ComponentTypeOptions, Mode=OneWay}"
-                  SelectedItem="{x:Bind ViewModel.ComponentType, Mode=TwoWay}"
+      <ScrollViewer>
+        <StackPanel Spacing="8">
+          <TextBlock Text="Add item" FontWeight="SemiBold"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+          <TextBox Header="SKU" Text="{x:Bind ViewModel.Sku, Mode=TwoWay}" />
+          <TextBox Header="Name" Text="{x:Bind ViewModel.Name, Mode=TwoWay}" />
+          <ComboBox Header="Component type"
+                    ItemsSource="{x:Bind ViewModel.ComponentTypeOptions, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.ComponentType, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch" />
+          <TextBox Header="Category" Text="{x:Bind ViewModel.Category, Mode=TwoWay}" />
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBox Header="Cost" Text="{x:Bind ViewModel.Cost, Mode=TwoWay}" />
+            <TextBox Grid.Column="1" Header="Sell" Text="{x:Bind ViewModel.Sell, Mode=TwoWay}" />
+          </Grid>
+          <TextBox Header="Qty on hand" Text="{x:Bind ViewModel.QtyOnHand, Mode=TwoWay}" />
+          <Button Content="Create" Command="{x:Bind ViewModel.CreateCommand}"
+                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+
+          <TextBlock Text="Adjust selected" FontWeight="SemiBold" Margin="0,12,0,0"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+          <TextBlock Text="{x:Bind ViewModel.SelectedLabel, Mode=OneWay}" Opacity="0.75" TextWrapping="Wrap" />
+          <TextBox Header="Quantity delta (+ receive / − deduct)"
+                   Text="{x:Bind ViewModel.AdjustDelta, Mode=TwoWay}" />
+          <TextBox Header="Reason" Text="{x:Bind ViewModel.AdjustReason, Mode=TwoWay}"
+                   PlaceholderText="Received stock / stocktake / damaged…" />
+          <Button Content="Apply adjustment" Command="{x:Bind ViewModel.AdjustCommand}"
                   HorizontalAlignment="Stretch" />
-        <TextBox Header="Category" Text="{x:Bind ViewModel.Category, Mode=TwoWay}" />
-        <Grid ColumnSpacing="8">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <TextBox Header="Cost" Text="{x:Bind ViewModel.Cost, Mode=TwoWay}" />
-          <TextBox Grid.Column="1" Header="Sell" Text="{x:Bind ViewModel.Sell, Mode=TwoWay}" />
-        </Grid>
-        <TextBox Header="Qty on hand" Text="{x:Bind ViewModel.QtyOnHand, Mode=TwoWay}" />
-        <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
-                   Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
-        <Button Content="Create" Command="{x:Bind ViewModel.CreateCommand}"
-                Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
-      </StackPanel>
+          <TextBox Header="Barcode lookup" Text="{x:Bind ViewModel.BarcodeLookup, Mode=TwoWay}"
+                   PlaceholderText="Scan or type barcode" />
+          <Button Content="Find by barcode" Command="{x:Bind ViewModel.LookupBarcodeCommand}"
+                  HorizontalAlignment="Stretch" />
+          <TextBox Header="Transfer bin" Text="{x:Bind ViewModel.TransferBin, Mode=TwoWay}" />
+          <Button Content="Transfer bin" Command="{x:Bind ViewModel.TransferBinCommand}"
+                  HorizontalAlignment="Stretch" />
+          <TextBox Header="Quarantine qty (+/−)" Text="{x:Bind ViewModel.QuarantineQty, Mode=TwoWay}" />
+          <TextBox Header="Quarantine reason" Text="{x:Bind ViewModel.QuarantineReason, Mode=TwoWay}" />
+          <Button Content="Apply quarantine" Command="{x:Bind ViewModel.QuarantineCommand}"
+                  HorizontalAlignment="Stretch" />
+          <Button Content="Print part label" Command="{x:Bind ViewModel.PrintLabelCommand}"
+                  HorizontalAlignment="Stretch" />
+          <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Opacity="0.75" TextWrapping="Wrap" />
+          <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
+                     Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+      </ScrollViewer>
     </Border>
   </Grid>
 </Page>

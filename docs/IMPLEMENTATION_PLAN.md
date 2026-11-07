@@ -1,5 +1,8 @@
 # TechBench NQ Platform — Implementation Plan
 
+> **V2 master plan:** For Spec V2 coverage, phased delivery, and the living checklist, see [`docs/MASTER_SPEC_V2_PLAN.md`](MASTER_SPEC_V2_PLAN.md) (baseline WorkshopOS 1.2.40). Board-level repair is out of scope. This file retains the earlier Phase 1–18 product brief.
+
+
 **Basis:** `docs/PLATFORM_ANALYSIS.md` (WorkshopOS 1.2.27 codebase)  
 **Product direction:** Original TechBench NQ repair-business OS (RepairTree-class breadth; not a clone).  
 **Rules:** Reuse existing APIs; no fake buttons; no destructive data loss; Custom PC Builds removed from product surface (tables retained).

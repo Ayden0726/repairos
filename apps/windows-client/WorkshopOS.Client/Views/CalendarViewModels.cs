@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
@@ -76,9 +77,23 @@ public partial class CalendarWeekVm : ObservableObject
 
 public partial class CalendarViewModel : ObservableObject
 {
+    private static readonly string[] LocalDateFormats =
+    [
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd H:mm",
+        "yyyy-M-d HH:mm",
+        "yyyy-M-d H:mm",
+        "d/M/yyyy HH:mm",
+        "d/M/yyyy H:mm",
+        "dd/MM/yyyy HH:mm",
+        "dd/MM/yyyy H:mm"
+    ];
+
     private readonly ApiClient _api;
+    private readonly AuthSession _session;
     private readonly List<BookingDto> _cache = new();
     private bool _suppressDaySelection;
+    private bool _openAsNewBooking;
 
     [ObservableProperty] private string _monthTitle = string.Empty;
     [ObservableProperty] private string? _statusMessage;
@@ -97,6 +112,8 @@ public partial class CalendarViewModel : ObservableObject
     [ObservableProperty] private string _bookingEndLocal = string.Empty;
     [ObservableProperty] private CalendarBookingChipVm? _selectedBooking;
     [ObservableProperty] private CalendarDayVm? _selectedDay;
+    [ObservableProperty] private bool _canManageBookings;
+    [ObservableProperty] private string _manageHint = string.Empty;
 
     public ObservableCollection<CalendarWeekVm> Weeks { get; } = new();
     public ObservableCollection<CalendarDayVm> Days { get; } = new();
@@ -110,14 +127,19 @@ public partial class CalendarViewModel : ObservableObject
     public DateTime VisibleMonth { get; private set; }
     public DateTime VisibleWeekStart { get; private set; }
 
-    public CalendarViewModel(ApiClient api)
+    public CalendarViewModel(ApiClient api, AuthSession session)
     {
         _api = api;
+        _session = session;
         var today = DateTime.Today;
         VisibleMonth = new DateTime(today.Year, today.Month, 1);
         VisibleWeekStart = StartOfWeek(today);
+        RefreshManageCapability();
         PrepareFormForDay(today);
     }
+
+    /// <summary>When navigating from the dashboard "New booking" button.</summary>
+    public void RequestNewBookingOnLoad() => _openAsNewBooking = true;
 
     partial void OnIsMonthViewChanged(bool value)
     {
@@ -134,6 +156,7 @@ public partial class CalendarViewModel : ObservableObject
     {
         Error = null;
         IsBusy = true;
+        RefreshManageCapability();
         try
         {
             await LoadCustomersAsync();
@@ -148,10 +171,20 @@ public partial class CalendarViewModel : ObservableObject
             }
 
             RebuildGrid();
+            if (_openAsNewBooking)
+            {
+                _openAsNewBooking = false;
+                var today = Days.FirstOrDefault(d => d.IsToday) ?? Days.FirstOrDefault();
+                if (today is not null) SelectDay(today);
+                NewBooking();
+            }
+
             if (string.IsNullOrWhiteSpace(Error))
             {
                 StatusMessage = _cache.Count(b => !string.Equals(b.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)) == 0
-                    ? "No bookings in this range. Pick a day and schedule one."
+                    ? (CanManageBookings
+                        ? "No bookings in this range. Pick a day, choose a customer, and Save booking."
+                        : "No bookings in this range. You can view the calendar; ask an owner to grant bookings.manage to schedule.")
                     : $"{_cache.Count} booking(s) in view";
             }
             else
@@ -243,8 +276,8 @@ public partial class CalendarViewModel : ObservableObject
         var b = chip.Booking;
         BookingType = b.Type;
         BookingNotes = b.Notes ?? string.Empty;
-        BookingStartLocal = b.StartsAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-        BookingEndLocal = b.EndsAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        BookingStartLocal = b.StartsAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        BookingEndLocal = b.EndsAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         SelectedCustomer = Customers.FirstOrDefault(c => c.Id == b.CustomerId)
             ?? new ListPickItem(b.CustomerId, b.CustomerName);
         if (SelectedCustomer is not null && Customers.All(c => c.Id != SelectedCustomer.Id))
@@ -267,21 +300,29 @@ public partial class CalendarViewModel : ObservableObject
         IsEditing = false;
         PanelTitle = "New booking";
         PrepareFormForDay(SelectedDay?.Date ?? DateTime.Today);
+        if (SelectedCustomer is null && Customers.Count > 0)
+            SelectedCustomer = Customers[0];
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSaveBooking))]
     private async Task SaveAsync()
     {
         Error = null;
-        if (SelectedCustomer is null)
+        RefreshManageCapability();
+        if (!CanManageBookings)
         {
-            Error = "Select a customer.";
+            Error = "Your role cannot create or edit bookings. Ask an owner/admin to grant the bookings.manage permission.";
             return;
         }
-        if (!DateTime.TryParse(BookingStartLocal, out var startLocal) ||
-            !DateTime.TryParse(BookingEndLocal, out var endLocal))
+        if (SelectedCustomer is null)
         {
-            Error = "Use start/end like 2026-09-28 14:00";
+            Error = "Select a customer from the list.";
+            return;
+        }
+        if (!TryParseLocal(BookingStartLocal, out var startLocal) ||
+            !TryParseLocal(BookingEndLocal, out var endLocal))
+        {
+            Error = "Use start/end like 2026-09-28 14:00 (or 28/09/2026 14:00).";
             return;
         }
         if (endLocal <= startLocal)
@@ -334,7 +375,7 @@ public partial class CalendarViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyHttpError(ex.Message);
         }
         finally
         {
@@ -342,11 +383,18 @@ public partial class CalendarViewModel : ObservableObject
         }
     }
 
+    private bool CanSaveBooking() => CanManageBookings;
+
     [RelayCommand(CanExecute = nameof(CanCancelBooking))]
     private async Task CancelBookingAsync()
     {
         if (SelectedBooking is null) return;
         Error = null;
+        if (!CanManageBookings)
+        {
+            Error = "Your role cannot cancel bookings (needs bookings.manage).";
+            return;
+        }
         IsBusy = true;
         try
         {
@@ -359,7 +407,7 @@ public partial class CalendarViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyHttpError(ex.Message);
         }
         finally
         {
@@ -368,16 +416,33 @@ public partial class CalendarViewModel : ObservableObject
     }
 
     private bool CanCancelBooking() =>
-        SelectedBooking is not null && !SelectedBooking.IsCancelled;
+        CanManageBookings && SelectedBooking is not null && !SelectedBooking.IsCancelled;
 
     partial void OnSelectedBookingChanged(CalendarBookingChipVm? value) =>
         CancelBookingCommand.NotifyCanExecuteChanged();
+
+    partial void OnCanManageBookingsChanged(bool value)
+    {
+        SaveCommand.NotifyCanExecuteChanged();
+        CancelBookingCommand.NotifyCanExecuteChanged();
+    }
+
+    private void RefreshManageCapability()
+    {
+        var user = _session.User;
+        CanManageBookings = user is not null &&
+            (user.IsOwner ||
+             user.Permissions.Any(p => string.Equals(p, "bookings.manage", StringComparison.OrdinalIgnoreCase)));
+        ManageHint = CanManageBookings
+            ? "Pick a day → choose customer → set times → Save booking."
+            : "View-only: your role needs bookings.manage to add or edit bookings.";
+    }
 
     private async Task LoadCustomersAsync()
     {
         try
         {
-            var page = await _api.GetAsync<PagedResult<CustomerListItemDto>>("api/customers?page=1&pageSize=100");
+            var page = await _api.GetAsync<PagedResult<CustomerListItemDto>>("api/customers?page=1&pageSize=200");
             var keepId = SelectedCustomer?.Id;
             Customers.Clear();
             foreach (var c in page.Items)
@@ -386,10 +451,14 @@ public partial class CalendarViewModel : ObservableObject
                 SelectedCustomer = Customers.FirstOrDefault(c => c.Id == id) ?? SelectedCustomer;
             else if (SelectedCustomer is null && Customers.Count > 0)
                 SelectedCustomer = Customers[0];
+
+            if (Customers.Count == 0 && CanManageBookings)
+                StatusMessage = "No customers yet — create a customer first, then schedule a booking.";
         }
-        catch
+        catch (Exception ex)
         {
-            /* optional for view-only users */
+            if (CanManageBookings)
+                Error = $"Could not load customers: {ex.Message}";
         }
     }
 
@@ -512,9 +581,29 @@ public partial class CalendarViewModel : ObservableObject
             var nextHour = DateTime.Now.AddHours(1);
             start = new DateTime(day.Year, day.Month, day.Day, nextHour.Hour, 0, 0);
         }
-        BookingStartLocal = start.ToString("yyyy-MM-dd HH:mm");
-        BookingEndLocal = start.AddHours(1).ToString("yyyy-MM-dd HH:mm");
+        BookingStartLocal = start.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        BookingEndLocal = start.AddHours(1).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         if (string.IsNullOrWhiteSpace(BookingType)) BookingType = "Intake";
+    }
+
+    private static bool TryParseLocal(string? text, out DateTime value)
+    {
+        value = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var t = text.Trim();
+        if (DateTime.TryParseExact(t, LocalDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out value))
+            return true;
+        if (DateTime.TryParse(t, CultureInfo.CurrentCulture, DateTimeStyles.None, out value))
+            return true;
+        return DateTime.TryParse(t, CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
+    }
+
+    private static string FriendlyHttpError(string message)
+    {
+        if (message.Contains("403", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Forbidden", StringComparison.OrdinalIgnoreCase))
+            return "Permission denied — your account needs bookings.manage to save calendar bookings.";
+        return message;
     }
 
     private static CalendarDayVm CreateTransientDay(DateTime date) =>

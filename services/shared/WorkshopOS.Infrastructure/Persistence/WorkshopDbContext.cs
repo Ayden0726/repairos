@@ -61,6 +61,22 @@ public sealed class WorkshopDbContext : DbContext
     public DbSet<UsedDevice> UsedDevices => Set<UsedDevice>();
     public DbSet<QaChecklist> QaChecklists => Set<QaChecklist>();
     public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
+    public DbSet<StocktakeSession> StocktakeSessions => Set<StocktakeSession>();
+    public DbSet<StocktakeLine> StocktakeLines => Set<StocktakeLine>();
+    public DbSet<DonorDevice> DonorDevices => Set<DonorDevice>();
+    public DbSet<HarvestedComponent> HarvestedComponents => Set<HarvestedComponent>();
+    public DbSet<LoanDevice> LoanDevices => Set<LoanDevice>();
+    public DbSet<LoanAgreement> LoanAgreements => Set<LoanAgreement>();
+    public DbSet<WarrantyClaim> WarrantyClaims => Set<WarrantyClaim>();
+    public DbSet<RefundRequest> RefundRequests => Set<RefundRequest>();
+    public DbSet<RepairAttachment> RepairAttachments => Set<RepairAttachment>();
+    public DbSet<RepairSignature> RepairSignatures => Set<RepairSignature>();
+    public DbSet<PrinterProfile> PrinterProfiles => Set<PrinterProfile>();
+    public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
+    public DbSet<IntegrationHealthEvent> IntegrationHealthEvents => Set<IntegrationHealthEvent>();
+    public DbSet<PartFitment> PartFitments => Set<PartFitment>();
+    public DbSet<SyncOutboxEntry> SyncOutboxEntries => Set<SyncOutboxEntry>();
+    public DbSet<InventoryBin> InventoryBins => Set<InventoryBin>();
 
     // Website / portal / sell-tech
     public DbSet<CustomerPortalAccount> CustomerPortalAccounts => Set<CustomerPortalAccount>();
@@ -286,6 +302,9 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.DeviceSerial).HasMaxLength(120);
             e.Property(x => x.DeviceImei).HasMaxLength(32);
             e.Property(x => x.DeviceCategory).HasMaxLength(64);
+            e.Property(x => x.DeviceColour).HasMaxLength(80);
+            e.Property(x => x.DeviceStorage).HasMaxLength(80);
+            e.Property(x => x.DeviceModelNumber).HasMaxLength(80);
             e.Property(x => x.RoundingMethod).HasMaxLength(32);
             e.Property(x => x.Subtotal).HasPrecision(12, 2);
             e.Property(x => x.GstAmount).HasPrecision(12, 2);
@@ -574,6 +593,9 @@ public sealed class WorkshopDbContext : DbContext
             e.HasOne(x => x.Sale).WithMany(s => s.Lines).HasForeignKey(x => x.SaleId);
             e.HasOne(x => x.InventoryItem).WithMany().HasForeignKey(x => x.InventoryItemId)
                 .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.UsedDevice).WithMany().HasForeignKey(x => x.UsedDeviceId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.UsedDeviceId);
         });
 
         modelBuilder.Entity<Supplier>(e =>
@@ -844,7 +866,147 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Type).HasMaxLength(32);
             e.Property(x => x.Status).HasMaxLength(32);
             e.Property(x => x.Path).HasMaxLength(500);
+            e.Property(x => x.Method).HasMaxLength(40);
+            e.Property(x => x.Sha256).HasMaxLength(64);
             e.HasIndex(x => x.StartedAt);
+        });
+
+        modelBuilder.Entity<StocktakeSession>(e =>
+        {
+            e.ToTable("stocktake_sessions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            e.HasMany(x => x.Lines).WithOne(l => l.Session).HasForeignKey(l => l.SessionId);
+        });
+
+        modelBuilder.Entity<StocktakeLine>(e =>
+        {
+            e.ToTable("stocktake_lines");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.SessionId, x.InventoryItemId }).IsUnique();
+            e.HasOne(x => x.InventoryItem).WithMany().HasForeignKey(x => x.InventoryItemId);
+        });
+
+        modelBuilder.Entity<DonorDevice>(e =>
+        {
+            e.ToTable("donor_devices");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(24);
+            e.HasOne(x => x.SourceUsedDevice).WithMany().HasForeignKey(x => x.SourceUsedDeviceId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(x => x.Components).WithOne(c => c.DonorDevice).HasForeignKey(c => c.DonorDeviceId);
+        });
+        modelBuilder.Entity<HarvestedComponent>(e =>
+        {
+            e.ToTable("harvested_components");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.InventoryItem).WithMany().HasForeignKey(x => x.InventoryItemId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<LoanDevice>(e =>
+        {
+            e.ToTable("loan_devices");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.AssetTag).HasMaxLength(64).IsRequired();
+            e.HasIndex(x => x.AssetTag).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(24);
+            e.HasMany(x => x.Agreements).WithOne(a => a.LoanDevice).HasForeignKey(a => a.LoanDeviceId);
+        });
+        modelBuilder.Entity<LoanAgreement>(e =>
+        {
+            e.ToTable("loan_agreements");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
+            e.HasOne(x => x.RepairTicket).WithMany().HasForeignKey(x => x.RepairTicketId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<WarrantyClaim>(e =>
+        {
+            e.ToTable("warranty_claims");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.HasIndex(x => x.Number).IsUnique();
+            e.HasOne(x => x.WarrantyRecord).WithMany().HasForeignKey(x => x.WarrantyRecordId);
+            e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
+            e.HasOne(x => x.RepairTicket).WithMany().HasForeignKey(x => x.RepairTicketId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<RefundRequest>(e =>
+        {
+            e.ToTable("refund_requests");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Number).HasMaxLength(40).IsRequired();
+            e.HasIndex(x => x.Number).IsUnique();
+            e.Property(x => x.Amount).HasPrecision(12, 2);
+            e.HasOne(x => x.PosSale).WithMany().HasForeignKey(x => x.PosSaleId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<RepairAttachment>(e =>
+        {
+            e.ToTable("repair_attachments");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<RepairSignature>(e =>
+        {
+            e.ToTable("repair_signatures");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Ticket).WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<PrinterProfile>(e =>
+        {
+            e.ToTable("printer_profiles");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Kind).HasMaxLength(40);
+        });
+        modelBuilder.Entity<PrintJob>(e =>
+        {
+            e.ToTable("print_jobs");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.PrinterProfile).WithMany().HasForeignKey(x => x.PrinterProfileId).OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<IntegrationHealthEvent>(e =>
+        {
+            e.ToTable("integration_health_events");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ProviderKey).HasMaxLength(80).IsRequired();
+            e.HasIndex(x => x.CreatedAt);
+        });
+        modelBuilder.Entity<PartFitment>(e =>
+        {
+            e.ToTable("part_fitments");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.PartName).HasMaxLength(240).IsRequired();
+            e.Property(x => x.PartSku).HasMaxLength(64);
+            e.Property(x => x.Brand).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Model).HasMaxLength(120).IsRequired();
+            e.Property(x => x.DeviceType).HasMaxLength(40);
+            e.HasIndex(x => new { x.Brand, x.Model });
+            e.HasOne(x => x.InventoryItem).WithMany().HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+        modelBuilder.Entity<SyncOutboxEntry>(e =>
+        {
+            e.ToTable("sync_outbox");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Method).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Path).HasMaxLength(400).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.ClientMutationId }).IsUnique();
+            e.HasIndex(x => x.CreatedAt);
+        });
+        modelBuilder.Entity<InventoryBin>(e =>
+        {
+            e.ToTable("inventory_bins");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Code).HasMaxLength(64).IsRequired();
+            e.HasIndex(x => x.Code).IsUnique();
+            e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.ParentBin).WithMany(p => p.Children).HasForeignKey(x => x.ParentBinId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<CustomerPortalAccount>(e =>

@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WorkshopOS.Client.Services;
 
@@ -13,4 +14,7 @@ public sealed partial class InventoryPage : Page
         DataContext = ViewModel;
         Loaded += async (_, _) => await ViewModel.RefreshCommand.ExecuteAsync(null);
     }
+
+    private void Stocktake_Click(object sender, RoutedEventArgs e) =>
+        Frame.Navigate(typeof(StocktakePage));
 }

@@ -20,7 +20,7 @@
 #>
 param(
   [string]$Repo = 'C:\Users\ayden\src\repairos',
-  [string]$Version = '1.2.35',
+  [string]$Version = '1.2.38',
   [string]$Branch = 'main',
   [switch]$WithInstaller,
   [switch]$UseAgentOverlay,

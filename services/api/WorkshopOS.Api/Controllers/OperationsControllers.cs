@@ -288,6 +288,29 @@ public sealed class InventoryController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("reservations")]
+    [Authorize(Policy = "perm:inventory.view")]
+    public Task<IReadOnlyList<InventoryReservationDto>> Reservations([FromQuery] Guid? itemId, CancellationToken ct) =>
+        _inventory.ListReservationsAsync(itemId, ct);
+
+    [HttpGet("barcode/{code}")]
+    [Authorize(Policy = "perm:inventory.view")]
+    public async Task<ActionResult<InventoryListItemDto>> ByBarcode(string code, CancellationToken ct)
+    {
+        var item = await _inventory.FindByBarcodeAsync(code, ct);
+        return item is null ? NotFound() : item;
+    }
+
+    [HttpPost("{id:guid}/transfer-bin")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<InventoryListItemDto> TransferBin(Guid id, [FromBody] TransferBinRequest request, CancellationToken ct) =>
+        _inventory.TransferBinAsync(id, request, UserId(), ct);
+
+    [HttpPost("{id:guid}/quarantine")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<InventoryListItemDto> Quarantine(Guid id, [FromBody] QuarantineStockRequest request, CancellationToken ct) =>
+        _inventory.QuarantineAsync(id, request, UserId(), ct);
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }
 
@@ -321,6 +344,10 @@ public sealed class PurchaseOrdersController : ControllerBase
     [Authorize(Policy = "perm:inventory.purchase_orders")]
     public Task<IReadOnlyList<PurchaseOrderListItemDto>> List(CancellationToken ct) => _purchasing.ListPurchaseOrdersAsync(ct);
 
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "perm:inventory.purchase_orders")]
+    public Task<PurchaseOrderDetailDto> Get(Guid id, CancellationToken ct) => _purchasing.GetPurchaseOrderAsync(id, ct);
+
     [HttpPost]
     [Authorize(Policy = "perm:inventory.purchase_orders")]
     public Task<PurchaseOrderListItemDto> Create([FromBody] CreatePurchaseOrderRequest request, CancellationToken ct) =>
@@ -330,6 +357,44 @@ public sealed class PurchaseOrdersController : ControllerBase
     [Authorize(Policy = "perm:inventory.purchase_orders")]
     public Task<PurchaseOrderListItemDto> Receive(Guid id, [FromBody] ReceivePoLineRequest request, CancellationToken ct) =>
         _purchasing.ReceiveLineAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/stocktakes")]
+public sealed class StocktakesController : ControllerBase
+{
+    private readonly IStocktakeService _stocktakes;
+    public StocktakesController(IStocktakeService stocktakes) => _stocktakes = stocktakes;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<IReadOnlyList<StocktakeListItemDto>> List(CancellationToken ct) => _stocktakes.ListAsync(ct);
+
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<StocktakeDetailDto> Get(Guid id, CancellationToken ct) => _stocktakes.GetAsync(id, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<StocktakeDetailDto> Create([FromBody] CreateStocktakeRequest? request, CancellationToken ct) =>
+        _stocktakes.CreateAsync(request ?? new CreateStocktakeRequest(null), UserId(), ct);
+
+    [HttpPost("{id:guid}/lines/{lineId:guid}")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<StocktakeLineDto> SetCount(Guid id, Guid lineId, [FromBody] SetStocktakeCountRequest request, CancellationToken ct) =>
+        _stocktakes.SetCountAsync(id, lineId, request, UserId(), ct);
+
+    [HttpPost("{id:guid}/complete")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<StocktakeDetailDto> Complete(Guid id, CancellationToken ct) =>
+        _stocktakes.CompleteAsync(id, UserId(), ct);
+
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<StocktakeDetailDto> Cancel(Guid id, CancellationToken ct) =>
+        _stocktakes.CancelAsync(id, UserId(), ct);
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }
@@ -594,6 +659,76 @@ public sealed class BackupsController : ControllerBase
     [Authorize(Policy = "perm:backups.manage")]
     public Task<BackupDto> Create(CancellationToken ct) => _backups.CreateAsync(UserId(), ct);
 
+    [HttpPost("{id:guid}/restore-test")]
+    [Authorize(Policy = "perm:backups.manage")]
+    public Task<BackupRestoreTestDto> RestoreTest(Guid id, CancellationToken ct) =>
+        _backups.RestoreTestAsync(id, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/audit")]
+public sealed class AuditController : ControllerBase
+{
+    private readonly IAuditService _audit;
+    public AuditController(IAuditService audit) => _audit = audit;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:audit.view")]
+    public Task<AuditSearchResponse> Search(
+        [FromQuery] string? action,
+        [FromQuery] Guid? actorUserId,
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default) =>
+        _audit.SearchAsync(action, actorUserId, from, to, page, pageSize, ct);
+}
+
+[ApiController]
+[Route("api/labels")]
+public sealed class LabelsController : ControllerBase
+{
+    private readonly ILabelPrintService _labels;
+    public LabelsController(ILabelPrintService labels) => _labels = labels;
+
+    [HttpGet("repair/{id:guid}")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public async Task<IActionResult> Repair(Guid id, CancellationToken ct)
+    {
+        var html = await _labels.RenderRepairLabelHtmlAsync(id, ct);
+        return Content(html, "text/html; charset=utf-8");
+    }
+
+    [HttpGet("used/{id:guid}")]
+    [Authorize(Policy = "perm:used.view")]
+    public async Task<IActionResult> Used(Guid id, [FromQuery] bool includePrice = false, CancellationToken ct = default)
+    {
+        var html = await _labels.RenderUsedDeviceLabelHtmlAsync(id, includePrice, ct);
+        return Content(html, "text/html; charset=utf-8");
+    }
+
+    [HttpGet("part/{id:guid}")]
+    [Authorize(Policy = "perm:inventory.view")]
+    public async Task<IActionResult> Part(Guid id, CancellationToken ct)
+    {
+        var html = await _labels.RenderPartLabelHtmlAsync(id, ct);
+        return Content(html, "text/html; charset=utf-8");
+    }
+
+    [HttpPost("batch")]
+    [Authorize(Policy = "perm:inventory.view")]
+    public async Task<IActionResult> Batch(
+        [FromBody] BatchLabelRequest request,
+        [FromServices] IPrinterProfileService printers,
+        CancellationToken ct)
+    {
+        var result = await printers.BatchRenderAsync(request, UserId(), ct);
+        return Content(result.CombinedHtml, "text/html; charset=utf-8");
+    }
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }
 
@@ -607,4 +742,288 @@ public sealed class HealthDetailController : ControllerBase
     [HttpGet("detail")]
     [Authorize(Policy = "perm:settings.view")]
     public Task<SystemHealthDetailDto> Detail(CancellationToken ct) => _backups.HealthDetailAsync(ct);
+}
+
+[ApiController]
+[Route("api/donors")]
+[Authorize]
+public sealed class DonorsController : ControllerBase
+{
+    private readonly IDonorService _donors;
+    public DonorsController(IDonorService donors) => _donors = donors;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:used.view")]
+    public Task<IReadOnlyList<DonorDeviceDto>> List(CancellationToken ct) => _donors.ListAsync(ct);
+
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "perm:used.view")]
+    public Task<DonorDeviceDetailDto> Get(Guid id, CancellationToken ct) => _donors.GetAsync(id, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:used.manage")]
+    public Task<DonorDeviceDetailDto> Create([FromBody] CreateDonorDeviceRequest request, CancellationToken ct) =>
+        _donors.CreateAsync(request, UserId(), ct);
+
+    [HttpPost("{id:guid}/harvest")]
+    [Authorize(Policy = "perm:used.manage")]
+    public Task<DonorDeviceDetailDto> Harvest(Guid id, [FromBody] HarvestComponentRequest request, CancellationToken ct) =>
+        _donors.HarvestAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/loans")]
+[Authorize]
+public sealed class LoansController : ControllerBase
+{
+    private readonly ILoanService _loans;
+    public LoansController(ILoanService loans) => _loans = loans;
+
+    [HttpGet("devices")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public Task<IReadOnlyList<LoanDeviceDto>> Devices(CancellationToken ct) => _loans.ListDevicesAsync(ct);
+
+    [HttpPost("devices")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<LoanDeviceDto> UpsertDevice([FromBody] UpsertLoanDeviceRequest request, CancellationToken ct) =>
+        _loans.UpsertDeviceAsync(request, UserId(), ct);
+
+    [HttpGet("agreements")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public Task<IReadOnlyList<LoanAgreementDto>> Agreements([FromQuery] string? status, CancellationToken ct) =>
+        _loans.ListAgreementsAsync(status, ct);
+
+    [HttpPost("checkout")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<LoanAgreementDto> Checkout([FromBody] CheckoutLoanRequest request, CancellationToken ct) =>
+        _loans.CheckoutAsync(request, UserId(), ct);
+
+    [HttpPost("agreements/{id:guid}/return")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<LoanAgreementDto> Return(Guid id, [FromBody] ReturnLoanRequest request, CancellationToken ct) =>
+        _loans.ReturnAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/warranty-claims")]
+[Authorize]
+public sealed class WarrantyClaimsController : ControllerBase
+{
+    private readonly IWarrantyClaimService _claims;
+    public WarrantyClaimsController(IWarrantyClaimService claims) => _claims = claims;
+
+    [HttpGet("warranties")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public Task<IReadOnlyList<StaffWarrantyDto>> Warranties(CancellationToken ct) => _claims.ListWarrantiesAsync(ct);
+
+    [HttpGet]
+    [Authorize(Policy = "perm:tickets.view")]
+    public Task<IReadOnlyList<WarrantyClaimDto>> List([FromQuery] string? status, CancellationToken ct) =>
+        _claims.ListClaimsAsync(status, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<WarrantyClaimDto> Create([FromBody] CreateWarrantyClaimRequest request, CancellationToken ct) =>
+        _claims.CreateClaimAsync(request, UserId(), ct);
+
+    [HttpPost("{id:guid}/update")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<WarrantyClaimDto> Update(Guid id, [FromBody] UpdateWarrantyClaimRequest request, CancellationToken ct) =>
+        _claims.UpdateClaimAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/refunds")]
+[Authorize]
+public sealed class RefundsController : ControllerBase
+{
+    private readonly IRefundService _refunds;
+    public RefundsController(IRefundService refunds) => _refunds = refunds;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:payments.view")]
+    public Task<IReadOnlyList<RefundRequestDto>> List([FromQuery] string? status, CancellationToken ct) =>
+        _refunds.ListAsync(status, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:payments.refund")]
+    public Task<RefundRequestDto> Create([FromBody] CreateRefundRequestDto request, CancellationToken ct) =>
+        _refunds.CreateAsync(request, UserId(), ct);
+
+    [HttpPost("{id:guid}/decide")]
+    [Authorize(Policy = "perm:payments.refund")]
+    public Task<RefundRequestDto> Decide(Guid id, [FromBody] DecideRefundRequest request, CancellationToken ct) =>
+        _refunds.DecideAsync(id, request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/repairs/{ticketId:guid}/media")]
+[Authorize]
+public sealed class RepairMediaController : ControllerBase
+{
+    private readonly IRepairMediaService _media;
+    public RepairMediaController(IRepairMediaService media) => _media = media;
+
+    [HttpGet("attachments")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public Task<IReadOnlyList<RepairAttachmentDto>> Attachments(Guid ticketId, CancellationToken ct) =>
+        _media.ListAttachmentsAsync(ticketId, ct);
+
+    [HttpPost("attachments")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<RepairAttachmentDto> Upload(Guid ticketId, [FromBody] UploadRepairAttachmentRequest request, CancellationToken ct) =>
+        _media.UploadAttachmentAsync(ticketId, request, UserId(), ct);
+
+    [HttpGet("signatures")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public Task<IReadOnlyList<RepairSignatureDto>> Signatures(Guid ticketId, CancellationToken ct) =>
+        _media.ListSignaturesAsync(ticketId, ct);
+
+    [HttpPost("signatures")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<RepairSignatureDto> Capture(Guid ticketId, [FromBody] CaptureRepairSignatureRequest request, CancellationToken ct) =>
+        _media.CaptureSignatureAsync(ticketId, request, UserId(), ct);
+
+    [HttpGet("condition-report")]
+    [Authorize(Policy = "perm:tickets.view")]
+    public async Task<IActionResult> ConditionReport(Guid ticketId, CancellationToken ct)
+    {
+        var html = await _media.BuildConditionReportHtmlAsync(ticketId, ct);
+        return Content(html, "text/html; charset=utf-8");
+    }
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/printers")]
+[Authorize]
+public sealed class PrintersController : ControllerBase
+{
+    private readonly IPrinterProfileService _printers;
+    public PrintersController(IPrinterProfileService printers) => _printers = printers;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:settings.view")]
+    public Task<IReadOnlyList<PrinterProfileDto>> List(CancellationToken ct) => _printers.ListAsync(ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:settings.manage")]
+    public Task<PrinterProfileDto> Upsert([FromBody] UpsertPrinterProfileRequest request, CancellationToken ct) =>
+        _printers.UpsertAsync(request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/integration-health")]
+[Authorize]
+public sealed class IntegrationHealthController : ControllerBase
+{
+    private readonly IIntegrationHealthService _health;
+    public IntegrationHealthController(IIntegrationHealthService health) => _health = health;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:integrations.manage")]
+    public Task<IReadOnlyList<IntegrationHealthEventDto>> List(CancellationToken ct) => _health.ListAsync(ct);
+}
+
+[ApiController]
+[Route("api/fitment")]
+[Authorize]
+public sealed class FitmentController : ControllerBase
+{
+    private readonly IPartFitmentService _fitment;
+    public FitmentController(IPartFitmentService fitment) => _fitment = fitment;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:inventory.view")]
+    public Task<IReadOnlyList<PartFitmentDto>> List(
+        [FromQuery] string? brand, [FromQuery] string? model, [FromQuery] string? q, CancellationToken ct) =>
+        _fitment.ListAsync(brand, model, q, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<PartFitmentDto> Upsert([FromBody] UpsertPartFitmentRequest request, CancellationToken ct) =>
+        _fitment.UpsertAsync(request, UserId(), ct);
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await _fitment.DeleteAsync(id, UserId(), ct);
+        return NoContent();
+    }
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/sync")]
+[Authorize]
+public sealed class SyncController : ControllerBase
+{
+    private readonly ISyncService _sync;
+    public SyncController(ISyncService sync) => _sync = sync;
+
+    [HttpPost("push")]
+    [Authorize(Policy = "perm:tickets.edit")]
+    public Task<SyncPushResponse> Push([FromBody] SyncPushRequest request, CancellationToken ct) =>
+        _sync.PushAsync(request, UserId(), ct);
+
+    [HttpGet("outbox")]
+    [Authorize(Policy = "perm:settings.view")]
+    public Task<IReadOnlyList<SyncOutboxListItemDto>> Outbox([FromQuery] string? status, CancellationToken ct) =>
+        _sync.ListAsync(status, ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/locations")]
+[Authorize]
+public sealed class WorkshopLocationsController : ControllerBase
+{
+    private readonly IWorkshopLocationService _locations;
+    public WorkshopLocationsController(IWorkshopLocationService locations) => _locations = locations;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:settings.view")]
+    public Task<IReadOnlyList<WorkshopLocationDto>> List(CancellationToken ct) => _locations.ListAsync(ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:settings.manage")]
+    public Task<WorkshopLocationDto> Upsert([FromBody] UpsertWorkshopLocationRequest request, CancellationToken ct) =>
+        _locations.UpsertAsync(request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+}
+
+[ApiController]
+[Route("api/inventory-bins")]
+[Authorize]
+public sealed class InventoryBinsController : ControllerBase
+{
+    private readonly IInventoryBinService _bins;
+    public InventoryBinsController(IInventoryBinService bins) => _bins = bins;
+
+    [HttpGet]
+    [Authorize(Policy = "perm:inventory.view")]
+    public Task<IReadOnlyList<InventoryBinDto>> List([FromQuery] Guid? locationId, CancellationToken ct) =>
+        _bins.ListAsync(locationId, ct);
+
+    [HttpPost]
+    [Authorize(Policy = "perm:inventory.manage")]
+    public Task<InventoryBinDto> Upsert([FromBody] UpsertInventoryBinRequest request, CancellationToken ct) =>
+        _bins.UpsertAsync(request, UserId(), ct);
+
+    private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
 }

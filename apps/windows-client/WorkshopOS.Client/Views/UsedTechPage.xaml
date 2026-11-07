@@ -30,6 +30,8 @@
           <ColumnDefinition Width="140" />
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <TextBox Header="Search"
                  PlaceholderText="Brand, model, serial, IMEI…"
@@ -40,7 +42,11 @@
                   HorizontalAlignment="Stretch" />
         <Button Grid.Column="2" Content="Refresh" VerticalAlignment="Bottom"
                 Command="{x:Bind ViewModel.RefreshCommand}" />
-        <Button Grid.Column="3" Content="New" VerticalAlignment="Bottom"
+        <Button Grid.Column="3" Content="Acquisitions" VerticalAlignment="Bottom"
+                Click="Acquisitions_Click" />
+        <Button Grid.Column="4" Content="Donors" VerticalAlignment="Bottom"
+                Click="Donors_Click" />
+        <Button Grid.Column="5" Content="New" VerticalAlignment="Bottom"
                 Command="{x:Bind ViewModel.NewDeviceCommand}"
                 Style="{StaticResource AccentButtonStyle}" />
       </Grid>
@@ -134,7 +140,38 @@
                      Text="{x:Bind ViewModel.Storage, Mode=TwoWay}" />
             <TextBox Grid.Column="1" Header="Serial" Text="{x:Bind ViewModel.Serial, Mode=TwoWay}" />
           </Grid>
-          <TextBox Header="IMEI" Text="{x:Bind ViewModel.Imei, Mode=TwoWay}" />
+          <Border Padding="10" CornerRadius="6"
+                  Background="{ThemeResource WorkshopAccentSoftBrush}">
+            <StackPanel Spacing="8">
+              <TextBlock Text="IMEI lookup (buy-in)" FontWeight="SemiBold" />
+              <TextBlock Text="Fills brand, model, category, colour, storage and specs from the IMEI (same Device ID settings as quotes)."
+                         FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+              <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Header="IMEI (15 digits)" Text="{x:Bind ViewModel.Imei, Mode=TwoWay}"
+                         PlaceholderText="356166091795616" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                  <CheckBox Content="Advanced"
+                            IsChecked="{x:Bind ViewModel.ImeiUseAdvanced, Mode=TwoWay}"
+                            Visibility="{x:Bind ViewModel.ImeiAdvancedLookupAvailable, Mode=OneWay}" />
+                  <Button Content="Look up"
+                          Command="{x:Bind ViewModel.LookupImeiCommand}"
+                          Style="{StaticResource AccentButtonStyle}"
+                          IsEnabled="{x:Bind ViewModel.CanManage, Mode=OneWay}" />
+                </StackPanel>
+              </Grid>
+              <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
+                            IsActive="{x:Bind ViewModel.IsLookingUpImei, Mode=OneWay}" />
+              <TextBlock Text="{x:Bind ViewModel.ImeiStatus, Mode=OneWay}"
+                         TextWrapping="Wrap" FontSize="12" Opacity="0.8" />
+              <TextBlock Text="{x:Bind ViewModel.ImeiResultSummary, Mode=OneWay}"
+                         TextWrapping="Wrap" FontWeight="SemiBold"
+                         Visibility="{x:Bind ViewModel.HasImeiResult, Mode=OneWay}" />
+            </StackPanel>
+          </Border>
           <TextBox Header="Other specs" Text="{x:Bind ViewModel.Specs, Mode=TwoWay}"
                    PlaceholderText="RAM, CPU, screen…" />
 
@@ -152,6 +189,19 @@
                       SelectedItem="{x:Bind ViewModel.Status, Mode=TwoWay}"
                       HorizontalAlignment="Stretch" />
           </Grid>
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBox Header="Battery health % (blank = untested)"
+                     Text="{x:Bind ViewModel.BatteryHealth, Mode=TwoWay}"
+                     PlaceholderText="Never invent — enter only when measured" />
+            <TextBox Grid.Column="1" Header="Functional grade"
+                     Text="{x:Bind ViewModel.FunctionalGrade, Mode=TwoWay}"
+                     PlaceholderText="A / B / Untested…" />
+          </Grid>
+          <CheckBox Content="Parts-only / donor device"
+                    IsChecked="{x:Bind ViewModel.IsPartsOnly, Mode=TwoWay}" />
 
           <TextBlock Text="Pricing" FontWeight="SemiBold" Opacity="0.8" Margin="0,8,0,0" />
           <Grid ColumnSpacing="8">
@@ -200,6 +250,9 @@
                   HorizontalAlignment="Stretch"
                   IsEnabled="{x:Bind ViewModel.CanManage, Mode=OneWay}"
                   Margin="0,8,0,0" />
+          <Button Content="Print stock label"
+                  Command="{x:Bind ViewModel.PrintLabelCommand}"
+                  HorizontalAlignment="Stretch" />
         </StackPanel>
       </ScrollViewer>
     </Border>

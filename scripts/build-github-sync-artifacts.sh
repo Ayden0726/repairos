@@ -14,7 +14,7 @@ mkdir -p "$OUT" "$SERVE"
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
 
-VERSION="1.2.35"
+VERSION="1.2.40"
 TIP="$(git -C "$ROOT" rev-parse --short HEAD)"
 
 echo "==> Staging clean tree (no .git / bin / obj / node_modules / large zips)"
@@ -66,21 +66,21 @@ WorkshopOS / repairos — sync this agent workspace to GitHub
 ===========================================================
 Target: https://github.com/Ayden0726/repairos.git  (branch: main)
 Agent tip: $TIP   Product: $VERSION
-  - Encrypted API credentials + settings persistence fixes
-  - Business expenses (GST / AU FY)
-  - Raspberry Pi 3B+ Docker server support
+  - IMEI lookup fills quote + used-tech buy-in (colour/storage/model number/specs)
+  - Encryption rewrap + calendar bookings (carried forward)
+  - Encrypted credentials, expenses, Raspberry Pi server
 
 You need GitHub auth on YOUR machine (gh auth login, Git Credential Manager, or PAT).
 This Cloud Agent VM cannot push to your personal GitHub without your token.
 
 Download (agent HTTP serve, port 18765 — use Ports UI URL if not localhost):
-  http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip     (FLAT tree overlay)
+  http://127.0.0.1:18765/WorkshopOS-1.2.40-github-sync.zip     (FLAT tree overlay)
   http://127.0.0.1:18765/repairos-github-sync.zip
   http://127.0.0.1:18765/repairos-main.bundle
   http://127.0.0.1:18765/GITHUB_SYNC_INSTRUCTIONS.txt
 
 Also on disk:
-  /opt/cursor/artifacts/WorkshopOS-1.2.35-github-sync.zip
+  /opt/cursor/artifacts/WorkshopOS-1.2.40-github-sync.zip
   /opt/cursor/artifacts/repairos-github-sync.zip
   /opt/cursor/artifacts/repairos-main.bundle
   /opt/cursor/artifacts/GITHUB_SYNC_INSTRUCTIONS.txt
@@ -93,9 +93,9 @@ OPTION A (recommended): PowerShell overlay → push + Setup.exe
 ────────────────────────────────────────────────────────────
 
   \$r = 'C:\\Users\\ayden\\src\\repairos'
-  \$z = "\$env:TEMP\\WorkshopOS-1.2.35-github-sync.zip"
+  \$z = "\$env:TEMP\\WorkshopOS-1.2.40-github-sync.zip"
   New-Item -ItemType Directory -Force -Path \$r | Out-Null
-  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip' -OutFile \$z
+  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.40-github-sync.zip' -OutFile \$z
   Expand-Archive -Path \$z -DestinationPath \$r -Force
   powershell -ExecutionPolicy Bypass -File "\$r\\scripts\\update-github-and-build-client.ps1"
 
@@ -104,9 +104,9 @@ OPTION B: WSL / bash (push only)
 ────────────────────────────────────────────────────────────
 
   REPO="\${HOME}/src/repairos"
-  ZIP=/tmp/WorkshopOS-1.2.35-github-sync.zip
+  ZIP=/tmp/WorkshopOS-1.2.40-github-sync.zip
   [[ -d "\$REPO/.git" ]] || git clone https://github.com/Ayden0726/repairos.git "\$REPO"
-  curl -fsSL -o "\$ZIP" 'http://127.0.0.1:18765/WorkshopOS-1.2.35-github-sync.zip'
+  curl -fsSL -o "\$ZIP" 'http://127.0.0.1:18765/WorkshopOS-1.2.40-github-sync.zip'
   unzip -o "\$ZIP" -d "\$REPO"
   cd "\$REPO" && chmod +x scripts/*.sh && ./scripts/sync-to-github.sh
 

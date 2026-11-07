@@ -1,0 +1,22 @@
+<Page x:Class="WorkshopOS.Client.Views.WebsiteInboxPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="{ThemeResource WorkshopPageBackgroundBrush}">
+  <Grid Padding="24" ColumnSpacing="16">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <StackPanel Spacing="8">
+      <TextBlock Text="Website inbox" FontSize="22" FontWeight="SemiBold" />
+      <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Left" />
+      <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Opacity="0.75" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
+      <TextBlock Text="Sell Your Tech" FontWeight="SemiBold" Margin="0,8,0,0" />
+      <ListView ItemsSource="{x:Bind ViewModel.SellTechLines, Mode=OneWay}" />
+    </StackPanel>
+    <StackPanel Grid.Column="1" Spacing="8">
+      <TextBlock Text="Customer messages" FontWeight="SemiBold" FontSize="16" Margin="0,40,0,0" />
+      <ListView ItemsSource="{x:Bind ViewModel.MessageLines, Mode=OneWay}" />
+    </StackPanel>
+  </Grid>
+</Page>

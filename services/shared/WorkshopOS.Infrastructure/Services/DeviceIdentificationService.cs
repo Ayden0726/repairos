@@ -43,6 +43,11 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
     public async Task<DeviceIdentificationSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {
         var stored = await LoadStoredAsync(ct);
+        // Opportunistically rewrap JWT-era ciphertext onto Encryption:Key so IMEI keeps working.
+        if (!string.IsNullOrWhiteSpace(stored.ApiKeyEncrypted))
+            _ = await TryDecryptKeyAsync(stored.ApiKeyEncrypted, persistRewrap: true, ct);
+
+        stored = await LoadStoredAsync(ct);
         var lookupsToday = 0;
         try
         {
@@ -73,7 +78,8 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
             catch (Exception ex)
             {
                 _log.LogError(ex, "Failed to encrypt IMEI API key");
-                throw new ValidationAppException("Could not encrypt the API key on the server. Check Jwt:SigningKey is set (32+ chars).");
+                throw new ValidationAppException(
+                    "Could not encrypt the API key on the server. Check Encryption:Key is set (32+ chars) in docker/.env.");
             }
         }
 
@@ -138,10 +144,11 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
         if (!configured)
             return new DeviceIdentificationTestResultDto(false, "No API key stored. Paste your IMEI.info key and Save first.", false, false, null);
 
-        var apiKey = TryDecryptKey(stored.ApiKeyEncrypted);
+        var apiKey = await TryDecryptKeyAsync(stored.ApiKeyEncrypted, persistRewrap: true, ct);
         if (string.IsNullOrWhiteSpace(apiKey))
             return new DeviceIdentificationTestResultDto(false,
-                "API key is stored but could not be decrypted. Re-paste the key and Save again (server encryption key may have changed).",
+                "API key is stored but could not be decrypted. Re-paste the IMEI.info key in Settings → Device ID and Save " +
+                "(or restore Encryption__Key / set Encryption__PreviousKey if you rotated keys).",
                 true, false, null);
 
         try
@@ -231,7 +238,7 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
                 return await BuildFromCacheAsync(cached, settings, masked, tac, duplicates, actorId, normalized, ct);
         }
 
-        var apiKey = TryDecryptKey(settings.ApiKeyEncrypted);
+        var apiKey = await TryDecryptKeyAsync(settings.ApiKeyEncrypted, persistRewrap: true, ct);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             var local = await TryLocalCatalogueMatchAsync(null, null, tac, ct);
@@ -241,7 +248,8 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
             return ManualFallback(settings, masked, tac, duplicates, local,
                 noKey
                     ? "IMEI.info API key is not configured. Device intake continues with manual brand/model entry. Add the key in Settings → Device ID."
-                    : "IMEI API key is stored but could not be decrypted. Re-paste the key in Settings → Device ID and Save.");
+                    : "IMEI API key is stored but could not be decrypted. Re-paste the key in Settings → Device ID and Save " +
+                      "(or restore Encryption__Key if it was rotated).");
         }
 
         var serviceId = request.Advanced
@@ -690,22 +698,60 @@ public sealed class DeviceIdentificationService : IDeviceIdentificationService
     private string? TryDecryptKey(string? enc)
     {
         if (string.IsNullOrWhiteSpace(enc)) return null;
-        try { return _secrets.Decrypt(enc); }
-        catch (Exception ex)
+        if (_secrets.TryDecrypt(enc, out var plain, out _))
+            return plain;
+        _log.LogWarning("Could not decrypt IMEI API key");
+        return null;
+    }
+
+    /// <summary>
+    /// Decrypts the IMEI API key. When a legacy JWT-derived ciphertext succeeds,
+    /// re-encrypts under Encryption:Key and persists so the problem does not recur.
+    /// </summary>
+    private async Task<string?> TryDecryptKeyAsync(string? enc, bool persistRewrap, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(enc)) return null;
+        if (!_secrets.TryDecrypt(enc, out var plain, out _, out var usedLegacy) || plain is null)
         {
-            _log.LogWarning(ex, "Could not decrypt IMEI API key");
+            _log.LogWarning("Could not decrypt IMEI API key");
             return null;
         }
+
+        if (persistRewrap && usedLegacy)
+        {
+            try
+            {
+                var rewrapped = _secrets.Encrypt(plain);
+                var stored = await LoadStoredAsync(ct);
+                if (string.Equals(stored.ApiKeyEncrypted, enc, StringComparison.Ordinal))
+                {
+                    stored.ApiKeyEncrypted = rewrapped;
+                    await DbSeed.SetSettingAsync(_db, SettingKeys.DeviceIdentification, stored, Guid.Empty, ct);
+                    _log.LogInformation("Re-wrapped IMEI API key under Encryption:Key after legacy decrypt.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "IMEI API key decrypted with legacy key but rewrap failed; will retry next use.");
+            }
+        }
+
+        return plain;
     }
 
     private async Task<StoredSettings> LoadStoredAsync(CancellationToken ct) =>
         await DbSeed.GetSettingAsync(_db, SettingKeys.DeviceIdentification, new StoredSettings(), ct);
 
-    private static DeviceIdentificationSettingsDto ToDto(StoredSettings s, int lookupsToday) =>
-        new(s.Enabled, s.Provider, !string.IsNullOrWhiteSpace(s.ApiKeyEncrypted),
+    private DeviceIdentificationSettingsDto ToDto(StoredSettings s, int lookupsToday)
+    {
+        var configured = !string.IsNullOrWhiteSpace(s.ApiKeyEncrypted);
+        var decryptable = !configured || _secrets.TryDecrypt(s.ApiKeyEncrypted, out _, out _);
+        return new(
+            s.Enabled, s.Provider, configured,
             s.BasicLookupEnabled, s.AdvancedLookupEnabled, s.BasicServiceId, s.AdvancedServiceId,
             s.CacheEnabled, s.CacheTtlDays, s.DailyLookupLimit, lookupsToday,
-            s.EstimatedBasicCost, s.EstimatedAdvancedCost, s.Notes, s.ShowOnQuotes);
+            s.EstimatedBasicCost, s.EstimatedAdvancedCost, s.Notes, s.ShowOnQuotes, decryptable);
+    }
 
     public static string? NormalizeImei(string? raw)
     {

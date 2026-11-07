@@ -16,10 +16,15 @@ public sealed partial class SettingsPage : Page
 {
     public UsersViewModel Users { get; }
     public BackupsViewModel Backups { get; }
+    public AuditLogViewModel AuditLog { get; }
+    public PrintersViewModel Printers { get; }
+    public LocationsViewModel Sites { get; }
     private bool _themeComboReady;
     private bool _startupToggleReady;
     private bool _usersLoaded;
     private bool _backupsLoaded;
+    private bool _printersLoaded;
+    private bool _auditLoaded;
     private bool _pricingLoaded;
     private bool _servicesLoaded;
     private bool _taxLoaded;
@@ -27,6 +32,7 @@ public sealed partial class SettingsPage : Page
     private bool _credentialsLoaded;
     private bool _deviceIdLoaded;
     private bool _connectionHealthLoaded;
+    private bool _sitesLoaded;
     private string? _initialSection;
     private readonly ObservableCollection<ModuleToggleItem> _moduleToggles = new();
     private PricingSettingsDto? _pricing;
@@ -38,6 +44,9 @@ public sealed partial class SettingsPage : Page
     {
         Users = App.Services.GetRequiredService<UsersViewModel>();
         Backups = new BackupsViewModel(App.Services.GetRequiredService<ApiClient>());
+        AuditLog = new AuditLogViewModel(App.Services.GetRequiredService<ApiClient>());
+        Printers = new PrintersViewModel(App.Services.GetRequiredService<ApiClient>());
+        Sites = new LocationsViewModel(App.Services.GetRequiredService<ApiClient>());
         InitializeComponent();
         Loaded += SettingsPage_Loaded;
     }
@@ -118,6 +127,8 @@ public sealed partial class SettingsPage : Page
             SelectPivotTag("users");
         else if (string.Equals(_initialSection, "backups", StringComparison.OrdinalIgnoreCase))
             SelectPivotTag("backups");
+        else if (string.Equals(_initialSection, "sites", StringComparison.OrdinalIgnoreCase))
+            SelectPivotTag("sites");
         else if (string.Equals(_initialSection, "connection", StringComparison.OrdinalIgnoreCase))
             SelectPivotTag("connection");
     }
@@ -225,12 +236,27 @@ public sealed partial class SettingsPage : Page
             _backupsLoaded = true;
             await RefreshBackupsUiAsync();
         }
+        else if (string.Equals(tag, "printers", StringComparison.OrdinalIgnoreCase) && !_printersLoaded)
+        {
+            await RefreshPrintersUiAsync();
+        }
+        else if (string.Equals(tag, "audit", StringComparison.OrdinalIgnoreCase) && !_auditLoaded)
+        {
+            _auditLoaded = true;
+            await RefreshAuditUiAsync();
+        }
+        else if (string.Equals(tag, "sites", StringComparison.OrdinalIgnoreCase) && !_sitesLoaded)
+        {
+            _sitesLoaded = true;
+            await RefreshSitesUiAsync();
+        }
         else if ((tag is null || string.Equals(tag, "connection", StringComparison.OrdinalIgnoreCase)
                   || string.Equals((SettingsPivot.SelectedItem as PivotItem)?.Header as string, "Connection", StringComparison.OrdinalIgnoreCase))
                  && !_connectionHealthLoaded
                  && SettingsPivot.SelectedItem == ConnectionPivot)
         {
             _connectionHealthLoaded = true;
+            RefreshOfflineQueueStatus();
             await CheckHealthAsync();
         }
     }
@@ -1050,6 +1076,11 @@ public sealed partial class SettingsPage : Page
         IntegrationsPivot.Visibility = Has("integrations.manage") || Has("settings.manage") ? Visibility.Visible : Visibility.Collapsed;
         UsersPivot.Visibility = Has("staff.view") || Has("roles.manage") ? Visibility.Visible : Visibility.Collapsed;
         BackupsPivot.Visibility = Has("backups.manage") ? Visibility.Visible : Visibility.Collapsed;
+        PrintersPivot.Visibility = Has("settings.view") || Has("settings.manage") || Has("integrations.manage")
+            ? Visibility.Visible : Visibility.Collapsed;
+        AuditPivot.Visibility = Has("audit.view") ? Visibility.Visible : Visibility.Collapsed;
+        SitesPivot.Visibility = Has("settings.view") || Has("settings.manage") || Has("inventory.view")
+            ? Visibility.Visible : Visibility.Collapsed;
         ConnectionPivot.Visibility = Has("settings.view") || Has("settings.manage") || canRestart
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1191,10 +1222,26 @@ public sealed partial class SettingsPage : Page
             DeviceIdNotesBox.Text = s.Notes ?? string.Empty;
             DeviceIdApiKeyBox.Password = string.Empty;
             DeviceIdClearKeyCheck.IsChecked = false;
-            DeviceIdConfiguredText.Text = s.ApiKeyConfigured
-                ? $"API key configured · provider {s.Provider} · {s.LookupsToday} lookup(s) today"
-                : $"No API key stored · provider {s.Provider}";
-            DeviceIdStatusText.Text = "Loaded Device ID settings.";
+            if (!s.ApiKeyConfigured)
+            {
+                DeviceIdConfiguredText.Text = $"No API key stored · provider {s.Provider}";
+                DeviceIdStatusText.Text = "Loaded Device ID settings. Paste your IMEI.info key and Save.";
+            }
+            else if (!s.ApiKeyDecryptable)
+            {
+                DeviceIdConfiguredText.Text =
+                    $"API key stored but NOT decryptable · provider {s.Provider} · {s.LookupsToday} lookup(s) today";
+                DeviceIdErrorText.Text =
+                    "Re-paste the IMEI.info API key below and Save. The server encryption key likely changed after this key was stored " +
+                    "(or restore Encryption__Key / set Encryption__PreviousKey in docker/.env).";
+                DeviceIdStatusText.Text = "Device ID settings loaded — API key needs re-entry.";
+            }
+            else
+            {
+                DeviceIdConfiguredText.Text =
+                    $"API key configured and decryptable · provider {s.Provider} · {s.LookupsToday} lookup(s) today";
+                DeviceIdStatusText.Text = "Loaded Device ID settings.";
+            }
         }
         catch (Exception ex)
         {
@@ -1317,6 +1364,12 @@ public sealed partial class SettingsPage : Page
         await RefreshBackupsUiAsync();
     }
 
+    private async void BackupsRestoreTest_Click(object sender, RoutedEventArgs e)
+    {
+        await Backups.RestoreTestLatestCommand.ExecuteAsync(null);
+        await RefreshBackupsUiAsync();
+    }
+
     private async Task RefreshBackupsUiAsync()
     {
         BackupsErrorText.Text = string.Empty;
@@ -1325,6 +1378,111 @@ public sealed partial class SettingsPage : Page
         BackupsStatusText.Text = Backups.Status ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(Backups.Error))
             BackupsErrorText.Text = Backups.Error;
+    }
+
+    private async void PrintersRefresh_Click(object sender, RoutedEventArgs e) => await RefreshPrintersUiAsync();
+
+    private async void PrintersSave_Click(object sender, RoutedEventArgs e)
+    {
+        Printers.Name = PrinterNameBox.Text ?? "Counter PDF";
+        Printers.Kind = PrinterKindBox.Text ?? "PdfFallback";
+        Printers.Connection = PrinterConnectionBox.Text ?? string.Empty;
+        await Printers.SaveCommand.ExecuteAsync(null);
+        await RefreshPrintersUiAsync();
+    }
+
+    private async Task RefreshPrintersUiAsync()
+    {
+        await Printers.RefreshCommand.ExecuteAsync(null);
+        PrintersList.ItemsSource = Printers.Lines;
+        IntegrationHealthList.ItemsSource = Printers.HealthLines;
+        _printersLoaded = true;
+    }
+
+    private async void AuditRefresh_Click(object sender, RoutedEventArgs e) => await RefreshAuditUiAsync();
+
+    private async Task RefreshAuditUiAsync()
+    {
+        AuditErrorText.Text = string.Empty;
+        AuditLog.ActionFilter = AuditActionFilterBox.Text ?? string.Empty;
+        await AuditLog.RefreshCommand.ExecuteAsync(null);
+        AuditList.ItemsSource = AuditLog.Lines;
+        AuditStatusText.Text = AuditLog.Status ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(AuditLog.Error))
+            AuditErrorText.Text = AuditLog.Error;
+    }
+
+    private async void SitesRefresh_Click(object sender, RoutedEventArgs e) => await RefreshSitesUiAsync();
+
+    private async void SitesSaveLocation_Click(object sender, RoutedEventArgs e)
+    {
+        Sites.Name = SiteNameBox.Text ?? string.Empty;
+        Sites.Suburb = SiteSuburbBox.Text ?? string.Empty;
+        Sites.State = string.IsNullOrWhiteSpace(SiteStateBox.Text) ? "QLD" : SiteStateBox.Text;
+        await Sites.SaveLocationCommand.ExecuteAsync(null);
+        SiteNameBox.Text = Sites.Name;
+        SiteSuburbBox.Text = Sites.Suburb;
+        SiteStateBox.Text = Sites.State;
+        await RefreshSitesUiAsync();
+    }
+
+    private async void SitesSaveBin_Click(object sender, RoutedEventArgs e)
+    {
+        Sites.BinCode = BinCodeBox.Text ?? string.Empty;
+        Sites.BinName = BinNameBox.Text ?? string.Empty;
+        await Sites.SaveBinCommand.ExecuteAsync(null);
+        BinCodeBox.Text = Sites.BinCode;
+        BinNameBox.Text = Sites.BinName;
+        await RefreshSitesUiAsync();
+    }
+
+    private async Task RefreshSitesUiAsync()
+    {
+        SitesErrorText.Text = string.Empty;
+        await Sites.RefreshCommand.ExecuteAsync(null);
+        SitesList.ItemsSource = Sites.Lines;
+        BinsList.ItemsSource = Sites.BinLines;
+        SitesStatusText.Text = Sites.Status ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(Sites.Error))
+            SitesErrorText.Text = Sites.Error;
+        _sitesLoaded = true;
+    }
+
+    private void OfflineQueueRefresh_Click(object sender, RoutedEventArgs e) => RefreshOfflineQueueStatus();
+
+    private async void OfflineQueueFlush_Click(object sender, RoutedEventArgs e)
+    {
+        OfflineQueueErrorText.Text = string.Empty;
+        OfflineQueueStatusText.Text = "Flushing offline queue…";
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var result = await api.FlushOfflineQueueAsync();
+            OfflineQueueStatusText.Text = result;
+        }
+        catch (Exception ex)
+        {
+            OfflineQueueErrorText.Text = FormatPricingError(ex.Message);
+            RefreshOfflineQueueStatus();
+        }
+    }
+
+    private void RefreshOfflineQueueStatus()
+    {
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            var count = api.OfflineQueueCount;
+            OfflineQueueStatusText.Text = count == 0
+                ? "Offline queue is empty."
+                : $"{count} mutation(s) waiting to sync.";
+            OfflineQueueErrorText.Text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            OfflineQueueStatusText.Text = "Could not read offline queue.";
+            OfflineQueueErrorText.Text = FormatPricingError(ex.Message);
+        }
     }
 
     private void ChangeServer_Click(object sender, RoutedEventArgs e)

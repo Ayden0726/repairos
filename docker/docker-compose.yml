@@ -38,6 +38,8 @@ services:
       # Dedicated encryption key for integration credentials (AES-GCM). Do not rotate casually.
       Encryption__Key: ${Encryption__Key:-change-me-to-a-long-random-encryption-key-32+}
       Encryption__KeyVersion: ${Encryption__KeyVersion:-1}
+      # Optional: previous Encryption__Key during planned rotation (or JWT-era recovery).
+      Encryption__PreviousKey: ${Encryption__PreviousKey:-}
       Jwt__Issuer: WorkshopOS
       Jwt__Audience: WorkshopOS.Client
       Seed__Demo: ${SEED_DEMO:-false}
@@ -64,6 +66,7 @@ services:
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-change-me-to-a-long-random-secret-key-32+}
       Encryption__Key: ${Encryption__Key:-change-me-to-a-long-random-encryption-key-32+}
       Encryption__KeyVersion: ${Encryption__KeyVersion:-1}
+      Encryption__PreviousKey: ${Encryption__PreviousKey:-}
       Files__Root: /data/files
     volumes:
       - files_data:/data/files

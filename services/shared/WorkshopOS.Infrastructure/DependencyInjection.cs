@@ -45,6 +45,18 @@ public static class DependencyInjection
         services.AddScoped<IPosService, PosService>();
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<IPurchasingService, PurchasingService>();
+        services.AddScoped<IStocktakeService, StocktakeService>();
+        services.AddScoped<IDonorService, DonorService>();
+        services.AddScoped<ILoanService, LoanService>();
+        services.AddScoped<IWarrantyClaimService, WarrantyClaimService>();
+        services.AddScoped<IRefundService, RefundService>();
+        services.AddScoped<IRepairMediaService, RepairMediaService>();
+        services.AddScoped<IPrinterProfileService, PrinterProfileService>();
+        services.AddScoped<IIntegrationHealthService, IntegrationHealthService>();
+        services.AddScoped<IPartFitmentService, PartFitmentService>();
+        services.AddScoped<ISyncService, SyncService>();
+        services.AddScoped<IWorkshopLocationService, WorkshopLocationService>();
+        services.AddScoped<IInventoryBinService, InventoryBinService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IKnowledgeService, KnowledgeService>();
@@ -57,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IAiService, AiService>();
         services.AddScoped<IBackupService, BackupService>();
+        services.AddScoped<ILabelPrintService, LabelPrintService>();
         services.AddScoped<IWebsitePublicService, WebsitePublicService>();
         services.AddScoped<ICustomerPortalService, CustomerPortalService>();
         services.AddScoped<ISellTechService, SellTechService>();

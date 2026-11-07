@@ -112,8 +112,11 @@
         <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ShowCalendarWidget, Mode=OneWay}">
           <Grid>
             <TextBlock Text="Calendar" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center" />
-            <Button Content="Open full calendar" Click="OpenCalendar_Click"
-                    HorizontalAlignment="Right" Padding="10,4" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="New booking" Click="NewBooking_Click" Padding="10,4"
+                      Style="{StaticResource AccentButtonStyle}" />
+              <Button Content="Open full calendar" Click="OpenCalendar_Click" Padding="10,4" />
+            </StackPanel>
           </Grid>
           <TextBlock Text="{x:Bind ViewModel.CalendarStatus, Mode=OneWay}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
           <ListView ItemsSource="{x:Bind ViewModel.UpcomingBookings, Mode=OneWay}" MaxHeight="320" SelectionMode="None">

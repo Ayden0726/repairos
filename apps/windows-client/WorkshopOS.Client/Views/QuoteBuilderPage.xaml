@@ -94,6 +94,17 @@
                         IsEditable="True" LostFocus="QuoteModelBox_LostFocus" />
               <TextBox Grid.Column="2" Header="Serial" Text="{x:Bind ViewModel.DeviceSerial, Mode=TwoWay}" />
             </Grid>
+            <Grid ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBox Header="Model number" Text="{x:Bind ViewModel.DeviceModelNumber, Mode=TwoWay}"
+                       PlaceholderText="A2890…" />
+              <TextBox Grid.Column="1" Header="Storage" Text="{x:Bind ViewModel.DeviceStorage, Mode=TwoWay}"
+                       PlaceholderText="128GB…" />
+              <TextBox Grid.Column="2" Header="Colour" Text="{x:Bind ViewModel.DeviceColour, Mode=TwoWay}"
+                       PlaceholderText="Black…" />
+            </Grid>
 
             <Border Padding="12" CornerRadius="6"
                     Background="{ThemeResource WorkshopAccentSoftBrush}"
@@ -101,7 +112,7 @@
               <StackPanel Spacing="8">
                 <TextBlock Text="IMEI lookup" FontWeight="SemiBold"
                            Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-                <TextBlock Text="Look up the device from its IMEI (Settings → Device ID). Brand and model fill when the provider returns them."
+                <TextBlock Text="Look up fills brand, model, model number, storage, colour, device type, and internal specs notes (Settings → Device ID)."
                            FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
                 <Grid ColumnSpacing="8">
                   <Grid.ColumnDefinitions>

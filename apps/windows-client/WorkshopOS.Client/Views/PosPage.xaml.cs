@@ -22,6 +22,12 @@ public sealed partial class PosPage : Page
             ViewModel.AddProduct(item);
     }
 
+    private void Used_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is UsedDeviceDto device)
+            ViewModel.AddUsedDevice(device);
+    }
+
     private void RemoveCart_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: PosCartLine line })

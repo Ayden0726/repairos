@@ -161,6 +161,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
     [ObservableProperty] private string _deviceModel = string.Empty;
     [ObservableProperty] private string _deviceSerial = string.Empty;
     [ObservableProperty] private string _deviceImei = string.Empty;
+    [ObservableProperty] private string _deviceColour = string.Empty;
+    [ObservableProperty] private string _deviceStorage = string.Empty;
+    [ObservableProperty] private string _deviceModelNumber = string.Empty;
     /// <summary>Catalogue device type: Phone, Tablet, Laptop, PC, Other.</summary>
     [ObservableProperty] private string _selectedDeviceType = "Phone";
     public ObservableCollection<string> DeviceTypes { get; } = new(["Phone", "Tablet", "Laptop", "PC", "Other"]);
@@ -386,35 +389,36 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(result.Brand))
-                DeviceBrand = result.Brand!;
-            if (!string.IsNullOrWhiteSpace(result.Model))
-                DeviceModel = result.Model!;
-            if (!string.IsNullOrWhiteSpace(result.DeviceCategory))
-            {
-                SelectedDeviceType = result.DeviceCategory.Trim() switch
-                {
-                    "Phone" or "Smartphone" or "Mobile" => "Phone",
-                    "Tablet" => "Tablet",
-                    "Laptop" or "Notebook" => "Laptop",
-                    "PC" or "Desktop" => "PC",
-                    _ => SelectedDeviceType
-                };
-            }
+            var filled = ImeiLookupFill.FromResult(result, DeviceImei);
+            if (!string.IsNullOrWhiteSpace(filled.Brand))
+                DeviceBrand = filled.Brand!;
+            if (!string.IsNullOrWhiteSpace(filled.Model))
+                DeviceModel = filled.Model!;
+            if (!string.IsNullOrWhiteSpace(filled.ModelNumber))
+                DeviceModelNumber = filled.ModelNumber!;
+            if (!string.IsNullOrWhiteSpace(filled.Colour))
+                DeviceColour = filled.Colour!;
+            if (!string.IsNullOrWhiteSpace(filled.Storage))
+                DeviceStorage = filled.Storage!;
+            if (!string.IsNullOrWhiteSpace(filled.Category) &&
+                DeviceTypes.Contains(filled.Category))
+                SelectedDeviceType = filled.Category;
+            else if (!string.IsNullOrWhiteSpace(filled.Category))
+                SelectedDeviceType = "Other";
 
+            InternalNotes = ImeiLookupFill.MergeNotesBlock(InternalNotes, filled.NotesBlock);
             DeviceBrandModelChanged?.Invoke();
 
-            var dup = result.Duplicates is { Count: > 0 }
-                ? $" · {result.Duplicates.Count} possible duplicate(s) in shop"
-                : "";
-            ImeiResultSummary =
-                $"{result.Brand} {result.Model}".Trim() +
-                (string.IsNullOrWhiteSpace(result.ModelNumber) ? "" : $" ({result.ModelNumber})") +
-                $" · {result.VerificationStatus}" +
-                (result.FromCache ? " · cached" : "") +
-                dup;
+            ImeiResultSummary = filled.Summary;
             HasImeiResult = !string.IsNullOrWhiteSpace(ImeiResultSummary);
-            ImeiStatus = result.Message ?? (result.Success ? "Lookup complete — brand/model filled where available." : "Manual entry may still be needed.");
+            var hints = new List<string>();
+            if (filled.StorageIsHint) hints.Add("confirm storage");
+            if (filled.ColourIsHint) hints.Add("confirm colour");
+            var hintText = hints.Count > 0 ? $" Please {string.Join(" and ", hints)} with the customer." : "";
+            ImeiStatus = result.Message
+                ?? (result.Success
+                    ? $"Lookup complete — brand, model, colour, storage and specs filled where available.{hintText}"
+                    : "Manual entry may still be needed.");
         }
         catch (Exception ex)
         {
@@ -523,6 +527,9 @@ public partial class QuoteBuilderViewModel : ObservableObject
         DeviceModel = q.DeviceModel ?? string.Empty;
         DeviceSerial = q.DeviceSerial ?? string.Empty;
         DeviceImei = q.DeviceImei ?? string.Empty;
+        DeviceColour = q.DeviceColour ?? string.Empty;
+        DeviceStorage = q.DeviceStorage ?? string.Empty;
+        DeviceModelNumber = q.DeviceModelNumber ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(q.DeviceCategory))
         {
             SelectedDeviceType = q.DeviceCategory.Trim() switch
@@ -854,9 +861,13 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 var deviceCat = string.Equals(SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
                     ? null : SelectedDeviceType;
                 var imei = string.IsNullOrWhiteSpace(DeviceImei) ? null : DeviceImei.Trim();
+                var colour = string.IsNullOrWhiteSpace(DeviceColour) ? null : DeviceColour.Trim();
+                var storage = string.IsNullOrWhiteSpace(DeviceStorage) ? null : DeviceStorage.Trim();
+                var modelNo = string.IsNullOrWhiteSpace(DeviceModelNumber) ? null : DeviceModelNumber.Trim();
                 var updated = await _api.PutAsync<UpdateQuoteRequest, QuoteDetailDto>($"api/quotes/{id}",
                     new UpdateQuoteRequest(Issue, CustomerNotes, InternalNotes, DeviceBrand, DeviceModel, DeviceSerial,
-                        deviceCat, null, lines, "Save", labour, markup, DeviceImei: imei));
+                        deviceCat, null, lines, "Save", labour, markup, DeviceImei: imei,
+                        DeviceColour: colour, DeviceStorage: storage, DeviceModelNumber: modelNo));
                 await LoadQuoteAsync(updated.Id);
                 StatusMessage = "Quote saved.";
             }
@@ -865,10 +876,14 @@ public partial class QuoteBuilderViewModel : ObservableObject
                 var deviceCat = string.Equals(SelectedDeviceType, "Other", StringComparison.OrdinalIgnoreCase)
                     ? null : SelectedDeviceType;
                 var imei = string.IsNullOrWhiteSpace(DeviceImei) ? null : DeviceImei.Trim();
+                var colour = string.IsNullOrWhiteSpace(DeviceColour) ? null : DeviceColour.Trim();
+                var storage = string.IsNullOrWhiteSpace(DeviceStorage) ? null : DeviceStorage.Trim();
+                var modelNo = string.IsNullOrWhiteSpace(DeviceModelNumber) ? null : DeviceModelNumber.Trim();
                 var created = await _api.PostAsync<CreateQuoteRequest, QuoteDetailDto>("api/quotes",
                     new CreateQuoteRequest(customerId, RepairTicketId, Issue, CustomerNotes, InternalNotes,
                         DeviceBrand, DeviceModel, DeviceSerial, deviceCat, DefaultValidityDays, lines,
-                        null, labour, markup, DeviceImei: imei));
+                        null, labour, markup, DeviceImei: imei,
+                        DeviceColour: colour, DeviceStorage: storage, DeviceModelNumber: modelNo));
                 await LoadQuoteAsync(created.Id);
                 StatusMessage = $"Created {created.Number}";
             }

@@ -93,7 +93,8 @@ public static class PermissionKeys
             "customers.view", "devices.view", "inventory.view", "quotes.view", "quotes.manage",
             "pricing.view", "pricing.apply_discount",
             "expenses.view", "expenses.manage",
-            "builds.view", "builds.manage", "used.view", "used.view_costs", "bookings.view",
+            "builds.view", "builds.manage", "used.view", "used.view_costs",
+            "bookings.view", "bookings.manage",
             "acquisitions.view", "acquisitions.manage",
             "selltech.view", "messages.view", "messages.manage",
             "knowledge.view", "knowledge.manage", "ai.use",
@@ -122,6 +123,7 @@ public static class PermissionKeys
             "acquisitions.view", "acquisitions.manage",
             "selltech.view", "selltech.manage",
             "inventory.view", "builds.view", "ai.use",
+            "bookings.view", "bookings.manage",
             "pos.view", "pos.sell"
         ],
         ["read_only"] =

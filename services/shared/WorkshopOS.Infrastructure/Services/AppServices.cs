@@ -36,6 +36,57 @@ public sealed class AuditService : IAuditService
         });
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task<AuditSearchResponse> SearchAsync(
+        string? action,
+        Guid? actorUserId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+        var q = _db.AuditEvents.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            var a = action.Trim().ToLowerInvariant();
+            q = q.Where(e => e.Action.ToLower().Contains(a));
+        }
+        if (actorUserId is Guid uid)
+            q = q.Where(e => e.ActorUserId == uid);
+        if (from is DateTimeOffset f)
+            q = q.Where(e => e.CreatedAt >= f);
+        if (to is DateTimeOffset t)
+            q = q.Where(e => e.CreatedAt <= t);
+
+        var total = await q.CountAsync(ct);
+        var rows = await q.OrderByDescending(e => e.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        var actorIds = rows.Where(r => r.ActorUserId is not null).Select(r => r.ActorUserId!.Value).Distinct().ToList();
+        var names = await _db.Users.AsNoTracking()
+            .Where(u => actorIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.DisplayName })
+            .ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+
+        var items = rows.Select(e => new AuditEventDto(
+            e.Id,
+            e.CreatedAt,
+            e.ActorUserId,
+            e.ActorUserId is Guid id && names.TryGetValue(id, out var n) ? n : null,
+            e.Action,
+            e.EntityType,
+            e.EntityId,
+            e.OldValueJson,
+            e.NewValueJson,
+            e.Ip)).ToList();
+
+        return new AuditSearchResponse(items, total);
+    }
 }
 
 public sealed class SetupService : ISetupService
@@ -332,6 +383,12 @@ public sealed class SettingsService : ISettingsService
             new("inventory", "Main", "Inventory", 1, IsVisible(visibility, "inventory"), true),
             new("purchasing", "Main", "Purchasing", 1, IsVisible(visibility, "purchasing"), true),
             new("used", "Main", "Refurbished", 1, IsVisible(visibility, "used"), true),
+            new("donors", "Main", "Donors", 1, IsVisible(visibility, "donors"), true),
+            new("loans", "Main", "Loaners", 1, IsVisible(visibility, "loans"), true),
+            new("warranty_claims", "Main", "Warranty claims", 1, IsVisible(visibility, "warranty_claims"), true),
+            new("refunds", "Main", "Refunds", 1, IsVisible(visibility, "refunds"), true),
+            new("website_inbox", "Main", "Website inbox", 1, IsVisible(visibility, "website_inbox"), true),
+            new("fitment", "Main", "Part fitment", 1, IsVisible(visibility, "fitment"), true),
             new("reports", "Main", "Reports", 1, IsVisible(visibility, "reports"), true),
             new("ai", "More", "AI Analyst", 1, IsVisible(visibility, "ai"), true),
             new("knowledge", "More", "Knowledge", 1, IsVisible(visibility, "knowledge"), true),

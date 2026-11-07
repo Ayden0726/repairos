@@ -291,6 +291,7 @@ public sealed class AuthSession
 public sealed class ApiClient
 {
     private readonly IAppSettingsStore _settings;
+    private readonly OfflineQueueStore _offlineQueue;
     private readonly AuthSession _session;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -305,10 +306,74 @@ public sealed class ApiClient
     /// <summary>Short budget used during bootstrap so the connect UI appears quickly.</summary>
     public static readonly TimeSpan BootstrapTimeout = TimeSpan.FromSeconds(4);
 
-    public ApiClient(IAppSettingsStore settings, AuthSession session)
+    public ApiClient(IAppSettingsStore settings, AuthSession session, OfflineQueueStore offlineQueue)
     {
         _settings = settings;
         _session = session;
+        _offlineQueue = offlineQueue;
+    }
+
+    public int OfflineQueueCount => _offlineQueue.Count;
+
+    public async Task<string> FlushOfflineQueueAsync(CancellationToken ct = default)
+    {
+        var pending = _offlineQueue.Peek();
+        if (pending.Count == 0) return "Offline queue is empty.";
+
+        var push = _offlineQueue.ToPushRequest();
+        try
+        {
+            var result = await PostAsync<SyncPushRequest, SyncPushResponse>("api/sync/push", push, ct);
+            var applied = result.Results.Count(r => r.Status is "Applied" or "Duplicate");
+            // Replay successful mutations against live endpoints when still queued locally
+            var remaining = new List<OfflineQueuedMutation>();
+            foreach (var m in pending)
+            {
+                var ack = result.Results.FirstOrDefault(r => r.ClientMutationId == m.ClientMutationId);
+                if (ack is null || ack.Status is "Rejected")
+                {
+                    remaining.Add(m);
+                    continue;
+                }
+                try
+                {
+                    await ReplayMutationAsync(m, ct);
+                }
+                catch
+                {
+                    remaining.Add(m);
+                }
+            }
+            _offlineQueue.Replace(remaining);
+            return $"Synced {applied} · {remaining.Count} still queued.";
+        }
+        catch (Exception ex)
+        {
+            return $"Sync push failed: {ex.Message}";
+        }
+    }
+
+    private async Task ReplayMutationAsync(OfflineQueuedMutation m, CancellationToken ct)
+    {
+        using var http = CreateClient();
+        using var content = m.BodyJson is null
+            ? null
+            : new StringContent(m.BodyJson, System.Text.Encoding.UTF8, "application/json");
+        using var response = m.Method.ToUpperInvariant() switch
+        {
+            "PUT" => await http.PutAsync(m.Path.TrimStart('/'), content, ct),
+            "DELETE" => await http.DeleteAsync(m.Path.TrimStart('/'), ct),
+            _ => await http.PostAsync(m.Path.TrimStart('/'), content, ct)
+        };
+        // 2xx or conflict/duplicate is fine after ack
+        if ((int)response.StatusCode >= 500)
+            throw new InvalidOperationException($"Replay failed {(int)response.StatusCode}");
+    }
+
+    private void QueueIfOffline(Exception ex, string method, string path, string? bodyJson)
+    {
+        if (ex is HttpRequestException or TaskCanceledException)
+            _offlineQueue.Enqueue(method, path.StartsWith('/') ? path : "/" + path, bodyJson);
     }
 
     public bool HasServer => !string.IsNullOrWhiteSpace(_settings.ServerUrl);
@@ -347,54 +412,110 @@ public sealed class ApiClient
 
     public async Task<TResponse> PostAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.PostAsJsonAsync(path, body, JsonOptions, ct);
-        await EnsureSuccess(response);
-        return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.PostAsJsonAsync(path, body, JsonOptions, ct);
+            await EnsureSuccess(response);
+            return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "POST", path, JsonSerializer.Serialize(body, JsonOptions));
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task PostAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.PostAsJsonAsync(path, body, JsonOptions, ct);
-        await EnsureSuccess(response);
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.PostAsJsonAsync(path, body, JsonOptions, ct);
+            await EnsureSuccess(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "POST", path, JsonSerializer.Serialize(body, JsonOptions));
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task PostAsync(string path, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.PostAsync(path, content: null, ct);
-        await EnsureSuccess(response);
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.PostAsync(path, content: null, ct);
+            await EnsureSuccess(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "POST", path, null);
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task<TResponse> PostAsync<TResponse>(string path, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.PostAsync(path, content: null, ct);
-        await EnsureSuccess(response);
-        return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.PostAsync(path, content: null, ct);
+            await EnsureSuccess(response);
+            return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "POST", path, null);
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task<TResponse> PutAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.PutAsJsonAsync(path, body, JsonOptions, ct);
-        await EnsureSuccess(response);
-        return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.PutAsJsonAsync(path, body, JsonOptions, ct);
+            await EnsureSuccess(response);
+            return (await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, ct))!;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "PUT", path, JsonSerializer.Serialize(body, JsonOptions));
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task PutAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.PutAsJsonAsync(path, body, JsonOptions, ct);
-        await EnsureSuccess(response);
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.PutAsJsonAsync(path, body, JsonOptions, ct);
+            await EnsureSuccess(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "PUT", path, JsonSerializer.Serialize(body, JsonOptions));
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task DeleteAsync(string path, CancellationToken ct = default)
     {
-        using var http = CreateClient();
-        using var response = await http.DeleteAsync(path, ct);
-        await EnsureSuccess(response);
+        try
+        {
+            using var http = CreateClient();
+            using var response = await http.DeleteAsync(path, ct);
+            await EnsureSuccess(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            QueueIfOffline(ex, "DELETE", path, null);
+            throw new InvalidOperationException("Offline — change queued and will sync when the server is reachable.", ex);
+        }
     }
 
     public async Task<WorkshopOS.Contracts.Common.HealthDto> HealthAsync(CancellationToken ct = default, TimeSpan? timeout = null) =>

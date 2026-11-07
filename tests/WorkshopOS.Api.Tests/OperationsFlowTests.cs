@@ -51,6 +51,9 @@ public sealed class OperationsFlowTests
 
         var report = await _client.GetFromJsonAsync<ReportSummaryDto>("/api/reports/summary");
         report.Should().NotBeNull();
+        report!.CogsKnown.Should().BeFalse("no stock consumes yet — must not invent COGS");
+        report.CostOfGoods.Should().Be(0m);
+        report.CogsNote.Should().NotBeNullOrWhiteSpace();
 
         var ai = await PostJson<AiAssistResponse>("/api/ai/assist", new AiAssistRequest("Suggest diagnosis for no power", null));
         ai.Enabled.Should().BeFalse();
@@ -60,10 +63,49 @@ public sealed class OperationsFlowTests
         backupResponse.EnsureSuccessStatusCode();
         var backup = await backupResponse.Content.ReadFromJsonAsync<BackupDto>();
         backup.Should().NotBeNull();
-        backup!.Status.Should().BeOneOf("Completed", "Running", "Failed");
+        backup!.Status.Should().Be("Completed");
+        backup.Verified.Should().BeTrue();
+        backup.SizeBytes.Should().BeGreaterThan(0);
+        backup.Method.Should().BeOneOf("pg_dump", "LogicalJsonGzip");
+        backup.Sha256.Should().NotBeNullOrWhiteSpace();
 
         var backups = await _client.GetFromJsonAsync<BackupDto[]>("/api/backups");
-        backups.Should().Contain(b => b.Id == backup.Id);
+        backups.Should().Contain(b => b.Id == backup.Id && b.Verified);
+
+        var audit = await _client.GetFromJsonAsync<AuditSearchResponse>("/api/audit?page=1&pageSize=20");
+        audit.Should().NotBeNull();
+        audit!.Total.Should().BeGreaterThan(0);
+        audit.Items.Should().Contain(e => e.Action.Contains("backup", StringComparison.OrdinalIgnoreCase));
+
+        var adjust = await PostJson<InventoryListItemDto>($"/api/inventory/{item.Id}/adjust",
+            new AdjustStockRequest(2, "Test receive"));
+        adjust.Available.Should().Be(5);
+
+        var stocktake = await PostJson<StocktakeDetailDto>("/api/stocktakes", new CreateStocktakeRequest("Ops test count"));
+        stocktake.Status.Should().Be("Open");
+        stocktake.Lines.Should().NotBeEmpty();
+        foreach (var line in stocktake.Lines)
+        {
+            var counted = await PostJson<StocktakeLineDto>(
+                $"/api/stocktakes/{stocktake.Id}/lines/{line.Id}",
+                new SetStocktakeCountRequest(line.ExpectedQty));
+            counted.CountedQty.Should().Be(line.ExpectedQty);
+        }
+        var completed = await PostJsonEmpty<StocktakeDetailDto>($"/api/stocktakes/{stocktake.Id}/complete");
+        completed.Status.Should().Be("Completed");
+
+        var partLabel = await _client.GetAsync($"/api/labels/part/{item.Id}");
+        partLabel.EnsureSuccessStatusCode();
+        var partHtml = await partLabel.Content.ReadAsStringAsync();
+        partHtml.Should().Contain(item.Sku);
+        partHtml.Should().Contain("Parts label");
+    }
+
+    private async Task<T> PostJsonEmpty<T>(string url)
+    {
+        var response = await _client.PostAsync(url, content: null);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<T>())!;
     }
 
     private async Task EnsureSetupAndLoginAsync()

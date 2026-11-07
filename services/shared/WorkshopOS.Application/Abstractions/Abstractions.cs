@@ -67,6 +67,14 @@ public interface ISearchService
 public interface IAuditService
 {
     Task WriteAsync(Guid? actorUserId, string action, string? entityType = null, string? entityId = null, object? oldValue = null, object? newValue = null, string? ip = null, string? userAgent = null, CancellationToken ct = default);
+    Task<AuditSearchResponse> SearchAsync(
+        string? action,
+        Guid? actorUserId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
 }
 
 public interface IClock
@@ -172,6 +180,10 @@ public interface IInventoryService
     Task ReserveAsync(ReserveStockRequest request, Guid actorId, CancellationToken ct = default);
     Task ConsumeReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default);
     Task ReleaseReservationAsync(Guid reservationId, Guid actorId, CancellationToken ct = default);
+    Task<InventoryListItemDto> TransferBinAsync(Guid id, TransferBinRequest request, Guid actorId, CancellationToken ct = default);
+    Task<InventoryListItemDto> QuarantineAsync(Guid id, QuarantineStockRequest request, Guid actorId, CancellationToken ct = default);
+    Task<InventoryListItemDto?> FindByBarcodeAsync(string code, CancellationToken ct = default);
+    Task<IReadOnlyList<InventoryReservationDto>> ListReservationsAsync(Guid? itemId = null, CancellationToken ct = default);
 }
 
 public interface IPurchasingService
@@ -179,8 +191,26 @@ public interface IPurchasingService
     Task<IReadOnlyList<SupplierDto>> ListSuppliersAsync(CancellationToken ct = default);
     Task<SupplierDto> UpsertSupplierAsync(UpsertSupplierRequest request, Guid actorId, CancellationToken ct = default);
     Task<IReadOnlyList<PurchaseOrderListItemDto>> ListPurchaseOrdersAsync(CancellationToken ct = default);
+    Task<PurchaseOrderDetailDto> GetPurchaseOrderAsync(Guid id, CancellationToken ct = default);
     Task<PurchaseOrderListItemDto> CreatePurchaseOrderAsync(CreatePurchaseOrderRequest request, Guid actorId, CancellationToken ct = default);
     Task<PurchaseOrderListItemDto> ReceiveLineAsync(Guid poId, ReceivePoLineRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IStocktakeService
+{
+    Task<IReadOnlyList<StocktakeListItemDto>> ListAsync(CancellationToken ct = default);
+    Task<StocktakeDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<StocktakeDetailDto> CreateAsync(CreateStocktakeRequest request, Guid actorId, CancellationToken ct = default);
+    Task<StocktakeLineDto> SetCountAsync(Guid sessionId, Guid lineId, SetStocktakeCountRequest request, Guid actorId, CancellationToken ct = default);
+    Task<StocktakeDetailDto> CompleteAsync(Guid id, Guid actorId, CancellationToken ct = default);
+    Task<StocktakeDetailDto> CancelAsync(Guid id, Guid actorId, CancellationToken ct = default);
+}
+
+public interface ILabelPrintService
+{
+    Task<string> RenderRepairLabelHtmlAsync(Guid repairId, CancellationToken ct = default);
+    Task<string> RenderUsedDeviceLabelHtmlAsync(Guid usedDeviceId, bool includePrice, CancellationToken ct = default);
+    Task<string> RenderPartLabelHtmlAsync(Guid inventoryItemId, CancellationToken ct = default);
 }
 
 public interface INotificationService
@@ -267,6 +297,7 @@ public interface IBackupService
     Task<IReadOnlyList<BackupDto>> ListAsync(CancellationToken ct = default);
     Task<BackupDto> CreateAsync(Guid actorId, CancellationToken ct = default);
     Task<SystemHealthDetailDto> HealthDetailAsync(CancellationToken ct = default);
+    Task<BackupRestoreTestDto> RestoreTestAsync(Guid backupId, Guid actorId, CancellationToken ct = default);
 }
 
 public interface IIntegrationCredentialService
@@ -420,4 +451,83 @@ public interface IRefurbDiagnosticService
 public interface INotificationOutboxProcessor
 {
     Task<int> ProcessPendingAsync(int take = 50, CancellationToken ct = default);
+}
+
+public interface IDonorService
+{
+    Task<IReadOnlyList<DonorDeviceDto>> ListAsync(CancellationToken ct = default);
+    Task<DonorDeviceDetailDto> GetAsync(Guid id, CancellationToken ct = default);
+    Task<DonorDeviceDetailDto> CreateAsync(CreateDonorDeviceRequest request, Guid actorId, CancellationToken ct = default);
+    Task<DonorDeviceDetailDto> HarvestAsync(Guid id, HarvestComponentRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface ILoanService
+{
+    Task<IReadOnlyList<LoanDeviceDto>> ListDevicesAsync(CancellationToken ct = default);
+    Task<LoanDeviceDto> UpsertDeviceAsync(UpsertLoanDeviceRequest request, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<LoanAgreementDto>> ListAgreementsAsync(string? status = null, CancellationToken ct = default);
+    Task<LoanAgreementDto> CheckoutAsync(CheckoutLoanRequest request, Guid actorId, CancellationToken ct = default);
+    Task<LoanAgreementDto> ReturnAsync(Guid agreementId, ReturnLoanRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IWarrantyClaimService
+{
+    Task<IReadOnlyList<StaffWarrantyDto>> ListWarrantiesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<WarrantyClaimDto>> ListClaimsAsync(string? status = null, CancellationToken ct = default);
+    Task<WarrantyClaimDto> CreateClaimAsync(CreateWarrantyClaimRequest request, Guid actorId, CancellationToken ct = default);
+    Task<WarrantyClaimDto> UpdateClaimAsync(Guid id, UpdateWarrantyClaimRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IRefundService
+{
+    Task<IReadOnlyList<RefundRequestDto>> ListAsync(string? status = null, CancellationToken ct = default);
+    Task<RefundRequestDto> CreateAsync(CreateRefundRequestDto request, Guid actorId, CancellationToken ct = default);
+    Task<RefundRequestDto> DecideAsync(Guid id, DecideRefundRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IRepairMediaService
+{
+    Task<IReadOnlyList<RepairAttachmentDto>> ListAttachmentsAsync(Guid ticketId, CancellationToken ct = default);
+    Task<RepairAttachmentDto> UploadAttachmentAsync(Guid ticketId, UploadRepairAttachmentRequest request, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<RepairSignatureDto>> ListSignaturesAsync(Guid ticketId, CancellationToken ct = default);
+    Task<RepairSignatureDto> CaptureSignatureAsync(Guid ticketId, CaptureRepairSignatureRequest request, Guid actorId, CancellationToken ct = default);
+    Task<string> BuildConditionReportHtmlAsync(Guid ticketId, CancellationToken ct = default);
+}
+
+public interface IPrinterProfileService
+{
+    Task<IReadOnlyList<PrinterProfileDto>> ListAsync(CancellationToken ct = default);
+    Task<PrinterProfileDto> UpsertAsync(UpsertPrinterProfileRequest request, Guid actorId, CancellationToken ct = default);
+    Task<BatchLabelResult> BatchRenderAsync(BatchLabelRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IIntegrationHealthService
+{
+    Task<IReadOnlyList<IntegrationHealthEventDto>> ListAsync(CancellationToken ct = default);
+    Task RecordAsync(string providerKey, bool success, string message, Guid? actorId, CancellationToken ct = default);
+}
+
+public interface IPartFitmentService
+{
+    Task<IReadOnlyList<PartFitmentDto>> ListAsync(string? brand = null, string? model = null, string? q = null, CancellationToken ct = default);
+    Task<PartFitmentDto> UpsertAsync(UpsertPartFitmentRequest request, Guid actorId, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, Guid actorId, CancellationToken ct = default);
+}
+
+public interface ISyncService
+{
+    Task<SyncPushResponse> PushAsync(SyncPushRequest request, Guid actorId, CancellationToken ct = default);
+    Task<IReadOnlyList<SyncOutboxListItemDto>> ListAsync(string? status = null, CancellationToken ct = default);
+}
+
+public interface IWorkshopLocationService
+{
+    Task<IReadOnlyList<WorkshopLocationDto>> ListAsync(CancellationToken ct = default);
+    Task<WorkshopLocationDto> UpsertAsync(UpsertWorkshopLocationRequest request, Guid actorId, CancellationToken ct = default);
+}
+
+public interface IInventoryBinService
+{
+    Task<IReadOnlyList<InventoryBinDto>> ListAsync(Guid? locationId = null, CancellationToken ct = default);
+    Task<InventoryBinDto> UpsertAsync(UpsertInventoryBinRequest request, Guid actorId, CancellationToken ct = default);
 }

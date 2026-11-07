@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WorkshopOS.Client.Services;
 
@@ -22,4 +23,10 @@ public sealed partial class UsedTechPage : Page
         if (e.ClickedItem is UsedDeviceRowVm row)
             await ViewModel.LoadDeviceAsync(row.Id);
     }
+
+    private void Acquisitions_Click(object sender, RoutedEventArgs e) =>
+        Frame.Navigate(typeof(AcquisitionsPage));
+
+    private void Donors_Click(object sender, RoutedEventArgs e) =>
+        Frame.Navigate(typeof(DonorsPage));
 }

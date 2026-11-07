@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
 using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
+using WorkshopOS.Contracts.Website;
 using WorkshopOS.Contracts.Workshop;
 
 namespace WorkshopOS.Client.Views;
@@ -317,21 +318,38 @@ public partial class InventoryViewModel : ObservableObject
     [ObservableProperty] private string _sell = "0";
     [ObservableProperty] private string _qtyOnHand = "1";
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _statusMessage;
+    [ObservableProperty] private InventoryListItemDto? _selectedItem;
+    [ObservableProperty] private string _selectedLabel = "Select a stock line to adjust or print.";
+    [ObservableProperty] private string _adjustDelta = "1";
+    [ObservableProperty] private string _adjustReason = "Stock adjustment";
+    [ObservableProperty] private string _barcodeLookup = string.Empty;
+    [ObservableProperty] private string _transferBin = string.Empty;
+    [ObservableProperty] private string _quarantineQty = "1";
+    [ObservableProperty] private string _quarantineReason = "Quarantine";
     public InventoryViewModel(ApiClient api) => _api = api;
 
     partial void OnComponentFilterChanged(string value) => _ = RefreshAsync();
+    partial void OnSelectedItemChanged(InventoryListItemDto? value) =>
+        SelectedLabel = value is null
+            ? "Select a stock line to adjust or print."
+            : $"{value.Sku} · {value.Name} · avail {value.Available} (on hand {value.OnHand}, reserved {value.Reserved}, quarantine {value.Quarantined})";
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        Error = null;
         try
         {
             var path = "api/inventory";
             if (!string.IsNullOrWhiteSpace(ComponentFilter) && ComponentFilter != "All")
                 path += $"?componentType={Uri.EscapeDataString(ComponentFilter)}";
             var list = await _api.GetAsync<IReadOnlyList<InventoryListItemDto>>(path);
+            var keepId = SelectedItem?.Id;
             Items.Clear();
             foreach (var i in list) Items.Add(i);
+            if (keepId is Guid id)
+                SelectedItem = Items.FirstOrDefault(x => x.Id == id);
         }
         catch (Exception ex) { Error = ex.Message; }
     }
@@ -339,6 +357,7 @@ public partial class InventoryViewModel : ObservableObject
     [RelayCommand]
     private async Task CreateAsync()
     {
+        Error = null;
         try
         {
             _ = decimal.TryParse(Cost, out var cost);
@@ -352,10 +371,121 @@ public partial class InventoryViewModel : ObservableObject
             Sku = Name = string.Empty;
             Cost = Sell = "0";
             QtyOnHand = "1";
+            StatusMessage = "Item created.";
             await RefreshAsync();
         }
         catch (Exception ex) { Error = ex.Message; }
     }
+
+    [RelayCommand]
+    private async Task AdjustAsync()
+    {
+        Error = null;
+        if (SelectedItem is null)
+        {
+            Error = "Select an inventory line first.";
+            return;
+        }
+        if (!int.TryParse(AdjustDelta, out var delta) || delta == 0)
+        {
+            Error = "Enter a non-zero quantity delta.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(AdjustReason))
+        {
+            Error = "Adjustment reason is required.";
+            return;
+        }
+        try
+        {
+            await _api.PostAsync<AdjustStockRequest, InventoryListItemDto>(
+                $"api/inventory/{SelectedItem.Id}/adjust",
+                new AdjustStockRequest(delta, AdjustReason.Trim()));
+            StatusMessage = $"Adjusted {SelectedItem.Sku} by {delta:+0;-0}.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task PrintLabelAsync()
+    {
+        Error = null;
+        if (SelectedItem is null)
+        {
+            Error = "Select an inventory line first.";
+            return;
+        }
+        try
+        {
+            var html = await _api.GetRawAsync($"api/labels/part/{SelectedItem.Id}");
+            var dir = Path.Combine(Path.GetTempPath(), "WorkshopOS");
+            Directory.CreateDirectory(dir);
+            var safeSku = string.Join("-", SelectedItem.Sku.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+            var path = Path.Combine(dir, $"part-label-{safeSku}.html");
+            await File.WriteAllTextAsync(path, html);
+            var opened = await Windows.System.Launcher.LaunchUriAsync(new Uri(path));
+            StatusMessage = opened
+                ? "Opened part label for printing."
+                : $"Part label saved: {path}";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task LookupBarcodeAsync()
+    {
+        Error = null;
+        if (string.IsNullOrWhiteSpace(BarcodeLookup))
+        {
+            Error = "Enter a barcode.";
+            return;
+        }
+        try
+        {
+            var item = await _api.GetAsync<InventoryListItemDto>(
+                $"api/inventory/barcode/{Uri.EscapeDataString(BarcodeLookup.Trim())}");
+            SelectedItem = Items.FirstOrDefault(i => i.Id == item.Id) ?? item;
+            if (Items.All(i => i.Id != item.Id)) Items.Insert(0, item);
+            StatusMessage = $"Found {item.Sku} via barcode.";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task TransferBinAsync()
+    {
+        if (SelectedItem is null) { Error = "Select a stock line first."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<TransferBinRequest, InventoryListItemDto>(
+                $"api/inventory/{SelectedItem.Id}/transfer-bin",
+                new TransferBinRequest(string.IsNullOrWhiteSpace(TransferBin) ? null : TransferBin.Trim()));
+            StatusMessage = $"Moved {SelectedItem.Sku} to bin {TransferBin}.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task QuarantineAsync()
+    {
+        if (SelectedItem is null) { Error = "Select a stock line first."; return; }
+        if (!int.TryParse(QuarantineQty, out var qty) || qty == 0)
+        { Error = "Enter a non-zero quarantine quantity."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<QuarantineStockRequest, InventoryListItemDto>(
+                $"api/inventory/{SelectedItem.Id}/quarantine",
+                new QuarantineStockRequest(qty, QuarantineReason.Trim()));
+            StatusMessage = $"Quarantine updated for {SelectedItem.Sku}.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
 }
 
 public partial class ReportsViewModel : ObservableObject
@@ -371,7 +501,12 @@ public partial class ReportsViewModel : ObservableObject
         try
         {
             var r = await _api.GetAsync<ReportSummaryDto>("api/reports/summary");
-            Summary = $"From {r.From:d} to {r.To:d}\nRevenue {r.Revenue:C}\nCOGS {r.CostOfGoods:C}\nGross profit {r.GrossProfit:C}\nOpened {r.RepairsOpened} · Completed {r.RepairsCompleted}";
+            var cogsLine = r.CogsKnown
+                ? $"COGS {r.CostOfGoods:C}"
+                : $"COGS unknown (shown {r.CostOfGoods:C} — not estimated)";
+            Summary =
+                $"From {r.From:d} to {r.To:d}\nRevenue {r.Revenue:C}\n{cogsLine}\nGross profit {r.GrossProfit:C}\nOpened {r.RepairsOpened} · Completed {r.RepairsCompleted}" +
+                (string.IsNullOrWhiteSpace(r.CogsNote) ? "" : $"\n\n{r.CogsNote}");
         }
         catch (Exception ex) { Error = ex.Message; }
     }
@@ -380,6 +515,7 @@ public partial class ReportsViewModel : ObservableObject
 public partial class BackupsViewModel : ObservableObject
 {
     private readonly ApiClient _api;
+    private IReadOnlyList<BackupDto> _items = Array.Empty<BackupDto>();
     public ObservableCollection<string> Lines { get; } = new();
     [ObservableProperty] private string? _error;
     [ObservableProperty] private string? _status;
@@ -391,15 +527,22 @@ public partial class BackupsViewModel : ObservableObject
         Error = null;
         try
         {
-            var list = await _api.GetAsync<IReadOnlyList<BackupDto>>("api/backups");
+            _items = await _api.GetAsync<IReadOnlyList<BackupDto>>("api/backups");
             Lines.Clear();
-            foreach (var b in list)
-                Lines.Add($"{b.StartedAt:u}  {b.Type}  {b.Status}  {b.Path ?? "(in progress)"}");
+            foreach (var b in _items)
+            {
+                var size = b.SizeBytes is long n ? $"{n / 1024.0:0.#} KiB" : "?";
+                var ver = b.Verified ? "verified" : "UNVERIFIED";
+                Lines.Add($"{b.StartedAt:u}  {b.Type}  {b.Status}  {b.Method ?? "?"}  {size}  {ver}  {b.Path ?? ""}");
+            }
             if (Lines.Count == 0) Lines.Add("No backups yet. Click Create backup.");
             try
             {
                 var health = await _api.GetAsync<SystemHealthDetailDto>("api/health/detail");
-                Status = $"System {health.Status} · DB {(health.Database ? "ok" : "down")} · backups {health.BackupCount ?? 0} · last {health.LastBackupAt?.ToString("u") ?? "never"}";
+                Status =
+                    $"System {health.Status} · DB {(health.Database ? "ok" : "down")} · backups {health.BackupCount ?? 0} · " +
+                    $"last {health.LastBackupAt?.ToString("u") ?? "never"} · " +
+                    $"last verified {health.LastVerifiedBackupAt?.ToString("u") ?? "never"}";
             }
             catch { /* optional */ }
         }
@@ -412,8 +555,61 @@ public partial class BackupsViewModel : ObservableObject
         Error = null;
         try
         {
-            await _api.PostAsync<BackupDto>("api/backups");
+            var created = await _api.PostAsync<BackupDto>("api/backups");
+            Status = created.Verified
+                ? $"Backup completed via {created.Method} ({created.SizeBytes} bytes, verified)."
+                : "Backup finished but was not verified.";
             await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task RestoreTestLatestAsync()
+    {
+        Error = null;
+        var latest = _items.OrderByDescending(b => b.StartedAt).FirstOrDefault();
+        if (latest is null)
+        {
+            Error = "Create a backup first.";
+            return;
+        }
+        try
+        {
+            var result = await _api.PostAsync<BackupRestoreTestDto>($"api/backups/{latest.Id}/restore-test");
+            Status = result.Verified
+                ? $"Restore-test OK · {result.Detail} · SHA {result.Sha256?[..Math.Min(12, result.Sha256?.Length ?? 0)]}…"
+                : $"Restore-test failed · {result.Detail}";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class AuditLogViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<string> Lines { get; } = new();
+    [ObservableProperty] private string _actionFilter = string.Empty;
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _status;
+    public AuditLogViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var q = "api/audit?page=1&pageSize=100";
+            if (!string.IsNullOrWhiteSpace(ActionFilter))
+                q += $"&action={Uri.EscapeDataString(ActionFilter.Trim())}";
+            var result = await _api.GetAsync<AuditSearchResponse>(q);
+            Lines.Clear();
+            foreach (var e in result.Items)
+                Lines.Add($"{e.CreatedAt:u}  {e.ActorName ?? e.ActorUserId?.ToString()[..8] ?? "system"}  {e.Action}  {e.EntityType}/{e.EntityId}");
+            Status = $"{result.Total} event(s) matching";
+            if (Lines.Count == 0) Lines.Add("No audit events for this filter.");
         }
         catch (Exception ex) { Error = ex.Message; }
     }
@@ -492,9 +688,15 @@ public partial class UsedTechViewModel : ObservableObject
     public ObservableCollection<UsedDeviceRowVm> Items { get; } = new();
     public ObservableCollection<UsedPickItem> Customers { get; } = new();
     public ObservableCollection<UsedPickItem> Repairs { get; } = new();
-    public ObservableCollection<string> StatusOptions { get; } = new(["All", "In stock", "Reserved", "Listed", "Sold"]);
-    public ObservableCollection<string> FormStatusOptions { get; } = new(["In stock", "Reserved", "Listed", "Sold"]);
-    public ObservableCollection<string> ConditionOptions { get; } = new(["New refurbished", "Excellent", "Good", "Fair"]);
+    public ObservableCollection<string> StatusOptions { get; } = new([
+        "All", "Purchased", "Inspection", "Parts Required", "Repair", "Testing", "Cleaning",
+        "Final Quality Check", "Ready for Sale", "Listed", "Reserved", "Sold", "In stock"
+    ]);
+    public ObservableCollection<string> FormStatusOptions { get; } = new([
+        "Purchased", "Inspection", "Parts Required", "Repair", "Testing", "Cleaning",
+        "Final Quality Check", "Ready for Sale", "Listed", "Reserved", "Sold"
+    ]);
+    public ObservableCollection<string> ConditionOptions { get; } = new(["New refurbished", "Excellent", "Good", "Fair", "A", "B", "C", "D"]);
 
     [ObservableProperty] private string _query = string.Empty;
     [ObservableProperty] private string _statusFilter = "All";
@@ -516,6 +718,9 @@ public partial class UsedTechViewModel : ObservableObject
     [ObservableProperty] private string _specs = string.Empty;
     [ObservableProperty] private string _condition = "Good";
     [ObservableProperty] private string _status = "In stock";
+    [ObservableProperty] private string _batteryHealth = string.Empty;
+    [ObservableProperty] private string _functionalGrade = string.Empty;
+    [ObservableProperty] private bool _isPartsOnly;
     [ObservableProperty] private string _purchasePrice = "0";
     [ObservableProperty] private string _partsCost = "0";
     [ObservableProperty] private string _askingPrice = "0";
@@ -527,6 +732,13 @@ public partial class UsedTechViewModel : ObservableObject
     [ObservableProperty] private UsedPickItem? _selectedRepair;
     [ObservableProperty] private string _totalCostPreview = "$0.00";
     [ObservableProperty] private string _marginPreview = "";
+
+    [ObservableProperty] private bool _imeiAdvancedLookupAvailable;
+    [ObservableProperty] private bool _imeiUseAdvanced;
+    [ObservableProperty] private bool _isLookingUpImei;
+    [ObservableProperty] private string? _imeiStatus;
+    [ObservableProperty] private string? _imeiResultSummary;
+    [ObservableProperty] private bool _hasImeiResult;
 
     public UsedTechViewModel(ApiClient api, AuthSession session)
     {
@@ -575,6 +787,7 @@ public partial class UsedTechViewModel : ObservableObject
         UpdatePermissions();
         try
         {
+            await EnsureImeiSettingsAsync();
             await LoadLookupsAsync();
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Query))
@@ -609,15 +822,117 @@ public partial class UsedTechViewModel : ObservableObject
         SaveButtonLabel = "Add device";
         Brand = Model = Category = Serial = Imei = Colour = Storage = Specs = string.Empty;
         Condition = "Good";
-        Status = "In stock";
+        Status = "Purchased";
+        BatteryHealth = FunctionalGrade = string.Empty;
+        IsPartsOnly = false;
         PurchasePrice = "0";
         PartsCost = "0";
         AskingPrice = "0";
         ActualSalePrice = Faults = Notes = Source = string.Empty;
         SelectedCustomer = null;
         SelectedRepair = null;
+        ImeiStatus = null;
+        ImeiResultSummary = null;
+        HasImeiResult = false;
         Error = null;
         RecalcPreview();
+    }
+
+    [RelayCommand]
+    private async Task LookupImeiAsync()
+    {
+        ImeiStatus = null;
+        ImeiResultSummary = null;
+        HasImeiResult = false;
+        if (string.IsNullOrWhiteSpace(Imei))
+        {
+            ImeiStatus = "Enter a 15-digit IMEI first.";
+            return;
+        }
+
+        IsLookingUpImei = true;
+        try
+        {
+            await EnsureImeiSettingsAsync();
+            var validate = await _api.PostAsync<ImeiValidateRequest, ImeiValidateResultDto>(
+                "api/device-identification/validate", new ImeiValidateRequest(Imei.Trim()));
+            if (!validate.IsValid)
+            {
+                ImeiStatus = validate.Message ?? "IMEI failed Luhn check.";
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(validate.NormalizedImei))
+                Imei = validate.NormalizedImei;
+
+            var result = await _api.PostAsync<ImeiLookupRequest, ImeiLookupResultDto>(
+                "api/device-identification/lookup",
+                new ImeiLookupRequest(Imei.Trim(), ImeiUseAdvanced && ImeiAdvancedLookupAvailable));
+
+            if (!result.Success &&
+                !string.Equals(result.VerificationStatus, "Manual", StringComparison.OrdinalIgnoreCase))
+            {
+                ImeiStatus = result.Message ?? result.ErrorCode ?? "Lookup failed.";
+                return;
+            }
+
+            var filled = ImeiLookupFill.FromResult(result, Imei);
+            if (!string.IsNullOrWhiteSpace(filled.Brand)) Brand = filled.Brand!;
+            if (!string.IsNullOrWhiteSpace(filled.Model))
+            {
+                Model = string.IsNullOrWhiteSpace(filled.ModelNumber)
+                    ? filled.Model!
+                    : $"{filled.Model} ({filled.ModelNumber})";
+            }
+            else if (!string.IsNullOrWhiteSpace(filled.ModelNumber))
+            {
+                Model = filled.ModelNumber!;
+            }
+
+            if (!string.IsNullOrWhiteSpace(filled.Category))
+                Category = filled.Category!;
+            else if (string.IsNullOrWhiteSpace(Category))
+                Category = "Phone";
+
+            if (!string.IsNullOrWhiteSpace(filled.Colour)) Colour = filled.Colour!;
+            if (!string.IsNullOrWhiteSpace(filled.Storage)) Storage = filled.Storage!;
+            if (!string.IsNullOrWhiteSpace(filled.Specs)) Specs = filled.Specs!;
+            Notes = ImeiLookupFill.MergeNotesBlock(Notes, filled.NotesBlock);
+
+            ImeiResultSummary = filled.Summary;
+            HasImeiResult = !string.IsNullOrWhiteSpace(ImeiResultSummary);
+            var hints = new List<string>();
+            if (filled.StorageIsHint) hints.Add("confirm storage");
+            if (filled.ColourIsHint) hints.Add("confirm colour");
+            var hintText = hints.Count > 0 ? $" Please {string.Join(" and ", hints)} on the handset." : "";
+            ImeiStatus = result.Message
+                ?? (result.Success
+                    ? $"Lookup complete — buy-in fields filled.{hintText}"
+                    : "Manual entry may still be needed.");
+        }
+        catch (Exception ex)
+        {
+            ImeiStatus = Friendly(ex.Message);
+        }
+        finally
+        {
+            IsLookingUpImei = false;
+        }
+    }
+
+    private async Task EnsureImeiSettingsAsync()
+    {
+        try
+        {
+            var settings = await _api.GetAsync<DeviceIdentificationSettingsDto>("api/device-identification/settings");
+            ImeiAdvancedLookupAvailable = settings.AdvancedLookupEnabled;
+            if (!ImeiAdvancedLookupAvailable)
+                ImeiUseAdvanced = false;
+        }
+        catch
+        {
+            ImeiAdvancedLookupAvailable = false;
+        }
     }
 
     public async Task LoadDeviceAsync(Guid id)
@@ -639,7 +954,10 @@ public partial class UsedTechViewModel : ObservableObject
             Storage = d.StorageCapacity ?? "";
             Specs = d.Specs ?? "";
             Condition = string.IsNullOrWhiteSpace(d.ConditionGrade) ? "Good" : d.ConditionGrade;
-            Status = string.IsNullOrWhiteSpace(d.Status) ? "In stock" : d.Status;
+            Status = string.IsNullOrWhiteSpace(d.Status) ? "Purchased" : d.Status;
+            BatteryHealth = d.BatteryHealthPercent?.ToString() ?? "";
+            FunctionalGrade = d.FunctionalGrade ?? "";
+            IsPartsOnly = d.IsPartsOnly;
             PurchasePrice = d.PurchasePrice.ToString("0.##");
             PartsCost = d.PartsCost.ToString("0.##");
             AskingPrice = d.AskingPrice.ToString("0.##");
@@ -686,6 +1004,16 @@ public partial class UsedTechViewModel : ObservableObject
             if (!decimal.TryParse(PartsCost, out var parts)) parts = 0m;
             if (!decimal.TryParse(AskingPrice, out var ask)) ask = 0m;
             decimal? sold = decimal.TryParse(ActualSalePrice, out var s) ? s : null;
+            int? battery = null;
+            if (!string.IsNullOrWhiteSpace(BatteryHealth))
+            {
+                if (!int.TryParse(BatteryHealth.Trim().TrimEnd('%'), out var pct) || pct is < 0 or > 100)
+                {
+                    Error = "Battery health must be blank (untested) or 0–100.";
+                    return;
+                }
+                battery = pct;
+            }
 
             Guid? customerId = SelectedCustomer is { Id: var cid } && cid != Guid.Empty ? cid : null;
             Guid? repairId = SelectedRepair is { Id: var rid } && rid != Guid.Empty ? rid : null;
@@ -698,10 +1026,11 @@ public partial class UsedTechViewModel : ObservableObject
                         null, NullIfEmpty(Brand), NullIfEmpty(Model), NullIfEmpty(Category),
                         NullIfEmpty(Serial), NullIfEmpty(Imei), NullIfEmpty(Colour), NullIfEmpty(Storage), NullIfEmpty(Specs),
                         string.IsNullOrWhiteSpace(Condition) ? "Good" : Condition.Trim(),
-                        string.IsNullOrWhiteSpace(Status) ? "In stock" : Status.Trim(),
+                        string.IsNullOrWhiteSpace(Status) ? "Purchased" : Status.Trim(),
                         purchase, ask, parts, sold,
                         NullIfEmpty(Faults), NullIfEmpty(Notes), NullIfEmpty(Source),
-                        null, customerId, repairId));
+                        null, customerId, repairId,
+                        battery, NullIfEmpty(FunctionalGrade), IsPartsOnly));
                 StatusMessage = "Device updated.";
             }
             else
@@ -712,10 +1041,11 @@ public partial class UsedTechViewModel : ObservableObject
                         null, NullIfEmpty(Brand), NullIfEmpty(Model), NullIfEmpty(Category),
                         NullIfEmpty(Serial), NullIfEmpty(Imei), NullIfEmpty(Colour), NullIfEmpty(Storage), NullIfEmpty(Specs),
                         string.IsNullOrWhiteSpace(Condition) ? "Good" : Condition.Trim(),
-                        string.IsNullOrWhiteSpace(Status) ? "In stock" : Status.Trim(),
+                        string.IsNullOrWhiteSpace(Status) ? "Purchased" : Status.Trim(),
                         purchase, ask, parts,
                         NullIfEmpty(Faults), NullIfEmpty(Notes), NullIfEmpty(Source),
-                        null, customerId, repairId));
+                        null, customerId, repairId,
+                        battery, NullIfEmpty(FunctionalGrade), IsPartsOnly));
                 StatusMessage = "Device added.";
             }
 
@@ -729,6 +1059,31 @@ public partial class UsedTechViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task PrintLabelAsync()
+    {
+        Error = null;
+        if (_editingId is not Guid id)
+        {
+            Error = "Save the device first, then print its label.";
+            return;
+        }
+        try
+        {
+            var html = await _api.GetRawAsync($"api/labels/used/{id}?includePrice=false");
+            var dir = Path.Combine(Path.GetTempPath(), "WorkshopOS");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"used-label-{id:N}.html");
+            await File.WriteAllTextAsync(path, html);
+            var opened = await Windows.System.Launcher.LaunchUriAsync(new Uri(path));
+            StatusMessage = opened ? "Opened refurbished label for printing." : $"Label saved: {path}";
+        }
+        catch (Exception ex)
+        {
+            Error = Friendly(ex.Message);
         }
     }
 
@@ -767,9 +1122,266 @@ public partial class UsedTechViewModel : ObservableObject
     }
 }
 
+public partial class PurchaseOrdersViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<PurchaseOrderListItemDto> Orders { get; } = new();
+    public ObservableCollection<PoLineRowVm> Lines { get; } = new();
+    [ObservableProperty] private PurchaseOrderListItemDto? _selectedOrder;
+    [ObservableProperty] private string? _detailHeader = "Select a purchase order to receive stock.";
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _statusMessage;
+    [ObservableProperty] private bool _isBusy;
+
+    public PurchaseOrdersViewModel(ApiClient api) => _api = api;
+
+    partial void OnSelectedOrderChanged(PurchaseOrderListItemDto? value) => _ = LoadDetailAsync();
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<PurchaseOrderListItemDto>>("api/purchase-orders");
+            var keep = SelectedOrder?.Id;
+            Orders.Clear();
+            foreach (var o in list) Orders.Add(o);
+            if (keep is Guid id)
+                SelectedOrder = Orders.FirstOrDefault(o => o.Id == id);
+            StatusMessage = Orders.Count == 0 ? "No purchase orders yet." : $"{Orders.Count} order(s)";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    private async Task LoadDetailAsync()
+    {
+        Lines.Clear();
+        if (SelectedOrder is null)
+        {
+            DetailHeader = "Select a purchase order to receive stock.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            var d = await _api.GetAsync<PurchaseOrderDetailDto>($"api/purchase-orders/{SelectedOrder.Id}");
+            DetailHeader = $"{d.Number} · {d.SupplierName} · {d.Status} · {d.Total:C}";
+            foreach (var l in d.Lines)
+                Lines.Add(new PoLineRowVm(l));
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task ReceiveRemainingAsync(PoLineRowVm? row)
+    {
+        if (SelectedOrder is null || row is null) return;
+        var remaining = row.QuantityOrdered - row.QuantityReceived;
+        if (remaining <= 0)
+        {
+            Error = "Line is already fully received.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<ReceivePoLineRequest, PurchaseOrderListItemDto>(
+                $"api/purchase-orders/{SelectedOrder.Id}/receive",
+                new ReceivePoLineRequest(row.Id, remaining));
+            StatusMessage = $"Received {remaining} on “{row.Description}”.";
+            await RefreshAsync();
+            await LoadDetailAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public sealed class PoLineRowVm
+{
+    public Guid Id { get; }
+    public string Description { get; }
+    public int QuantityOrdered { get; }
+    public int QuantityReceived { get; }
+    public string ProgressLabel => $"{QuantityReceived} / {QuantityOrdered}";
+    public bool CanReceive => QuantityReceived < QuantityOrdered;
+    public PoLineRowVm(PurchaseOrderLineDto l)
+    {
+        Id = l.Id;
+        Description = l.Description;
+        QuantityOrdered = l.QuantityOrdered;
+        QuantityReceived = l.QuantityReceived;
+    }
+}
+
+public partial class StocktakeViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<StocktakeListItemDto> Sessions { get; } = new();
+    public ObservableCollection<StocktakeLineRowVm> Lines { get; } = new();
+    [ObservableProperty] private StocktakeListItemDto? _selectedSession;
+    [ObservableProperty] private string _notes = string.Empty;
+    [ObservableProperty] private string? _detailHeader = "Start a stocktake to count on-hand stock.";
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _statusMessage;
+    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _sessionOpen;
+
+    public StocktakeViewModel(ApiClient api) => _api = api;
+
+    partial void OnSelectedSessionChanged(StocktakeListItemDto? value) => _ = LoadDetailAsync();
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<StocktakeListItemDto>>("api/stocktakes");
+            var keep = SelectedSession?.Id;
+            Sessions.Clear();
+            foreach (var s in list) Sessions.Add(s);
+            if (keep is Guid id)
+                SelectedSession = Sessions.FirstOrDefault(s => s.Id == id);
+            StatusMessage = Sessions.Count == 0 ? "No stocktakes yet." : $"{Sessions.Count} session(s)";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task StartAsync()
+    {
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            var created = await _api.PostAsync<CreateStocktakeRequest, StocktakeDetailDto>(
+                "api/stocktakes", new CreateStocktakeRequest(NullIfEmpty(Notes)));
+            Notes = string.Empty;
+            StatusMessage = $"Started {created.Number} with {created.Lines.Count} lines.";
+            await RefreshAsync();
+            SelectedSession = Sessions.FirstOrDefault(s => s.Id == created.Id);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task LoadDetailAsync()
+    {
+        Lines.Clear();
+        SessionOpen = false;
+        if (SelectedSession is null)
+        {
+            DetailHeader = "Start a stocktake to count on-hand stock.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            var d = await _api.GetAsync<StocktakeDetailDto>($"api/stocktakes/{SelectedSession.Id}");
+            DetailHeader = $"{d.Number} · {d.Status} · {d.Lines.Count} lines";
+            SessionOpen = d.Status == "Open";
+            foreach (var l in d.Lines)
+                Lines.Add(new StocktakeLineRowVm(l));
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task SaveCountAsync(StocktakeLineRowVm? row)
+    {
+        if (SelectedSession is null || row is null || !SessionOpen) return;
+        if (!int.TryParse(row.CountedText, out var qty) || qty < 0)
+        {
+            Error = "Enter a non-negative count.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            var updated = await _api.PostAsync<SetStocktakeCountRequest, StocktakeLineDto>(
+                $"api/stocktakes/{SelectedSession.Id}/lines/{row.Id}",
+                new SetStocktakeCountRequest(qty));
+            row.Apply(updated);
+            StatusMessage = $"Counted {row.Sku} = {qty}.";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CompleteAsync()
+    {
+        if (SelectedSession is null) return;
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            await _api.PostAsync<StocktakeDetailDto>($"api/stocktakes/{SelectedSession.Id}/complete");
+            StatusMessage = "Stocktake completed — inventory adjusted for variances.";
+            await RefreshAsync();
+            await LoadDetailAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task CancelAsync()
+    {
+        if (SelectedSession is null) return;
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            await _api.PostAsync<StocktakeDetailDto>($"api/stocktakes/{SelectedSession.Id}/cancel");
+            StatusMessage = "Stocktake cancelled — no stock changes.";
+            await RefreshAsync();
+            await LoadDetailAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+}
+
+public sealed partial class StocktakeLineRowVm : ObservableObject
+{
+    public Guid Id { get; }
+    public string Sku { get; }
+    public string Name { get; }
+    public string? LocationBin { get; }
+    public int ExpectedQty { get; }
+    [ObservableProperty] private string _countedText = string.Empty;
+    [ObservableProperty] private string _varianceLabel = "—";
+
+    public StocktakeLineRowVm(StocktakeLineDto l)
+    {
+        Id = l.Id;
+        Sku = l.Sku;
+        Name = l.Name;
+        LocationBin = l.LocationBin;
+        ExpectedQty = l.ExpectedQty;
+        CountedText = l.CountedQty?.ToString() ?? "";
+        VarianceLabel = l.Variance is int v ? v.ToString("+0;-0;0") : "—";
+    }
+
+    public void Apply(StocktakeLineDto l)
+    {
+        CountedText = l.CountedQty?.ToString() ?? "";
+        VarianceLabel = l.Variance is int v ? v.ToString("+0;-0;0") : "—";
+    }
+}
+
 public sealed class PosCartLine
 {
     public Guid? InventoryItemId { get; init; }
+    public Guid? UsedDeviceId { get; init; }
     public string Description { get; init; } = string.Empty;
     public string? Sku { get; init; }
     public decimal Quantity { get; set; }
@@ -789,9 +1401,11 @@ public partial class PosViewModel : ObservableObject
 {
     private readonly ApiClient _api;
     private IReadOnlyList<InventoryListItemDto> _allProducts = Array.Empty<InventoryListItemDto>();
+    private IReadOnlyList<UsedDeviceDto> _allUsed = Array.Empty<UsedDeviceDto>();
     private IReadOnlyList<PosDiscountPresetDto> _presets = Array.Empty<PosDiscountPresetDto>();
 
     public ObservableCollection<InventoryListItemDto> Products { get; } = new();
+    public ObservableCollection<UsedDeviceDto> UsedDevices { get; } = new();
     public ObservableCollection<PosCartLine> Cart { get; } = new();
     public ObservableCollection<PosSaleListItemDto> Sales { get; } = new();
     public ObservableCollection<PosPayableRepairDto> PayableRepairs { get; } = new();
@@ -823,6 +1437,7 @@ public partial class PosViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         await RefreshProductsAsync();
+        await RefreshUsedAsync();
         await RefreshSalesAsync();
         try
         {
@@ -896,6 +1511,22 @@ public partial class PosViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task RefreshUsedAsync()
+    {
+        try
+        {
+            _allUsed = await _api.GetAsync<IReadOnlyList<UsedDeviceDto>>("api/used-tech?status=Ready%20for%20Sale");
+            UsedDevices.Clear();
+            foreach (var u in _allUsed.Where(u => !string.Equals(u.Status, "Sold", StringComparison.OrdinalIgnoreCase)))
+                UsedDevices.Add(u);
+        }
+        catch
+        {
+            /* refurbished catalogue optional for POS */
+        }
+    }
+
+    [RelayCommand]
     private async Task SearchRepairsAsync()
     {
         Error = null;
@@ -950,6 +1581,7 @@ public partial class PosViewModel : ObservableObject
             Cart.Insert(idx, new PosCartLine
             {
                 InventoryItemId = existing.InventoryItemId,
+                UsedDeviceId = existing.UsedDeviceId,
                 Description = existing.Description,
                 Sku = existing.Sku,
                 Quantity = existing.Quantity,
@@ -965,6 +1597,31 @@ public partial class PosViewModel : ObservableObject
             Sku = item.Sku,
             Quantity = 1,
             UnitPrice = item.SellPrice
+        });
+        RecalcTotal();
+    }
+
+    public void AddUsedDevice(UsedDeviceDto device)
+    {
+        if (SelectedRepair is not null)
+        {
+            Error = "Clear the imported repair before adding refurbished lines.";
+            return;
+        }
+        if (Cart.Any(c => c.UsedDeviceId == device.Id))
+        {
+            Error = "That refurbished device is already in the cart.";
+            return;
+        }
+        Cart.Add(new PosCartLine
+        {
+            UsedDeviceId = device.Id,
+            Description = string.IsNullOrWhiteSpace(device.Summary)
+                ? $"{device.Brand} {device.Model}".Trim()
+                : device.Summary,
+            Sku = device.StockId,
+            Quantity = 1,
+            UnitPrice = device.AskingPrice
         });
         RecalcTotal();
     }
@@ -1114,7 +1771,7 @@ public partial class PosViewModel : ObservableObject
                 string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim(),
                 isRepair
                     ? Array.Empty<PosSaleLineInputDto>()
-                    : Cart.Select(c => new PosSaleLineInputDto(c.InventoryItemId, c.Description, c.Quantity, c.UnitPrice)).ToList(),
+                    : Cart.Select(c => new PosSaleLineInputDto(c.InventoryItemId, c.Description, c.Quantity, c.UnitPrice, c.UsedDeviceId)).ToList(),
                 isRepair ? SelectedRepair!.RepairTicketId : null,
                 amountToPay,
                 isDeposit,
@@ -1137,6 +1794,7 @@ public partial class PosViewModel : ObservableObject
             SelectedRepair = null;
             RecalcTotal();
             await RefreshProductsAsync();
+            await RefreshUsedAsync();
             await RefreshSalesAsync();
             await SearchRepairsAsync();
         }
@@ -1158,5 +1816,733 @@ public partial class PosViewModel : ObservableObject
         {
             if (Error is null) Error = ex.Message;
         }
+    }
+}
+
+public partial class AcquisitionsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<AcquisitionLeadListItemDto> Items { get; } = new();
+    public ObservableCollection<string> StatusOptions { get; } = new([
+        "All", "New Lead", "Under Evaluation", "Offer Prepared", "Offer Sent", "Negotiating",
+        "Accepted", "Purchased", "Awaiting Arrival", "Received", "Inspection",
+        "Rejected", "Cancelled", "Seller Unresponsive", "Sold Elsewhere", "Returned to Seller"
+    ]);
+    public ObservableCollection<string> LeadStatusOptions { get; } = new([
+        "New Lead", "Under Evaluation", "Offer Prepared", "Offer Sent", "Negotiating",
+        "Accepted", "Purchased", "Awaiting Arrival", "Received", "Inspection",
+        "Rejected", "Cancelled", "Seller Unresponsive", "Sold Elsewhere", "Returned to Seller"
+    ]);
+
+    [ObservableProperty] private string _query = string.Empty;
+    [ObservableProperty] private string _statusFilter = "All";
+    [ObservableProperty] private AcquisitionLeadListItemDto? _selected;
+    [ObservableProperty] private string _selectedLabel = "Select a lead to update or convert.";
+    [ObservableProperty] private string _selectedStatus = "Under Evaluation";
+    [ObservableProperty] private string _brand = string.Empty;
+    [ObservableProperty] private string _model = string.Empty;
+    [ObservableProperty] private string _imei = string.Empty;
+    [ObservableProperty] private string _sellerName = string.Empty;
+    [ObservableProperty] private string _source = "Walk-In";
+    [ObservableProperty] private string _askingPrice = string.Empty;
+    [ObservableProperty] private string _proposedOffer = string.Empty;
+    [ObservableProperty] private string _notes = string.Empty;
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _statusMessage;
+    [ObservableProperty] private bool _isBusy;
+
+    public AcquisitionsViewModel(ApiClient api) => _api = api;
+
+    partial void OnSelectedChanged(AcquisitionLeadListItemDto? value)
+    {
+        SelectedLabel = value is null
+            ? "Select a lead to update or convert."
+            : $"{value.Reference} · {value.Brand} {value.Model} · {value.Status}";
+        if (value is not null)
+            SelectedStatus = value.Status;
+    }
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Query))
+                parts.Add($"q={Uri.EscapeDataString(Query.Trim())}");
+            if (!string.IsNullOrWhiteSpace(StatusFilter) && StatusFilter != "All")
+                parts.Add($"status={Uri.EscapeDataString(StatusFilter)}");
+            var path = "api/acquisitions" + (parts.Count > 0 ? "?" + string.Join("&", parts) : "");
+            var list = await _api.GetAsync<IReadOnlyList<AcquisitionLeadListItemDto>>(path);
+            var keep = Selected?.Id;
+            Items.Clear();
+            foreach (var i in list) Items.Add(i);
+            if (keep is Guid id)
+                Selected = Items.FirstOrDefault(x => x.Id == id);
+            StatusMessage = Items.Count == 0 ? "No acquisition leads yet." : $"{Items.Count} lead(s)";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task CreateAsync()
+    {
+        Error = null;
+        if (string.IsNullOrWhiteSpace(Brand) && string.IsNullOrWhiteSpace(Model))
+        {
+            Error = "Brand or model is required.";
+            return;
+        }
+        decimal? ask = decimal.TryParse(AskingPrice, out var a) ? a : null;
+        decimal? offer = decimal.TryParse(ProposedOffer, out var o) ? o : null;
+        IsBusy = true;
+        try
+        {
+            await _api.PostAsync<CreateAcquisitionLeadRequest, AcquisitionLeadDetailDto>(
+                "api/acquisitions",
+                new CreateAcquisitionLeadRequest(
+                    NullIfEmpty(Brand), NullIfEmpty(Model), null, null, null, null,
+                    NullIfEmpty(Imei), null, null,
+                    NullIfEmpty(SellerName), null, null, null, null,
+                    NullIfEmpty(Source), null, ask, offer,
+                    null, null, null, null, null, NullIfEmpty(Notes), null, null, null));
+            Brand = Model = Imei = SellerName = Notes = AskingPrice = ProposedOffer = string.Empty;
+            Source = "Walk-In";
+            StatusMessage = "Lead created.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task UpdateStatusAsync()
+    {
+        if (Selected is null)
+        {
+            Error = "Select a lead first.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpdateAcquisitionStatusRequest, AcquisitionLeadDetailDto>(
+                $"api/acquisitions/{Selected.Id}/status",
+                new UpdateAcquisitionStatusRequest(SelectedStatus, null));
+            StatusMessage = $"Status → {SelectedStatus}";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task ConvertAsync()
+    {
+        if (Selected is null)
+        {
+            Error = "Select a lead first.";
+            return;
+        }
+        Error = null;
+        IsBusy = true;
+        try
+        {
+            var device = await _api.PostAsync<ConvertAcquisitionRequest, UsedDeviceDetailDto>(
+                $"api/acquisitions/{Selected.Id}/convert",
+                new ConvertAcquisitionRequest(null, null, null, "Purchased", null));
+            StatusMessage = $"Converted to refurbished stock {device.StockId ?? device.Id.ToString()[..8]}.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+public partial class DonorsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<DonorDeviceDto> Items { get; } = new();
+    public ObservableCollection<HarvestedComponentDto> Components { get; } = new();
+    [ObservableProperty] private DonorDeviceDto? _selected;
+    [ObservableProperty] private string _brand = string.Empty;
+    [ObservableProperty] private string _model = string.Empty;
+    [ObservableProperty] private string _imei = string.Empty;
+    [ObservableProperty] private string _notes = string.Empty;
+    [ObservableProperty] private string _harvestDescription = string.Empty;
+    [ObservableProperty] private string _harvestQty = "1";
+    [ObservableProperty] private string _harvestSku = string.Empty;
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string? _error;
+
+    public DonorsViewModel(ApiClient api) => _api = api;
+
+    partial void OnSelectedChanged(DonorDeviceDto? value) => _ = LoadDetailAsync();
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<DonorDeviceDto>>("api/donors");
+            Items.Clear();
+            foreach (var d in list) Items.Add(d);
+            StatusMessage = $"{Items.Count} donor device(s).";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    private async Task LoadDetailAsync()
+    {
+        Components.Clear();
+        if (Selected is null) return;
+        try
+        {
+            var d = await _api.GetAsync<DonorDeviceDetailDto>($"api/donors/{Selected.Id}");
+            foreach (var c in d.Components) Components.Add(c);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CreateAsync()
+    {
+        Error = null;
+        try
+        {
+            var created = await _api.PostAsync<CreateDonorDeviceRequest, DonorDeviceDetailDto>(
+                "api/donors",
+                new CreateDonorDeviceRequest(
+                    string.IsNullOrWhiteSpace(Brand) ? null : Brand.Trim(),
+                    string.IsNullOrWhiteSpace(Model) ? null : Model.Trim(),
+                    string.IsNullOrWhiteSpace(Imei) ? null : Imei.Trim(),
+                    null,
+                    string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()));
+            Brand = Model = Imei = Notes = string.Empty;
+            StatusMessage = $"Created {created.Number}.";
+            await RefreshAsync();
+            Selected = Items.FirstOrDefault(i => i.Id == created.Id);
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task HarvestAsync()
+    {
+        if (Selected is null) { Error = "Select a donor first."; return; }
+        if (string.IsNullOrWhiteSpace(HarvestDescription)) { Error = "Component description required."; return; }
+        if (!int.TryParse(HarvestQty, out var qty) || qty < 1) { Error = "Quantity must be ≥ 1."; return; }
+        Error = null;
+        try
+        {
+            var updated = await _api.PostAsync<HarvestComponentRequest, DonorDeviceDetailDto>(
+                $"api/donors/{Selected.Id}/harvest",
+                new HarvestComponentRequest(
+                    HarvestDescription.Trim(),
+                    null,
+                    qty,
+                    string.IsNullOrWhiteSpace(HarvestSku) ? null : HarvestSku.Trim()));
+            HarvestDescription = HarvestSku = string.Empty;
+            HarvestQty = "1";
+            StatusMessage = $"Harvested into inventory from {updated.Number}.";
+            await RefreshAsync();
+            Selected = Items.FirstOrDefault(i => i.Id == updated.Id);
+            await LoadDetailAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class LoansViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<LoanDeviceDto> Devices { get; } = new();
+    public ObservableCollection<LoanAgreementDto> Agreements { get; } = new();
+    [ObservableProperty] private string _assetTag = string.Empty;
+    [ObservableProperty] private string _brand = string.Empty;
+    [ObservableProperty] private string _model = string.Empty;
+    [ObservableProperty] private string _checkoutCustomerId = string.Empty;
+    [ObservableProperty] private LoanDeviceDto? _selectedDevice;
+    [ObservableProperty] private LoanAgreementDto? _selectedAgreement;
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string? _error;
+
+    public LoansViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var devices = await _api.GetAsync<IReadOnlyList<LoanDeviceDto>>("api/loans/devices");
+            Devices.Clear();
+            foreach (var d in devices) Devices.Add(d);
+            var agreements = await _api.GetAsync<IReadOnlyList<LoanAgreementDto>>("api/loans/agreements");
+            Agreements.Clear();
+            foreach (var a in agreements) Agreements.Add(a);
+            StatusMessage = $"{Devices.Count} loaner(s) · {Agreements.Count} agreement(s).";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task UpsertDeviceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AssetTag)) { Error = "Asset tag required."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpsertLoanDeviceRequest, LoanDeviceDto>(
+                "api/loans/devices",
+                new UpsertLoanDeviceRequest(null, AssetTag.Trim(),
+                    string.IsNullOrWhiteSpace(Brand) ? null : Brand.Trim(),
+                    string.IsNullOrWhiteSpace(Model) ? null : Model.Trim(),
+                    null, null, null));
+            AssetTag = Brand = Model = string.Empty;
+            StatusMessage = "Loan device saved.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CheckoutAsync()
+    {
+        if (SelectedDevice is null) { Error = "Select a loan device."; return; }
+        if (!Guid.TryParse(CheckoutCustomerId.Trim(), out var customerId))
+        { Error = "Enter a valid customer GUID."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<CheckoutLoanRequest, LoanAgreementDto>(
+                "api/loans/checkout",
+                new CheckoutLoanRequest(SelectedDevice.Id, customerId, null, null, null));
+            StatusMessage = $"Checked out {SelectedDevice.AssetTag}.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task ReturnAsync()
+    {
+        if (SelectedAgreement is null || SelectedAgreement.Status != "Active")
+        { Error = "Select an active agreement."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<ReturnLoanRequest, LoanAgreementDto>(
+                $"api/loans/agreements/{SelectedAgreement.Id}/return",
+                new ReturnLoanRequest(null));
+            StatusMessage = "Loan returned.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class WarrantyClaimsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<StaffWarrantyDto> Warranties { get; } = new();
+    public ObservableCollection<WarrantyClaimDto> Claims { get; } = new();
+    public ObservableCollection<string> ClaimStatuses { get; } = new(["Open", "Approved", "Rejected", "Completed"]);
+    [ObservableProperty] private StaffWarrantyDto? _selectedWarranty;
+    [ObservableProperty] private WarrantyClaimDto? _selectedClaim;
+    [ObservableProperty] private string _summary = string.Empty;
+    [ObservableProperty] private string _claimStatus = "Open";
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string? _error;
+
+    public WarrantyClaimsViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var w = await _api.GetAsync<IReadOnlyList<StaffWarrantyDto>>("api/warranty-claims/warranties");
+            Warranties.Clear();
+            foreach (var x in w) Warranties.Add(x);
+            var c = await _api.GetAsync<IReadOnlyList<WarrantyClaimDto>>("api/warranty-claims");
+            Claims.Clear();
+            foreach (var x in c) Claims.Add(x);
+            StatusMessage = $"{Warranties.Count} warranties · {Claims.Count} claims.";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CreateClaimAsync()
+    {
+        if (SelectedWarranty is null) { Error = "Select a warranty."; return; }
+        if (string.IsNullOrWhiteSpace(Summary)) { Error = "Summary required."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<CreateWarrantyClaimRequest, WarrantyClaimDto>(
+                "api/warranty-claims",
+                new CreateWarrantyClaimRequest(SelectedWarranty.Id, Summary.Trim(), null));
+            Summary = string.Empty;
+            StatusMessage = "Claim opened.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task UpdateClaimAsync()
+    {
+        if (SelectedClaim is null) { Error = "Select a claim."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpdateWarrantyClaimRequest, WarrantyClaimDto>(
+                $"api/warranty-claims/{SelectedClaim.Id}/update",
+                new UpdateWarrantyClaimRequest(ClaimStatus, null));
+            StatusMessage = $"Claim → {ClaimStatus}.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class RefundsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<RefundRequestDto> Items { get; } = new();
+    [ObservableProperty] private RefundRequestDto? _selected;
+    [ObservableProperty] private string _invoiceId = string.Empty;
+    [ObservableProperty] private string _posSaleId = string.Empty;
+    [ObservableProperty] private string _amount = string.Empty;
+    [ObservableProperty] private string _reason = string.Empty;
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string? _error;
+
+    public RefundsViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<RefundRequestDto>>("api/refunds");
+            Items.Clear();
+            foreach (var r in list) Items.Add(r);
+            StatusMessage = $"{Items.Count} refund request(s).";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task CreateAsync()
+    {
+        if (!decimal.TryParse(Amount, out var amt) || amt <= 0) { Error = "Enter a positive amount."; return; }
+        if (string.IsNullOrWhiteSpace(Reason)) { Error = "Reason required."; return; }
+        Guid? posId = Guid.TryParse(PosSaleId.Trim(), out var p) ? p : null;
+        Guid? invId = Guid.TryParse(InvoiceId.Trim(), out var i) ? i : null;
+        if (posId is null && invId is null) { Error = "Provide invoice or POS sale id."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<CreateRefundRequestDto, RefundRequestDto>(
+                "api/refunds", new CreateRefundRequestDto(posId, invId, amt, Reason.Trim()));
+            Amount = Reason = InvoiceId = PosSaleId = string.Empty;
+            StatusMessage = "Refund request submitted for approval.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task ApproveAsync() => await DecideAsync(true);
+
+    [RelayCommand]
+    private async Task RejectAsync() => await DecideAsync(false);
+
+    private async Task DecideAsync(bool approve)
+    {
+        if (Selected is null) { Error = "Select a refund."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<DecideRefundRequest, RefundRequestDto>(
+                $"api/refunds/{Selected.Id}/decide",
+                new DecideRefundRequest(approve, null));
+            StatusMessage = approve ? "Refund approved." : "Refund rejected.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class WebsiteInboxViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<string> SellTechLines { get; } = new();
+    public ObservableCollection<string> MessageLines { get; } = new();
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string? _error;
+
+    public WebsiteInboxViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            SellTechLines.Clear();
+            MessageLines.Clear();
+            try
+            {
+                var sell = await _api.GetAsync<IReadOnlyList<SellDeviceListItemDto>>("api/sell-tech");
+                foreach (var s in sell)
+                    SellTechLines.Add($"{s.Reference} · {s.Status} · {s.Brand} {s.Model} · {s.ContactName} · {s.CreatedAt:d}");
+                if (SellTechLines.Count == 0) SellTechLines.Add("No Sell Your Tech requests.");
+            }
+            catch (Exception ex) { SellTechLines.Add($"Sell-tech: {ex.Message}"); }
+
+            try
+            {
+                var threads = await _api.GetAsync<IReadOnlyList<StaffThreadDto>>("api/messages");
+                foreach (var t in threads)
+                    MessageLines.Add($"{t.Status} · {t.Subject} · {t.UpdatedAt:g}");
+                if (MessageLines.Count == 0) MessageLines.Add("No customer message threads.");
+            }
+            catch (Exception ex) { MessageLines.Add($"Messages: {ex.Message}"); }
+
+            StatusMessage = "Website inbox refreshed.";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class PrintersViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<string> Lines { get; } = new();
+    public ObservableCollection<string> HealthLines { get; } = new();
+    [ObservableProperty] private string _name = "Counter PDF";
+    [ObservableProperty] private string _kind = "PdfFallback";
+    [ObservableProperty] private string _connection = string.Empty;
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _status;
+
+    public PrintersViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var list = await _api.GetAsync<IReadOnlyList<PrinterProfileDto>>("api/printers");
+            Lines.Clear();
+            foreach (var p in list)
+                Lines.Add($"{p.Name} · {p.Kind} · {(p.IsDefault ? "default" : "")} · {p.Connection ?? ""}");
+            if (Lines.Count == 0) Lines.Add("No printer profiles yet.");
+        }
+        catch (Exception ex) { Error = ex.Message; }
+
+        try
+        {
+            var health = await _api.GetAsync<IReadOnlyList<IntegrationHealthEventDto>>("api/integration-health");
+            HealthLines.Clear();
+            foreach (var h in health)
+                HealthLines.Add($"{h.CreatedAt:u} · {h.ProviderKey} · {(h.Success ? "OK" : "FAIL")} · {h.Message}");
+            if (HealthLines.Count == 0) HealthLines.Add("No integration health events yet. Run a credential test.");
+        }
+        catch
+        {
+            HealthLines.Clear();
+            HealthLines.Add("Integration health requires integrations.manage.");
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Name)) { Error = "Name required."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpsertPrinterProfileRequest, PrinterProfileDto>(
+                "api/printers",
+                new UpsertPrinterProfileRequest(null, Name.Trim(), Kind.Trim(),
+                    string.IsNullOrWhiteSpace(Connection) ? null : Connection.Trim(), null, true));
+            Status = "Printer profile saved.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class FitmentViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<PartFitmentDto> Items { get; } = new();
+    [ObservableProperty] private PartFitmentDto? _selected;
+    [ObservableProperty] private string _brandFilter = string.Empty;
+    [ObservableProperty] private string _modelFilter = string.Empty;
+    [ObservableProperty] private string _partName = string.Empty;
+    [ObservableProperty] private string _partSku = string.Empty;
+    [ObservableProperty] private string _brand = string.Empty;
+    [ObservableProperty] private string _model = string.Empty;
+    [ObservableProperty] private string _deviceType = string.Empty;
+    [ObservableProperty] private string _notes = string.Empty;
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string? _error;
+
+    public FitmentViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var qs = new List<string>();
+            if (!string.IsNullOrWhiteSpace(BrandFilter)) qs.Add($"brand={Uri.EscapeDataString(BrandFilter.Trim())}");
+            if (!string.IsNullOrWhiteSpace(ModelFilter)) qs.Add($"model={Uri.EscapeDataString(ModelFilter.Trim())}");
+            var path = "api/fitment" + (qs.Count == 0 ? "" : "?" + string.Join("&", qs));
+            var list = await _api.GetAsync<IReadOnlyList<PartFitmentDto>>(path);
+            Items.Clear();
+            foreach (var i in list) Items.Add(i);
+            StatusMessage = $"{Items.Count} fitment rule(s).";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(PartName) || string.IsNullOrWhiteSpace(Brand) || string.IsNullOrWhiteSpace(Model))
+        {
+            Error = "Part name, brand, and model are required.";
+            return;
+        }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpsertPartFitmentRequest, PartFitmentDto>(
+                "api/fitment",
+                new UpsertPartFitmentRequest(
+                    null, null,
+                    string.IsNullOrWhiteSpace(PartSku) ? null : PartSku.Trim(),
+                    PartName.Trim(), Brand.Trim(), Model.Trim(),
+                    string.IsNullOrWhiteSpace(DeviceType) ? null : DeviceType.Trim(),
+                    string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()));
+            PartName = PartSku = Brand = Model = DeviceType = Notes = string.Empty;
+            StatusMessage = "Fitment rule saved.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task DeleteAsync()
+    {
+        if (Selected is null) { Error = "Select a rule first."; return; }
+        Error = null;
+        try
+        {
+            await _api.DeleteAsync($"api/fitment/{Selected.Id}");
+            StatusMessage = "Fitment rule removed.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+}
+
+public partial class LocationsViewModel : ObservableObject
+{
+    private readonly ApiClient _api;
+    public ObservableCollection<string> Lines { get; } = new();
+    public ObservableCollection<string> BinLines { get; } = new();
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _suburb = string.Empty;
+    [ObservableProperty] private string _state = "QLD";
+    [ObservableProperty] private string _binCode = string.Empty;
+    [ObservableProperty] private string _binName = string.Empty;
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _status;
+    private Guid? _defaultLocationId;
+
+    public LocationsViewModel(ApiClient api) => _api = api;
+
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        Error = null;
+        try
+        {
+            var locs = await _api.GetAsync<IReadOnlyList<WorkshopLocationDto>>("api/locations");
+            Lines.Clear();
+            foreach (var l in locs)
+            {
+                Lines.Add($"{l.Name}{(l.IsDefault ? " · default" : "")} · {l.Suburb} {l.State}");
+                if (l.IsDefault) _defaultLocationId = l.Id;
+            }
+            if (Lines.Count == 0) Lines.Add("No sites yet.");
+
+            var bins = await _api.GetAsync<IReadOnlyList<InventoryBinDto>>("api/inventory-bins");
+            BinLines.Clear();
+            foreach (var b in bins)
+                BinLines.Add($"{b.Code} · {b.Name ?? ""} · {b.LocationName ?? "no site"}");
+            if (BinLines.Count == 0) BinLines.Add("No inventory bins yet.");
+            Status = $"{locs.Count} site(s) · {bins.Count} bin(s).";
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task SaveLocationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Name)) { Error = "Site name required."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpsertWorkshopLocationRequest, WorkshopLocationDto>(
+                "api/locations",
+                new UpsertWorkshopLocationRequest(
+                    null, Name.Trim(), null, null, null,
+                    string.IsNullOrWhiteSpace(Suburb) ? null : Suburb.Trim(),
+                    string.IsNullOrWhiteSpace(State) ? null : State.Trim(),
+                    null, true));
+            Name = Suburb = string.Empty;
+            State = "QLD";
+            Status = "Site saved.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task SaveBinAsync()
+    {
+        if (string.IsNullOrWhiteSpace(BinCode)) { Error = "Bin code required."; return; }
+        Error = null;
+        try
+        {
+            await _api.PostAsync<UpsertInventoryBinRequest, InventoryBinDto>(
+                "api/inventory-bins",
+                new UpsertInventoryBinRequest(
+                    null, _defaultLocationId, null, BinCode.Trim(),
+                    string.IsNullOrWhiteSpace(BinName) ? null : BinName.Trim(), null));
+            BinCode = BinName = string.Empty;
+            Status = "Bin saved.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) { Error = ex.Message; }
     }
 }

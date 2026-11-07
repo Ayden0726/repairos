@@ -506,9 +506,20 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Method")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<string>("Path")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -526,11 +537,87 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<bool>("Verified")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.HasIndex("StartedAt");
 
                     b.ToTable("backup_records", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.StocktakeLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CountedQty")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExpectedQty")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("InventoryItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("SessionId", "InventoryItemId")
+                        .IsUnique();
+
+                    b.ToTable("stocktake_lines", (string)null);
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.StocktakeSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StartedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.ToTable("stocktake_sessions", (string)null);
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.Booking", b =>
@@ -5127,6 +5214,30 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("WorkshopOS.Domain.Entities.PurchaseOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.StocktakeLine", b =>
+                {
+                    b.HasOne("WorkshopOS.Domain.Entities.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WorkshopOS.Domain.Entities.StocktakeSession", "Session")
+                        .WithMany("Lines")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("WorkshopOS.Domain.Entities.StocktakeSession", b =>
                 {
                     b.Navigation("Lines");
                 });

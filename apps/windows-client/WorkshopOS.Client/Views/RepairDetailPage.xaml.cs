@@ -48,4 +48,10 @@ public sealed partial class RepairDetailPage : Page
         ViewModel.SelectedStatus = match;
         await ViewModel.SaveStatusCommand.ExecuteAsync(null);
     }
+
+    private async void QaSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: QaRowVm row })
+            await ViewModel.SetQaCommand.ExecuteAsync(row);
+    }
 }

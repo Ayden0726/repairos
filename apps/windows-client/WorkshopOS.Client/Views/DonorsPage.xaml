@@ -1,0 +1,68 @@
+<Page x:Class="WorkshopOS.Client.Views.DonorsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ops="using:WorkshopOS.Contracts.Operations"
+      Background="{ThemeResource WorkshopPageBackgroundBrush}">
+  <Grid Padding="24" ColumnSpacing="16">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" /><ColumnDefinition Width="340" />
+    </Grid.ColumnDefinitions>
+    <StackPanel Spacing="8">
+      <TextBlock Text="Donor devices" FontSize="22" FontWeight="SemiBold"
+                 Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+      <TextBlock Text="Harvest parts into inventory with donor traceability."
+                 Foreground="{ThemeResource WorkshopTextSecondaryBrush}" TextWrapping="Wrap" />
+      <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Left" />
+      <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Opacity="0.75" />
+      <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
+      <ListView ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                SelectedItem="{x:Bind ViewModel.Selected, Mode=TwoWay}">
+        <ListView.ItemTemplate>
+          <DataTemplate x:DataType="ops:DonorDeviceDto">
+            <StackPanel Padding="4,8" Spacing="2">
+              <TextBlock FontWeight="SemiBold">
+                <Run Text="{x:Bind Number}" /><Run Text=" · " /><Run Text="{x:Bind Status}" />
+              </TextBlock>
+              <TextBlock FontSize="12" Opacity="0.75">
+                <Run Text="{x:Bind Brand}" /><Run Text=" " /><Run Text="{x:Bind Model}" />
+                <Run Text=" · " /><Run Text="{x:Bind ComponentCount}" /><Run Text=" parts" />
+              </TextBlock>
+            </StackPanel>
+          </DataTemplate>
+        </ListView.ItemTemplate>
+      </ListView>
+      <TextBlock Text="Harvested components" FontWeight="SemiBold" Margin="0,8,0,0" />
+      <ListView ItemsSource="{x:Bind ViewModel.Components, Mode=OneWay}" MaxHeight="180">
+        <ListView.ItemTemplate>
+          <DataTemplate x:DataType="ops:HarvestedComponentDto">
+            <TextBlock>
+              <Run Text="{x:Bind Description}" /><Run Text=" ×" /><Run Text="{x:Bind Quantity}" />
+              <Run Text=" · " /><Run Text="{x:Bind InventorySku}" />
+            </TextBlock>
+          </DataTemplate>
+        </ListView.ItemTemplate>
+      </ListView>
+    </StackPanel>
+    <Border Grid.Column="1" Padding="16" CornerRadius="8"
+            Background="{ThemeResource WorkshopSurfaceBrush}"
+            BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
+      <ScrollViewer>
+        <StackPanel Spacing="8">
+          <TextBlock Text="New donor" FontWeight="SemiBold" />
+          <TextBox Header="Brand" Text="{x:Bind ViewModel.Brand, Mode=TwoWay}" />
+          <TextBox Header="Model" Text="{x:Bind ViewModel.Model, Mode=TwoWay}" />
+          <TextBox Header="IMEI" Text="{x:Bind ViewModel.Imei, Mode=TwoWay}" />
+          <TextBox Header="Notes" Text="{x:Bind ViewModel.Notes, Mode=TwoWay}" AcceptsReturn="True" Height="56" />
+          <Button Content="Create donor" Command="{x:Bind ViewModel.CreateCommand}"
+                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="Harvest component" FontWeight="SemiBold" Margin="0,12,0,0" />
+          <TextBox Header="Description" Text="{x:Bind ViewModel.HarvestDescription, Mode=TwoWay}" />
+          <TextBox Header="Quantity" Text="{x:Bind ViewModel.HarvestQty, Mode=TwoWay}" />
+          <TextBox Header="New SKU (optional)" Text="{x:Bind ViewModel.HarvestSku, Mode=TwoWay}" />
+          <Button Content="Harvest to inventory" Command="{x:Bind ViewModel.HarvestCommand}"
+                  HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</Page>

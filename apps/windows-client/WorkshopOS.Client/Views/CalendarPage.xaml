@@ -168,31 +168,41 @@
 
           <TextBlock Text="{x:Bind ViewModel.PanelTitle, Mode=OneWay}" FontWeight="SemiBold" FontSize="15"
                      Margin="0,8,0,0" />
+          <TextBlock Text="{x:Bind ViewModel.ManageHint, Mode=OneWay}" FontSize="12" Opacity="0.7"
+                     TextWrapping="Wrap" />
           <ComboBox Header="Customer"
                     ItemsSource="{x:Bind ViewModel.Customers, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedCustomer, Mode=TwoWay}"
                     DisplayMemberPath="Label"
-                    IsEditable="True" IsTextSearchEnabled="True"
-                    PlaceholderText="Search customer"
-                    HorizontalAlignment="Stretch" />
+                    IsEditable="False" IsTextSearchEnabled="True"
+                    PlaceholderText="Select a customer"
+                    HorizontalAlignment="Stretch"
+                    IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
           <ComboBox Header="Type"
                     ItemsSource="{x:Bind ViewModel.BookingTypes, Mode=OneWay}"
                     Text="{x:Bind ViewModel.BookingType, Mode=TwoWay}"
                     IsEditable="True"
-                    HorizontalAlignment="Stretch" />
+                    HorizontalAlignment="Stretch"
+                    IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
           <TextBox Header="Starts (local yyyy-MM-dd HH:mm)"
-                   Text="{x:Bind ViewModel.BookingStartLocal, Mode=TwoWay}" />
+                   Text="{x:Bind ViewModel.BookingStartLocal, Mode=TwoWay}"
+                   IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
           <TextBox Header="Ends (local yyyy-MM-dd HH:mm)"
-                   Text="{x:Bind ViewModel.BookingEndLocal, Mode=TwoWay}" />
+                   Text="{x:Bind ViewModel.BookingEndLocal, Mode=TwoWay}"
+                   IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
           <TextBox Header="Notes" Text="{x:Bind ViewModel.BookingNotes, Mode=TwoWay}"
-                   AcceptsReturn="True" Height="64" TextWrapping="Wrap" />
+                   AcceptsReturn="True" Height="64" TextWrapping="Wrap"
+                   IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
 
           <Button Content="Save booking" Command="{x:Bind ViewModel.SaveCommand}"
-                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+                  Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                  IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
           <Button Content="New booking" Command="{x:Bind ViewModel.NewBookingCommand}"
-                  HorizontalAlignment="Stretch" />
+                  HorizontalAlignment="Stretch"
+                  IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
           <Button Content="Cancel booking" Command="{x:Bind ViewModel.CancelBookingCommand}"
-                  HorizontalAlignment="Stretch" />
+                  HorizontalAlignment="Stretch"
+                  IsEnabled="{x:Bind ViewModel.CanManageBookings, Mode=OneWay}" />
 
           <ProgressRing Width="28" Height="28" HorizontalAlignment="Left"
                         IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />

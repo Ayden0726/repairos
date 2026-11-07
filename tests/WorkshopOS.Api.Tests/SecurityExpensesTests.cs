@@ -59,6 +59,74 @@ public sealed class SecurityExpensesTests
     }
 
     [Fact]
+    public void SecretProtector_LegacyJwt_Decrypt_And_Rewrap()
+    {
+        const string jwt = "legacy-jwt-signing-key-at-least-32-characters!!";
+        const string enc = "new-dedicated-encryption-key-at-least-32-chars!";
+
+        // Ciphertext created when Encryption:Key was missing (JWT-derived).
+        var legacy = new SecretProtector(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:SigningKey"] = jwt
+            }).Build());
+        var cipher = legacy.Encrypt("imei-api-key-secret");
+
+        // Dedicated Encryption:Key added later — must still decrypt via JWT fallback.
+        var modern = new SecretProtector(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Encryption:Key"] = enc,
+                ["Jwt:SigningKey"] = jwt
+            }).Build());
+
+        modern.TryDecrypt(cipher, out var plain, out var err, out var usedLegacy).Should().BeTrue();
+        plain.Should().Be("imei-api-key-secret");
+        err.Should().BeNull();
+        usedLegacy.Should().BeTrue();
+
+        var rewrapped = modern.RewrapIfNeeded(cipher);
+        rewrapped.Should().NotBeNullOrWhiteSpace();
+        rewrapped.Should().NotBe(cipher);
+
+        // After rewrap, primary key alone (no JWT) can decrypt.
+        var primaryOnly = new SecretProtector(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Encryption:Key"] = enc
+            }).Build());
+        primaryOnly.Decrypt(rewrapped!).Should().Be("imei-api-key-secret");
+        primaryOnly.TryDecrypt(rewrapped, out _, out _, out var legacy2).Should().BeTrue();
+        legacy2.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SecretProtector_PreviousKey_Fallback()
+    {
+        const string oldKey = "old-encryption-key-value-at-least-32-chars!!";
+        const string newKey = "new-encryption-key-value-at-least-32-chars!!";
+
+        var withOld = new SecretProtector(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Encryption:Key"] = oldKey
+            }).Build());
+        var cipher = withOld.Encrypt("rotation-secret");
+
+        var rotated = new SecretProtector(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Encryption:Key"] = newKey,
+                ["Encryption:PreviousKey"] = oldKey
+            }).Build());
+
+        rotated.TryDecrypt(cipher, out var plain, out _, out var usedLegacy).Should().BeTrue();
+        plain.Should().Be("rotation-secret");
+        usedLegacy.Should().BeTrue();
+        rotated.RewrapIfNeeded(cipher).Should().NotBe(cipher);
+    }
+
+    [Fact]
     public void Gst_Inclusive_Exclusive_And_Free()
     {
         var inclusive = ExpenseService.CalculateGst(110m, "Inclusive");

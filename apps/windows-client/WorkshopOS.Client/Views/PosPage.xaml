@@ -60,6 +60,20 @@
           </ListView.ItemTemplate>
         </ListView>
         <StackPanel Grid.Row="2" Spacing="8" Margin="0,8,0,0">
+          <TextBlock Text="Refurbished ready for sale" FontWeight="SemiBold" />
+          <ListView ItemsSource="{x:Bind ViewModel.UsedDevices, Mode=OneWay}"
+                    IsItemClickEnabled="True" ItemClick="Used_ItemClick" MaxHeight="120">
+            <ListView.ItemTemplate>
+              <DataTemplate x:DataType="ops:UsedDeviceDto">
+                <StackPanel Padding="2,4">
+                  <TextBlock>
+                    <Run Text="{x:Bind Brand}" /><Run Text=" " /><Run Text="{x:Bind Model}" />
+                    <Run Text=" · $" /><Run Text="{x:Bind AskingPrice}" />
+                  </TextBlock>
+                </StackPanel>
+              </DataTemplate>
+            </ListView.ItemTemplate>
+          </ListView>
           <TextBlock Text="Import repair" FontWeight="SemiBold" />
           <Grid ColumnSpacing="8">
             <Grid.ColumnDefinitions>

@@ -153,6 +153,12 @@ public sealed partial class NewRepairPage : Page
     private void SvcRemove_Click(object sender, RoutedEventArgs e) =>
         _picker.Remove(SvcSelectedBox.SelectedItem as CatalogueServiceRow);
 
+    private async void ImeiBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.CheckImeiHistoryCommand.CanExecute(null))
+            await ViewModel.CheckImeiHistoryCommand.ExecuteAsync(null);
+    }
+
     private async void CreateTicket_Click(object sender, RoutedEventArgs e)
     {
         // Prefer ComboBox text (editable) over SelectedItem

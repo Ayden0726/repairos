@@ -26,6 +26,12 @@ public class Quote : SoftDeleteEntity
     public string? DeviceSerial { get; set; }
     public string? DeviceImei { get; set; }
     public string? DeviceCategory { get; set; }
+    /// <summary>Optional colour filled from IMEI lookup (confirm with customer).</summary>
+    public string? DeviceColour { get; set; }
+    /// <summary>Optional storage capacity (e.g. 128GB) from IMEI lookup.</summary>
+    public string? DeviceStorage { get; set; }
+    /// <summary>Manufacturer model / order number (e.g. A2890).</summary>
+    public string? DeviceModelNumber { get; set; }
     /// <summary>Parts sell after job markup (synced with PartsSellTotal).</summary>
     public decimal PartsSubtotal { get; set; }
     /// <summary>Job labour fee (synced with LabourFee).</summary>
@@ -214,10 +220,11 @@ public class InventoryItem : SoftDeleteEntity
     public decimal SellPrice { get; set; }
     public int QuantityOnHand { get; set; }
     public int QuantityReserved { get; set; }
+    public int QuantityQuarantined { get; set; }
     public int MinimumStock { get; set; }
     public int ReorderQuantity { get; set; }
     public string? LocationBin { get; set; }
-    public int Available => Math.Max(0, QuantityOnHand - QuantityReserved);
+    public int Available => Math.Max(0, QuantityOnHand - QuantityReserved - QuantityQuarantined);
 }
 
 public class InventoryTransaction
@@ -450,4 +457,32 @@ public class BackupRecord
     public Guid? StartedById { get; set; }
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? FinishedAt { get; set; }
+    /// <summary>pg_dump | LogicalJsonGzip</summary>
+    public string? Method { get; set; }
+    public long? SizeBytes { get; set; }
+    public string? Sha256 { get; set; }
+    /// <summary>True only after file exists, size &gt; 0, and hash matches on-disk content.</summary>
+    public bool Verified { get; set; }
+}
+
+public class StocktakeSession : SoftDeleteEntity
+{
+    public string Number { get; set; } = string.Empty;
+    public string Status { get; set; } = "Open"; // Open, Completed, Cancelled
+    public string? Notes { get; set; }
+    public Guid StartedById { get; set; }
+    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? CompletedAt { get; set; }
+    public ICollection<StocktakeLine> Lines { get; set; } = new List<StocktakeLine>();
+}
+
+public class StocktakeLine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public StocktakeSession Session { get; set; } = null!;
+    public Guid InventoryItemId { get; set; }
+    public InventoryItem InventoryItem { get; set; } = null!;
+    public int ExpectedQty { get; set; }
+    public int? CountedQty { get; set; }
 }

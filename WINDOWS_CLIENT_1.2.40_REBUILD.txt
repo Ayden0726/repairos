@@ -1,0 +1,8 @@
+WorkshopOS Windows client 1.2.40
+================================
+
+Rebuild the WinUI client against API 1.2.40.
+
+Includes: parts fitment page, offline sync queue flush (Settings → Connection),
+multi-site Locations + inventory bins (Settings → Sites).
+Board-level repair is out of scope and will not be built.

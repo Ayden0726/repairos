@@ -1,0 +1,22 @@
+Rebuild Windows client 1.2.36
+=============================
+
+After syncing GitHub main to this tag/commit:
+
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.36.ps1
+
+Or:
+
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 -Configuration Release -Version 1.2.36
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.36.zip
+  packaging\dist\WorkshopOS-Setup-1.2.36.exe
+
+Server update (WSL/Linux):
+  curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash -s -- --update
+
+1.2.36 notes:
+  - IMEI keys encrypted under old JWT still decrypt; auto re-wrap under Encryption__Key
+  - Calendar: pick customer from list, Save booking; New booking on dashboard
+  - technician + sales roles gain bookings.manage on API restart

@@ -137,6 +137,7 @@ public sealed class DeviceIdentificationFlowTests
         withKey.EnsureSuccessStatusCode();
         var keyDto = await withKey.Content.ReadFromJsonAsync<DeviceIdentificationSettingsDto>();
         keyDto!.ApiKeyConfigured.Should().BeTrue();
+        keyDto.ApiKeyDecryptable.Should().BeTrue();
 
         var keep = await _client.PutAsJsonAsync("/api/device-identification/settings",
             new UpdateDeviceIdentificationSettingsRequest(

@@ -296,6 +296,9 @@ public sealed class QuoteService : IQuoteService
             DeviceSerial = request.DeviceSerial?.Trim(),
             DeviceImei = request.DeviceImei?.Trim(),
             DeviceCategory = request.DeviceCategory?.Trim(),
+            DeviceColour = request.DeviceColour?.Trim(),
+            DeviceStorage = request.DeviceStorage?.Trim(),
+            DeviceModelNumber = request.DeviceModelNumber?.Trim(),
             CreatedById = actorId,
             ValidityDays = validity,
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(validity),
@@ -344,6 +347,9 @@ public sealed class QuoteService : IQuoteService
         quote.DeviceSerial = request.DeviceSerial?.Trim() ?? quote.DeviceSerial;
         quote.DeviceImei = request.DeviceImei?.Trim() ?? quote.DeviceImei;
         quote.DeviceCategory = request.DeviceCategory?.Trim() ?? quote.DeviceCategory;
+        quote.DeviceColour = request.DeviceColour?.Trim() ?? quote.DeviceColour;
+        quote.DeviceStorage = request.DeviceStorage?.Trim() ?? quote.DeviceStorage;
+        quote.DeviceModelNumber = request.DeviceModelNumber?.Trim() ?? quote.DeviceModelNumber;
         if (request.ValidityDays is int days && days > 0)
         {
             quote.ValidityDays = days;
@@ -503,6 +509,11 @@ public sealed class QuoteService : IQuoteService
         var labour = q.LabourFee != 0m ? q.LabourFee : q.LabourSubtotal;
 
         var device = string.Join(" ", new[] { q.DeviceBrand, q.DeviceModel }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        if (!string.IsNullOrWhiteSpace(q.DeviceModelNumber))
+            device = string.IsNullOrWhiteSpace(device) ? q.DeviceModelNumber : $"{device} ({q.DeviceModelNumber})";
+        var deviceExtras = string.Join(" · ", new[] { q.DeviceStorage, q.DeviceColour }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        if (!string.IsNullOrWhiteSpace(deviceExtras))
+            device = string.IsNullOrWhiteSpace(device) ? deviceExtras : $"{device} · {deviceExtras}";
         if (string.IsNullOrWhiteSpace(device)) device = "—";
 
         // Customer lines: parts at sell only (job markup already in PartSell/UnitPrice). Never bake labour into a line.
@@ -576,6 +587,8 @@ public sealed class QuoteService : IQuoteService
           .Append("<div class=\"box\"><div class=\"label\">Device</div>").Append(Esc(device));
         if (!string.IsNullOrWhiteSpace(q.DeviceSerial))
             sb.Append("<div>Serial: ").Append(Esc(q.DeviceSerial)).Append("</div>");
+        if (!string.IsNullOrWhiteSpace(q.DeviceImei))
+            sb.Append("<div>IMEI: ").Append(Esc(q.DeviceImei)).Append("</div>");
         sb.Append("</div>");
         if (!string.IsNullOrWhiteSpace(q.Issue))
             sb.Append("<div class=\"box\"><div class=\"label\">Issue</div><pre style=\"white-space:pre-wrap;font-family:inherit;margin:0\">")
@@ -849,6 +862,9 @@ public sealed class QuoteService : IQuoteService
             includeInternal ? markupAmount : 0m,
             labourFee,
             q.AdditionalTotal,
-            q.DeviceImei);
+            q.DeviceImei,
+            q.DeviceColour,
+            q.DeviceStorage,
+            q.DeviceModelNumber);
     }
 }

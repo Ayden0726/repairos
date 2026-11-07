@@ -35,6 +35,8 @@ public class PosSaleLine
     public PosSale Sale { get; set; } = null!;
     public Guid? InventoryItemId { get; set; }
     public InventoryItem? InventoryItem { get; set; }
+    public Guid? UsedDeviceId { get; set; }
+    public UsedDevice? UsedDevice { get; set; }
     public string Description { get; set; } = string.Empty;
     public string? Sku { get; set; }
     public decimal Quantity { get; set; } = 1;

@@ -1,0 +1,9 @@
+WorkshopOS Windows client 1.2.39
+================================
+
+Rebuild the WinUI client against API 1.2.39.
+
+Includes: donor harvest, loaners, warranty claims, refund approvals,
+POS sell refurbished, repair photos/signatures/condition report,
+inventory barcode/bin/quarantine, printer profiles, backup restore-test,
+website staff inbox, integration health.

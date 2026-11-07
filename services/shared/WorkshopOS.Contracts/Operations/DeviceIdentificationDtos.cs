@@ -17,7 +17,12 @@ public sealed record DeviceIdentificationSettingsDto(
     decimal? EstimatedAdvancedCost,
     string? Notes,
     /// <summary>When true, quote builder shows the IMEI lookup panel.</summary>
-    bool ShowOnQuotes = true);
+    bool ShowOnQuotes = true,
+    /// <summary>
+    /// True when no key is stored, or the stored ciphertext decrypts with the current
+    /// Encryption:Key (or a legacy fallback that was auto-rewrapped). False means re-paste the key.
+    /// </summary>
+    bool ApiKeyDecryptable = true);
 
 public sealed record UpdateDeviceIdentificationSettingsRequest(
     bool Enabled,

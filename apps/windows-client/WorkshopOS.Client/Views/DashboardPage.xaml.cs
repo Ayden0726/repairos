@@ -40,6 +40,9 @@ public sealed partial class DashboardPage : Page
     private void OpenCalendar_Click(object sender, RoutedEventArgs e) =>
         Frame.Navigate(typeof(CalendarPage));
 
+    private void NewBooking_Click(object sender, RoutedEventArgs e) =>
+        Frame.Navigate(typeof(CalendarPage), "new");
+
     private void MoveUp_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: DashboardWidgetEditVm widget })

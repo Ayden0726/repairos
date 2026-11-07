@@ -1,5 +1,92 @@
 # Changelog
 
+## 1.2.40 — 2026-11-03
+
+### Phase H — fitment / offline / multi-site (board-level won’t do)
+- Parts fitment compatibility graph: `part_fitments` + `/api/fitment` + Fitment WinUI page
+- Offline sync: client `OfflineQueueStore` queues mutations when the API is unreachable; `POST /api/sync/push` acks into `sync_outbox` with dedupe; Connection settings can flush/replay
+- Multi-site workshop Locations CRUD + inventory bins hierarchy (`inventory_bins`); Settings → Sites pivot
+- Board-level / microsoldering repair explicitly removed from the V2 plan — will not be built
+- Multi-site only (not SaaS multi-tenant / licensing)
+
+- API / client version `1.2.40` (ClientMinVersion `1.2.40`)
+
+
+## 1.2.39 — 2026-11-02
+
+### Phase E — donor / harvest
+- Donor devices API + WinUI; harvest components into inventory with donor trace
+- Parts-only flag set when donor is sourced from a refurbished unit
+
+### Phase F — POS / refunds / loaners / warranty
+- POS can sell refurbished devices (`UsedDeviceId` on sale lines); void restores Ready for Sale
+- Refund request + approve/reject workflow (invoice payment reversal)
+- Loaner device register + checkout / return agreements
+- Warranty claims staff API + WinUI
+
+### Phase C / D / G / H slices
+- Repair photo attachments, intake signatures, condition report HTML
+- Printer profiles + batch label HTML; backup restore-test drill
+- Inventory barcode lookup, bin transfer, quarantine qty (Available = on-hand − reserved − quarantined)
+- Website staff inbox (Sell Your Tech + messages)
+- Integration health events recorded on credential tests
+
+- API / client version `1.2.39` (ClientMinVersion `1.2.39`)
+
+
+## 1.2.38 — 2026-11-02
+
+### Phase A — ops honesty
+- Backups use real `pg_dump` when available, else verified logical JSON gzip (SHA-256); no fake “Completed” markers
+- Reports never invent COGS — unknown periods show $0 with an explicit note
+- `GET /api/audit` + Settings → Activity audit browser
+
+### Phase B — inventory depth
+- Inventory adjust + part label print in WinUI
+- Purchase order detail + receive remaining lines UI
+- Stocktake sessions (count → complete applies variances)
+
+### Phase C / D — shop floor
+- Repair QA checklist WinUI (seeds on open)
+- Repeat / known-device banner on new repair when IMEI has history
+- HTML label templates for repair / refurbished / parts (internal IDs; battery never invented)
+- Used Tech battery health %, functional grade, parts-only flag + stock label print
+
+### Phase E (partial)
+- Acquisitions WinUI (create / status / convert to stock)
+- Used Tech status options aligned to full refurbished pipeline
+
+- API / client version `1.2.38` (ClientMinVersion `1.2.38`)
+
+
+## 1.2.37 — 2026-10-27
+
+### IMEI lookup → quote + used buy-in
+- Quote builder fills **brand, model, model number, storage, colour, device type** from IMEI lookup
+- Extra provider details (TAC, display, chipset, RAM, network, warranty, duplicates) merge into **internal notes**
+- New quote columns: `DeviceColour`, `DeviceStorage`, `DeviceModelNumber`
+- Refurbished **Used Tech** buy-in form has the same IMEI Look up action
+
+- API / client version `1.2.37` (ClientMinVersion `1.2.37`)
+
+
+## 1.2.36 — 2026-10-27
+
+### Encryption / IMEI decrypt reliability
+- `SecretProtector` decrypts with `Encryption__Key`, then optional `Encryption__PreviousKey`, then legacy `JWT_SIGNING_KEY`
+- Successful legacy decrypts **re-wrap** IMEI Device ID and integration credentials under `Encryption__Key`
+- Device ID settings report `ApiKeyDecryptable`; Settings UI prompts to re-paste when false
+- Documented in `docs/SETTINGS_AND_SECURITY.md`
+
+### Calendar — add bookings
+- Customer picker uses reliable list selection (editable ComboBox no longer drops `SelectedCustomer`)
+- Clear `bookings.manage` gating + friendly 403 message; technicians and sales gain `bookings.manage` on upgrade
+- Dashboard calendar widget **New booking** opens the full Calendar ready to schedule
+- Local date parse accepts `yyyy-MM-dd HH:mm` and AU `d/M/yyyy HH:mm`
+
+- API / client version `1.2.36` (ClientMinVersion `1.2.36`)
+
+
 ## 1.2.35 — 2026-10-22
 
 ### Quote IMEI lookup
