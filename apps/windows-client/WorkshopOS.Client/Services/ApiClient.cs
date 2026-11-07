@@ -323,7 +323,8 @@ public sealed class ApiClient
         var push = _offlineQueue.ToPushRequest();
         try
         {
-            var result = await PostAsync<SyncPushRequest, SyncPushResponse>("api/sync/push", push, ct);
+            var result = await PostAsync<WorkshopOS.Contracts.Operations.SyncPushRequest, WorkshopOS.Contracts.Operations.SyncPushResponse>(
+                "api/sync/push", push, ct);
             var applied = result.Results.Count(r => r.Status is "Applied" or "Duplicate");
             // Replay successful mutations against live endpoints when still queued locally
             var remaining = new List<OfflineQueuedMutation>();
