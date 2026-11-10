@@ -33,10 +33,12 @@ public sealed partial class SettingsPage : Page
     private bool _deviceIdLoaded;
     private bool _connectionHealthLoaded;
     private bool _sitesLoaded;
+    private bool _workshopStyleReady;
     private string? _initialSection;
     private readonly ObservableCollection<ModuleToggleItem> _moduleToggles = new();
     private PricingSettingsDto? _pricing;
     private BusinessProfileDto? _business;
+    private WorkshopStyleSettingsDto? _workshopStyle;
     private IntegrationCredentialDto? _selectedCredential;
     private IReadOnlyList<IntegrationProviderInfoDto> _providers = Array.Empty<IntegrationProviderInfoDto>();
 
@@ -88,6 +90,8 @@ public sealed partial class SettingsPage : Page
         ServerUrlText.Text = string.IsNullOrWhiteSpace(settings.ServerUrl)
             ? "No server saved."
             : $"Connected server: {settings.ServerUrl}";
+
+        await LoadWorkshopStyleAsync();
 
         RestartCommandsBox.Text =
             "cd ~/workshopos\n" +
@@ -170,6 +174,71 @@ public sealed partial class SettingsPage : Page
         settings.Theme = tag;
         ThemeService.ApplyFromStore(settings);
         ThemeStatusText.Text = $"Applied: {settings.Theme}";
+    }
+
+    private async Task LoadWorkshopStyleAsync()
+    {
+        _workshopStyleReady = false;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            _workshopStyle = await api.GetAsync<WorkshopStyleSettingsDto>("api/settings/workshop-style");
+            foreach (var item in WorkshopStyleCombo.Items.OfType<ComboBoxItem>())
+            {
+                if (string.Equals(item.Tag as string, _workshopStyle.Style, StringComparison.OrdinalIgnoreCase))
+                {
+                    WorkshopStyleCombo.SelectedItem = item;
+                    break;
+                }
+            }
+            BeginnerTipsToggle.IsOn = _workshopStyle.ShowBeginnerTips;
+            WorkshopStyleStatusText.Text = WorkshopStyles.IsHome(_workshopStyle.Style)
+                ? "Home / side hustle — slim modules and guided intake."
+                : "Full shop — all modules available.";
+            if (WorkshopStyles.IsHome(_workshopStyle.Style))
+                SitesPivot.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            WorkshopStyleStatusText.Text = $"Could not load workshop profile: {ex.Message}";
+        }
+        finally
+        {
+            _workshopStyleReady = true;
+        }
+    }
+
+    private void WorkshopStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Selection alone does not save — user clicks Save workshop profile.
+    }
+
+    private void BeginnerTipsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        // Saved with Save workshop profile.
+    }
+
+    private async void SaveWorkshopStyle_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_workshopStyleReady) return;
+        var tag = (WorkshopStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? WorkshopStyles.FullShop;
+        try
+        {
+            var api = App.Services.GetRequiredService<ApiClient>();
+            _workshopStyle = await api.PutAsync<UpdateWorkshopStyleRequest, WorkshopStyleSettingsDto>(
+                "api/settings/workshop-style",
+                new UpdateWorkshopStyleRequest(tag, BeginnerTipsToggle.IsOn));
+            WorkshopStyleStatusText.Text = WorkshopStyles.IsHome(_workshopStyle.Style)
+                ? "Saved Home / side hustle. Reopen the main window (sign out/in) to refresh the nav."
+                : "Saved Full shop. Reopen the main window (sign out/in) to refresh the nav.";
+            SitesPivot.Visibility = WorkshopStyles.IsHome(_workshopStyle.Style)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            WorkshopStyleStatusText.Text = ex.Message;
+        }
     }
 
     private void StartWithWindowsToggle_Toggled(object sender, RoutedEventArgs e)

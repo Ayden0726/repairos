@@ -21,7 +21,7 @@
                     ItemInvoked="NavView_ItemInvoked">
       <NavigationView.PaneHeader>
         <StackPanel Padding="12,8,12,4" Spacing="0">
-          <TextBlock Text="TechBench NQ" FontWeight="SemiBold" FontSize="13"
+          <TextBlock Text="{x:Bind ViewModel.BrandTitle, Mode=OneWay}" FontWeight="SemiBold" FontSize="13"
                      Foreground="{ThemeResource WorkshopAccentBrush}" />
           <TextBlock Text="{x:Bind ViewModel.BusinessName, Mode=OneWay}" FontSize="11"
                      TextTrimming="CharacterEllipsis" MaxLines="1"

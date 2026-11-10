@@ -8,13 +8,26 @@
       <Grid>
         <StackPanel Spacing="2">
           <TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
-          <TextBlock Text="Your dashboard — show, hide, and reorder widgets for this account." FontSize="13" Opacity="0.65" TextWrapping="Wrap" />
+          <TextBlock Text="{x:Bind ViewModel.HomeSubtitle, Mode=OneWay}" FontSize="13" Opacity="0.65" TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
-          <Button Content="Customise" Command="{x:Bind ViewModel.ToggleCustomizeCommand}" />
+          <Button Content="Customise" Command="{x:Bind ViewModel.ToggleCustomizeCommand}"
+                  Visibility="{x:Bind ViewModel.ShowCustomizeButton, Mode=OneWay}" />
           <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" />
         </StackPanel>
       </Grid>
+      <Border Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopAccentSoftBrush}"
+              Visibility="{x:Bind ViewModel.ShowBeginnerTip, Mode=OneWay}">
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{x:Bind ViewModel.BeginnerTip, Mode=OneWay}" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Content="Got it" Command="{x:Bind ViewModel.DismissBeginnerTipCommand}"
+                  VerticalAlignment="Top" Padding="10,4" />
+        </Grid>
+      </Border>
       <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" />
       <TextBlock Text="{x:Bind ViewModel.LayoutStatus, Mode=OneWay}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
 

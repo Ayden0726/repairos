@@ -6,6 +6,7 @@ using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Website;
 using WorkshopOS.Contracts.Workshop;
+// WorkshopStyles / HomeMoneySummaryDto live in Contracts.Common
 
 namespace WorkshopOS.Client.Views;
 
@@ -39,6 +40,11 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] private bool _showWorkloadWidget = true;
     [ObservableProperty] private bool _showLowStockWidget = true;
     [ObservableProperty] private bool _showActivityWidget = true;
+    [ObservableProperty] private bool _isHomeMode;
+    [ObservableProperty] private bool _showCustomizeButton = true;
+    [ObservableProperty] private string _homeSubtitle = "Your dashboard — show, hide, and reorder widgets for this account.";
+    [ObservableProperty] private string? _beginnerTip;
+    [ObservableProperty] private bool _showBeginnerTip;
 
     private List<DashboardWidgetPreferenceDto> _layout =
         DashboardWidgetIds.All.Select((id, i) =>
@@ -70,20 +76,32 @@ public partial class DashboardViewModel : ObservableObject
         Error = null;
         CalendarStatus = null;
         Greeting = BuildGreeting(_session.User?.DisplayName);
+        await LoadWorkshopProfileAsync();
         await LoadLayoutAsync();
 
         try
         {
             var d = await _api.GetAsync<DashboardDto>("api/dashboard");
             Cards.Clear();
-            Cards.Add(new("Open Jobs", d.Cards.OpenJobs.ToString(), "open"));
-            Cards.Add(new("Due Today", d.Cards.DueToday.ToString(), "dueToday"));
-            Cards.Add(new("Awaiting Approval", d.Cards.AwaitingApproval.ToString(), "awaiting_approval"));
-            Cards.Add(new("Waiting for Parts", d.Cards.WaitingForParts.ToString(), "waiting_parts"));
-            Cards.Add(new("Ready for Pickup", d.Cards.ReadyForPickup.ToString(), "ready_pickup"));
-            Cards.Add(new("Overdue", d.Cards.Overdue.ToString(), "overdue"));
-            Cards.Add(new("Revenue 30d", MoneyDisplay.Format(d.Cards.Revenue30Days), null));
-            Cards.Add(new("Gross Profit 30d", MoneyDisplay.Format(d.Cards.GrossProfit30Days), null));
+            if (IsHomeMode)
+            {
+                Cards.Add(new("Open jobs", d.Cards.OpenJobs.ToString(), "open"));
+                Cards.Add(new("Due today", d.Cards.DueToday.ToString(), "dueToday"));
+                Cards.Add(new("Waiting on parts", d.Cards.WaitingForParts.ToString(), "waiting_parts"));
+                Cards.Add(new("Ready for pickup", d.Cards.ReadyForPickup.ToString(), "ready_pickup"));
+                Cards.Add(new("Paid (30d)", MoneyDisplay.Format(d.Cards.Revenue30Days), null));
+            }
+            else
+            {
+                Cards.Add(new("Open Jobs", d.Cards.OpenJobs.ToString(), "open"));
+                Cards.Add(new("Due Today", d.Cards.DueToday.ToString(), "dueToday"));
+                Cards.Add(new("Awaiting Approval", d.Cards.AwaitingApproval.ToString(), "awaiting_approval"));
+                Cards.Add(new("Waiting for Parts", d.Cards.WaitingForParts.ToString(), "waiting_parts"));
+                Cards.Add(new("Ready for Pickup", d.Cards.ReadyForPickup.ToString(), "ready_pickup"));
+                Cards.Add(new("Overdue", d.Cards.Overdue.ToString(), "overdue"));
+                Cards.Add(new("Revenue 30d", MoneyDisplay.Format(d.Cards.Revenue30Days), null));
+                Cards.Add(new("Gross Profit 30d", MoneyDisplay.Format(d.Cards.GrossProfit30Days), null));
+            }
             Pipeline.Clear(); foreach (var p in d.Pipeline) Pipeline.Add(p);
             Urgent.Clear(); foreach (var u in d.UrgentJobs) Urgent.Add(u);
             Workload.Clear(); foreach (var w in d.Workload) Workload.Add(w);
@@ -95,8 +113,49 @@ public partial class DashboardViewModel : ObservableObject
 
         if (ShowMyTicketsWidget)
             await LoadMyOpenTicketsAsync();
-        if (ShowCalendarWidget)
+        if (ShowCalendarWidget && !IsHomeMode)
             await LoadCalendarAsync();
+    }
+
+    private async Task LoadWorkshopProfileAsync()
+    {
+        try
+        {
+            var style = await _api.GetAsync<WorkshopStyleSettingsDto>("api/settings/workshop-style");
+            IsHomeMode = WorkshopStyles.IsHome(style.Style);
+            ShowCustomizeButton = !IsHomeMode;
+            HomeSubtitle = IsHomeMode
+                ? "Your home workshop — open jobs, parts waiting, and what is ready to return."
+                : "Your dashboard — show, hide, and reorder widgets for this account.";
+            var store = App.Services.GetRequiredService<IAppSettingsStore>();
+            if (IsHomeMode && style.ShowBeginnerTips && !store.IsTipDismissed("dashboard_home"))
+            {
+                BeginnerTip = "Start with New repair when a device arrives. Use Parts for screens and batteries you keep at home. Money shows what you have been paid this month.";
+                ShowBeginnerTip = true;
+            }
+            else
+            {
+                ShowBeginnerTip = false;
+            }
+            if (IsHomeMode)
+            {
+                ShowCalendarWidget = false;
+                ShowWorkloadWidget = false;
+            }
+        }
+        catch
+        {
+            IsHomeMode = false;
+            ShowCustomizeButton = true;
+            HomeSubtitle = "Your dashboard — show, hide, and reorder widgets for this account.";
+        }
+    }
+
+    [RelayCommand]
+    private void DismissBeginnerTip()
+    {
+        ShowBeginnerTip = false;
+        App.Services.GetRequiredService<IAppSettingsStore>().DismissTip("dashboard_home");
     }
 
     private async Task LoadLayoutAsync()
@@ -327,12 +386,17 @@ public partial class InventoryViewModel : ObservableObject
     [ObservableProperty] private string _transferBin = string.Empty;
     [ObservableProperty] private string _quarantineQty = "1";
     [ObservableProperty] private string _quarantineReason = "Quarantine";
+    [ObservableProperty] private string _pageTitle = "Inventory";
+    [ObservableProperty] private bool _isHomeMode;
+    [ObservableProperty] private bool _showStocktake = true;
+    [ObservableProperty] private string? _beginnerTip;
+    [ObservableProperty] private bool _showBeginnerTip;
     public InventoryViewModel(ApiClient api) => _api = api;
 
     partial void OnComponentFilterChanged(string value) => _ = RefreshAsync();
     partial void OnSelectedItemChanged(InventoryListItemDto? value) =>
         SelectedLabel = value is null
-            ? "Select a stock line to adjust or print."
+            ? "Select an inventory line to adjust or print."
             : $"{value.Sku} · {value.Name} · avail {value.Available} (on hand {value.OnHand}, reserved {value.Reserved}, quarantine {value.Quarantined})";
 
     [RelayCommand]
@@ -341,6 +405,27 @@ public partial class InventoryViewModel : ObservableObject
         Error = null;
         try
         {
+            try
+            {
+                var style = await _api.GetAsync<WorkshopStyleSettingsDto>("api/settings/workshop-style");
+                IsHomeMode = WorkshopStyles.IsHome(style.Style);
+                PageTitle = IsHomeMode ? "Parts" : "Inventory";
+                ShowStocktake = !IsHomeMode;
+                var store = App.Services.GetRequiredService<IAppSettingsStore>();
+                if (IsHomeMode && style.ShowBeginnerTips && !store.IsTipDismissed("parts_home"))
+                {
+                    BeginnerTip = "Track screens, batteries, and tools you keep at home. Set cost so Money can estimate profit when you use a part on a job.";
+                    ShowBeginnerTip = true;
+                }
+                else ShowBeginnerTip = false;
+            }
+            catch
+            {
+                IsHomeMode = false;
+                PageTitle = "Inventory";
+                ShowStocktake = true;
+            }
+
             var path = "api/inventory";
             if (!string.IsNullOrWhiteSpace(ComponentFilter) && ComponentFilter != "All")
                 path += $"?componentType={Uri.EscapeDataString(ComponentFilter)}";
@@ -352,6 +437,13 @@ public partial class InventoryViewModel : ObservableObject
                 SelectedItem = Items.FirstOrDefault(x => x.Id == id);
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+
+    [RelayCommand]
+    private void DismissBeginnerTip()
+    {
+        ShowBeginnerTip = false;
+        App.Services.GetRequiredService<IAppSettingsStore>().DismissTip("parts_home");
     }
 
     [RelayCommand]
@@ -493,13 +585,39 @@ public partial class ReportsViewModel : ObservableObject
     private readonly ApiClient _api;
     [ObservableProperty] private string _summary = "Loading…";
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private string _pageTitle = "Reports";
+    [ObservableProperty] private bool _isHomeMode;
     public ReportsViewModel(ApiClient api) => _api = api;
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        Error = null;
         try
         {
+            try
+            {
+                var style = await _api.GetAsync<WorkshopStyleSettingsDto>("api/settings/workshop-style");
+                IsHomeMode = WorkshopStyles.IsHome(style.Style);
+            }
+            catch { IsHomeMode = false; }
+
+            if (IsHomeMode)
+            {
+                PageTitle = "Money";
+                var m = await _api.GetAsync<HomeMoneySummaryDto>("api/settings/home/money");
+                Summary =
+                    $"{m.PeriodLabel} · {m.Currency}\n\n" +
+                    $"Paid this month  {m.PaidThisMonth:C}\n" +
+                    $"Still owed       {m.OutstandingBalance:C}\n" +
+                    $"Parts cost used  {m.PartsCostThisMonth:C}\n" +
+                    $"Est. profit      {m.EstimatedProfitThisMonth:C}\n\n" +
+                    $"Open jobs {m.OpenJobs} · Completed this month {m.JobsCompletedThisMonth}\n\n" +
+                    "Tip: record payments on invoices when customers pay. Parts cost comes from stock you consume on jobs.";
+                return;
+            }
+
+            PageTitle = "Reports";
             var r = await _api.GetAsync<ReportSummaryDto>("api/reports/summary");
             var cogsLine = r.CogsKnown
                 ? $"COGS {r.CostOfGoods:C}"

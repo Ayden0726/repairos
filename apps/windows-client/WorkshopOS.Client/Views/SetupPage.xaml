@@ -17,7 +17,7 @@
       <StackPanel Spacing="4">
         <TextBlock Text="First-run setup" FontSize="24" FontWeight="SemiBold"
                    Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-        <TextBlock Text="Configure this shop before staff sign in. Integrations can wait."
+        <TextBlock Text="Tell us about your workshop. You can switch Full shop ↔ Home later in Settings."
                    Foreground="{ThemeResource WorkshopTextSecondaryBrush}" TextWrapping="Wrap" />
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
@@ -30,7 +30,22 @@
     <ScrollViewer Grid.Row="1" Background="{ThemeResource WorkshopPageBackgroundBrush}">
       <StackPanel MaxWidth="640" Padding="32" Spacing="12"
                   Background="{ThemeResource WorkshopPageBackgroundBrush}">
-        <TextBox Header="Business name" Text="{x:Bind ViewModel.BusinessName, Mode=TwoWay}" />
+        <TextBox Header="Business or workshop name" Text="{x:Bind ViewModel.BusinessName, Mode=TwoWay}"
+                 PlaceholderText="e.g. Ayden's Phone Repairs" />
+
+        <TextBlock Text="How will you use WorkshopOS?" FontWeight="SemiBold" Margin="0,8,0,0"
+                   Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+        <TextBlock Text="Home mode keeps the nav short and adds guided intake, job templates, and simple money. Full shop unlocks bookings, POS, multi-site, staff, and the rest. You can switch later in Settings → App."
+                   Foreground="{ThemeResource WorkshopTextSecondaryBrush}" TextWrapping="Wrap" FontSize="12" />
+        <ComboBox x:Name="WorkshopStyleCombo" Header="Workshop profile" HorizontalAlignment="Stretch"
+                  SelectionChanged="WorkshopStyleCombo_SelectionChanged">
+          <ComboBoxItem Content="Full shop — counter, staff, and full modules" Tag="FullShop" IsSelected="True" />
+          <ComboBoxItem Content="Home / side hustle — slim nav, guided jobs, simple money" Tag="Home" />
+        </ComboBox>
+        <CheckBox Content="Show beginner tips on Home, New repair, and Parts"
+                  IsChecked="{x:Bind ViewModel.ShowBeginnerTips, Mode=TwoWay}"
+                  Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+
         <Grid ColumnSpacing="12">
           <Grid.ColumnDefinitions>
             <ColumnDefinition /><ColumnDefinition />

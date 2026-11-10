@@ -63,7 +63,7 @@ public sealed partial class ShellPage : Page
         NavView.MenuItems.Clear();
         var byKey = ViewModel.Modules.ToDictionary(m => m.Key, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (title, keys) in ShellViewModel.NavGroups)
+        foreach (var (title, keys) in ViewModel.ActiveNavGroups)
         {
             var visible = keys
                 .Select(k => byKey.TryGetValue(k, out var m) ? m : null)
@@ -75,7 +75,7 @@ public sealed partial class ShellPage : Page
             {
                 visible = keys
                     .Where(ViewModel.CanSeeModule)
-                    .Select(k => new ModuleDto(k, title, TitleForKey(k), 1, true, true))
+                    .Select(k => new ModuleDto(k, title, HomeAwareTitle(k), 1, true, true))
                     .ToList();
             }
 
@@ -112,16 +112,18 @@ public sealed partial class ShellPage : Page
         }
     }
 
-    private static string TitleForKey(string key) => key switch
+    private string HomeAwareTitle(string key) => TitleForKey(key, ViewModel.IsHomeMode);
+
+    private static string TitleForKey(string key, bool home = false) => key switch
     {
-        "dashboard" => "Dashboard",
+        "dashboard" => home ? "Home" : "Dashboard",
         "repairs" => "Repairs",
         "quotes" => "Quotes",
         "invoices" => "Invoices",
         "expenses" => "Expenses",
         "pos" => "POS",
         "calendar" => "Bookings",
-        "inventory" => "Inventory",
+        "inventory" => home ? "Parts" : "Inventory",
         "purchasing" => "Purchasing",
         "used" => "Refurbished",
         "donors" => "Donors",
@@ -131,7 +133,7 @@ public sealed partial class ShellPage : Page
         "website_inbox" => "Website inbox",
         "fitment" => "Part fitment",
         "customers" => "Customers",
-        "reports" => "Reports",
+        "reports" => home ? "Money" : "Reports",
         "ai" => "AI Analyst",
         "knowledge" => "Knowledge",
         "notifications" => "Notifications",

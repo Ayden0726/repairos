@@ -5,14 +5,36 @@
     Background="{ThemeResource WorkshopPageBackgroundBrush}">
   <ScrollViewer Padding="24">
     <StackPanel MaxWidth="560" Spacing="12">
-      <TextBlock Text="New ticket" FontSize="24" FontWeight="SemiBold"
+      <TextBlock Text="{x:Bind ViewModel.PageTitle, Mode=OneWay}" FontSize="24" FontWeight="SemiBold"
                  Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
-      <TextBlock Text="Quick intake — open a job on the board in under a minute. Device details can wait."
+      <TextBlock Text="{x:Bind ViewModel.PageSubtitle, Mode=OneWay}"
                  Foreground="{ThemeResource WorkshopTextSecondaryBrush}" TextWrapping="Wrap" />
+      <Border Padding="12" CornerRadius="8"
+              Background="{ThemeResource WorkshopAccentSoftBrush}"
+              Visibility="{x:Bind ViewModel.ShowBeginnerTip, Mode=OneWay}">
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{x:Bind ViewModel.BeginnerTip, Mode=OneWay}" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Content="Got it" Command="{x:Bind ViewModel.DismissBeginnerTipCommand}"
+                  VerticalAlignment="Top" Padding="10,4" />
+        </Grid>
+      </Border>
       <Border Padding="16" CornerRadius="8"
               Background="{ThemeResource WorkshopSurfaceBrush}"
               BorderBrush="{ThemeResource WorkshopBorderBrush}" BorderThickness="1">
         <StackPanel Spacing="12">
+          <TextBlock Text="1 · Customer" FontWeight="SemiBold"
+                     Visibility="{x:Bind ViewModel.IsHomeMode, Mode=OneWay}"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+          <ComboBox Header="Job template (optional)"
+                    ItemsSource="{x:Bind ViewModel.Templates, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedTemplate, Mode=TwoWay}"
+                    DisplayMemberPath="Name"
+                    HorizontalAlignment="Stretch"
+                    Visibility="{x:Bind ViewModel.ShowTemplates, Mode=OneWay}" />
           <CheckBox Content="Existing customer"
                     IsChecked="{x:Bind ViewModel.UseExistingCustomer, Mode=TwoWay}" />
 
@@ -68,6 +90,9 @@
             </Grid>
           </StackPanel>
 
+          <TextBlock Text="2 · Device" FontWeight="SemiBold" Margin="0,8,0,0"
+                     Visibility="{x:Bind ViewModel.IsHomeMode, Mode=OneWay}"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
           <Grid ColumnSpacing="12">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
@@ -81,7 +106,8 @@
           </Grid>
           <ComboBox Header="Assign technician (optional)" ItemsSource="{x:Bind ViewModel.Technicians, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedTechnician, Mode=TwoWay}"
-                    DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+                    DisplayMemberPath="Name" HorizontalAlignment="Stretch"
+                    Visibility="{x:Bind ViewModel.ShowTechnicianPicker, Mode=OneWay}" />
           <ComboBox Header="Device type" HorizontalAlignment="Stretch"
                     ItemsSource="{x:Bind ViewModel.DeviceTypes, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedDeviceType, Mode=TwoWay}"
@@ -113,6 +139,9 @@
                        TextWrapping="Wrap" FontWeight="SemiBold" />
           </Border>
 
+          <TextBlock Text="3 · What's wrong" FontWeight="SemiBold" Margin="0,8,0,0"
+                     Visibility="{x:Bind ViewModel.IsHomeMode, Mode=OneWay}"
+                     Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
           <!-- Inline service catalogue — filtered by device type -->
           <TextBlock Text="Services for this device" FontWeight="SemiBold" FontSize="16"
                      Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />

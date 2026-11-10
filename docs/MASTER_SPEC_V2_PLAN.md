@@ -1,8 +1,8 @@
 # TechBench NQ Workshop OS — Master Spec V2 Development Plan
 
 **Spec:** Master Development Specification — Version 2  
-**Codebase baseline:** WorkshopOS **1.2.40** (`ProductVersions`)  
-**Date:** 2026-11-03 (Australia/Brisbane)  
+**Codebase baseline:** WorkshopOS **1.2.41** (`ProductVersions`) — Home / side-hustle workshop profile  
+**Date:** 2026-11-10 (Australia/Brisbane)  
 **Rules applied:** Inspect first · no greenfield rebuild · no mock buttons · migrations only · preserve data/auth · phased delivery  
 **Out of scope:** Board-level / microsoldering repair — will not be built.
 

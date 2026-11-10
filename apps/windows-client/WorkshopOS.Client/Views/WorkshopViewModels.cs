@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorkshopOS.Client.Services;
+using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Contracts.Workshop;
 
@@ -241,12 +242,22 @@ public partial class NewRepairViewModel : ObservableObject
     [ObservableProperty] private bool _isSaving;
     /// <summary>Catalogue device type label shown in the combo: Phone, Tablet, Laptop, PC, Other.</summary>
     [ObservableProperty] private string _selectedDeviceType = "Phone";
+    [ObservableProperty] private bool _isHomeMode;
+    [ObservableProperty] private bool _showBeginnerTips;
+    [ObservableProperty] private string? _beginnerTip;
+    [ObservableProperty] private bool _showBeginnerTip;
+    [ObservableProperty] private string _pageTitle = "New ticket";
+    [ObservableProperty] private string _pageSubtitle = "Quick intake — open a job on the board in under a minute. Device details can wait.";
+    [ObservableProperty] private JobTemplateDto? _selectedTemplate;
     public ObservableCollection<string> DeviceTypes { get; } = new(["Phone", "Tablet", "Laptop", "PC", "Other"]);
+    public ObservableCollection<JobTemplateDto> Templates { get; } = new();
     public Action<Guid>? Created { get; set; }
     public Action<string>? DeviceTypeChanged { get; set; }
     public List<Guid> SelectedServiceIds { get; set; } = new();
     public string? ServiceNotes { get; set; }
     public string? ServicePartsNotes { get; set; }
+    public bool ShowTechnicianPicker => !IsHomeMode;
+    public bool ShowTemplates => IsHomeMode && Templates.Count > 0;
 
     public DeviceCategory SelectedDeviceCategory => SelectedDeviceType switch
     {
@@ -267,6 +278,34 @@ public partial class NewRepairViewModel : ObservableObject
     public bool CanSubmit => !IsSaving;
 
     public NewRepairViewModel(ApiClient api) => _api = api;
+
+    partial void OnSelectedTemplateChanged(JobTemplateDto? value)
+    {
+        if (value is null) return;
+        SelectedDeviceType = value.DeviceType;
+        if (string.IsNullOrWhiteSpace(Issue))
+            Issue = value.IssueHint;
+        else if (!Issue.Contains(value.IssueHint, StringComparison.OrdinalIgnoreCase))
+            Issue = value.IssueHint;
+        if (!string.IsNullOrWhiteSpace(value.SuggestedPriorityKey))
+        {
+            SelectedPriority = Priorities.FirstOrDefault(p =>
+                string.Equals(p.Key, value.SuggestedPriorityKey, StringComparison.OrdinalIgnoreCase))
+                ?? SelectedPriority;
+        }
+        if (!string.IsNullOrWhiteSpace(value.Tip) && ShowBeginnerTips)
+        {
+            BeginnerTip = value.Tip;
+            ShowBeginnerTip = true;
+        }
+    }
+
+    [RelayCommand]
+    private void DismissBeginnerTip()
+    {
+        ShowBeginnerTip = false;
+        App.Services.GetRequiredService<IAppSettingsStore>().DismissTip("new_repair_home");
+    }
 
     partial void OnUseExistingCustomerChanged(bool value)
     {
@@ -296,6 +335,46 @@ public partial class NewRepairViewModel : ObservableObject
         CustomersStatus = null;
         try
         {
+            try
+            {
+                var style = await _api.GetAsync<WorkshopStyleSettingsDto>("api/settings/workshop-style");
+                IsHomeMode = WorkshopStyles.IsHome(style.Style);
+                ShowBeginnerTips = style.ShowBeginnerTips;
+            }
+            catch
+            {
+                IsHomeMode = false;
+                ShowBeginnerTips = false;
+            }
+
+            OnPropertyChanged(nameof(ShowTechnicianPicker));
+            PageTitle = IsHomeMode ? "New job" : "New ticket";
+            PageSubtitle = IsHomeMode
+                ? "Guided intake — customer, device, then what is wrong. Templates fill common jobs."
+                : "Quick intake — open a job on the board in under a minute. Device details can wait.";
+
+            if (IsHomeMode)
+            {
+                Templates.Clear();
+                try
+                {
+                    var templates = await _api.GetAsync<IReadOnlyList<JobTemplateDto>>("api/settings/job-templates");
+                    foreach (var t in templates) Templates.Add(t);
+                }
+                catch
+                {
+                    foreach (var t in JobTemplates.All) Templates.Add(t);
+                }
+                OnPropertyChanged(nameof(ShowTemplates));
+
+                var store = App.Services.GetRequiredService<IAppSettingsStore>();
+                if (ShowBeginnerTips && !store.IsTipDismissed("new_repair_home"))
+                {
+                    BeginnerTip = "Tip: pick a job template first, then confirm the customer and device. You can edit anything before creating the ticket.";
+                    ShowBeginnerTip = true;
+                }
+            }
+
             var lookups = await _api.GetAsync<RepairLookupsDto>("api/repairs/lookups");
             Types.Clear(); foreach (var t in lookups.Types) Types.Add(t);
             Priorities.Clear(); foreach (var p in lookups.Priorities) Priorities.Add(p);

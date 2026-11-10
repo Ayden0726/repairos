@@ -31,6 +31,9 @@ public interface ISettingsService
     Task<IReadOnlyList<ModuleDto>> UpdateModulesAsync(UpdateModuleVisibilityRequest request, Guid actorId, CancellationToken ct = default);
     Task<PosSettingsDto> GetPosSettingsAsync(CancellationToken ct = default);
     Task<PosSettingsDto> UpdatePosSettingsAsync(UpdatePosSettingsRequest request, Guid actorId, CancellationToken ct = default);
+    Task<WorkshopStyleSettingsDto> GetWorkshopStyleAsync(CancellationToken ct = default);
+    Task<WorkshopStyleSettingsDto> UpdateWorkshopStyleAsync(UpdateWorkshopStyleRequest request, Guid actorId, CancellationToken ct = default);
+    Task<HomeMoneySummaryDto> GetHomeMoneySummaryAsync(CancellationToken ct = default);
 }
 
 public interface IPosService

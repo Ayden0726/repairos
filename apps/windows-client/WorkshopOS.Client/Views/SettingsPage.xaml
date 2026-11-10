@@ -28,6 +28,21 @@
             </ComboBox>
             <TextBlock x:Name="ThemeStatusText" FontSize="12" Opacity="0.65" />
 
+            <TextBlock Text="Workshop profile" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
+            <TextBlock Text="Home / side hustle slims the nav, adds guided repair intake and job templates, and shows simple Money instead of full Reports. Full shop restores the complete module set. Sign out and back in (or reopen the shell) after saving so the nav refreshes."
+                       Opacity="0.7" TextWrapping="Wrap" />
+            <ComboBox x:Name="WorkshopStyleCombo" Header="Profile" Width="320"
+                      SelectionChanged="WorkshopStyleCombo_SelectionChanged">
+              <ComboBoxItem Content="Full shop" Tag="FullShop" />
+              <ComboBoxItem Content="Home / side hustle" Tag="Home" />
+            </ComboBox>
+            <ToggleSwitch x:Name="BeginnerTipsToggle" Header="Beginner tips"
+                          OffContent="Off" OnContent="On"
+                          Toggled="BeginnerTipsToggle_Toggled" />
+            <Button Content="Save workshop profile" Click="SaveWorkshopStyle_Click"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+            <TextBlock x:Name="WorkshopStyleStatusText" FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+
             <TextBlock Text="Startup" FontWeight="SemiBold" FontSize="16" Margin="0,16,0,0" />
             <TextBlock Text="Open WorkshopOS automatically when you sign in to Windows on this PC."
                        Opacity="0.7" TextWrapping="Wrap" />

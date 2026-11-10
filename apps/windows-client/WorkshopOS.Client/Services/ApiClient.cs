@@ -16,10 +16,14 @@ public interface IAppSettingsStore
     string? RememberedEmail { get; set; }
     /// <summary>When true, RememberedEmail is kept across sign-out / ClearConnection.</summary>
     bool RememberEmail { get; set; }
+    /// <summary>Comma-separated beginner tip keys dismissed on this PC.</summary>
+    string DismissedTips { get; set; }
     bool HasServerUrl { get; }
     void ClearTokens();
-    /// <summary>Clears connection persistence (JSON tokens/URL, WinRT LocalSettings, PasswordVault). Keeps Theme, StartWithWindows, and remembered email.</summary>
+    /// <summary>Clears connection persistence (JSON tokens/URL, WinRT LocalSettings, PasswordVault). Keeps Theme, StartWithWindows, remembered email, and dismissed tips.</summary>
     void ClearConnection();
+    bool IsTipDismissed(string tipKey);
+    void DismissTip(string tipKey);
 }
 
 /// <summary>
@@ -53,6 +57,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
         public bool StartWithWindows { get; set; }
         public string? RememberedEmail { get; set; }
         public bool RememberEmail { get; set; } = true;
+        public string DismissedTips { get; set; } = string.Empty;
     }
 
     public static string SettingsDirectory =>
@@ -130,6 +135,39 @@ public sealed class AppSettingsStore : IAppSettingsStore
         set { lock (Gate) { _data.RememberEmail = value; Save(); } }
     }
 
+    public string DismissedTips
+    {
+        get { lock (Gate) return _data.DismissedTips ?? string.Empty; }
+        set { lock (Gate) { _data.DismissedTips = value ?? string.Empty; Save(); } }
+    }
+
+    public bool IsTipDismissed(string tipKey)
+    {
+        if (string.IsNullOrWhiteSpace(tipKey)) return false;
+        var key = tipKey.Trim();
+        lock (Gate)
+        {
+            return (_data.DismissedTips ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(t => string.Equals(t, key, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public void DismissTip(string tipKey)
+    {
+        if (string.IsNullOrWhiteSpace(tipKey)) return;
+        var key = tipKey.Trim();
+        lock (Gate)
+        {
+            var set = (_data.DismissedTips ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!set.Add(key)) return;
+            _data.DismissedTips = string.Join(',', set);
+            Save();
+        }
+    }
+
     public bool HasServerUrl
     {
         get { lock (Gate) return !string.IsNullOrWhiteSpace(_data.ServerUrl); }
@@ -154,12 +192,14 @@ public sealed class AppSettingsStore : IAppSettingsStore
             var keepStartup = _data.StartWithWindows;
             var keepRemember = _data.RememberEmail;
             var keepEmail = keepRemember ? _data.RememberedEmail : null;
+            var keepTips = _data.DismissedTips ?? string.Empty;
             _data = new SettingsDto
             {
                 Theme = keepTheme,
                 StartWithWindows = keepStartup,
                 RememberEmail = keepRemember,
-                RememberedEmail = keepEmail
+                RememberedEmail = keepEmail,
+                DismissedTips = keepTips
             };
             try
             {

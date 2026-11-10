@@ -1,6 +1,6 @@
 # TechBench NQ Platform — Implementation Plan
 
-> **V2 master plan:** For Spec V2 coverage, phased delivery, and the living checklist, see [`docs/MASTER_SPEC_V2_PLAN.md`](MASTER_SPEC_V2_PLAN.md) (baseline WorkshopOS 1.2.40). Board-level repair is out of scope. This file retains the earlier Phase 1–18 product brief.
+> **V2 master plan:** For Spec V2 coverage, phased delivery, and the living checklist, see [`docs/MASTER_SPEC_V2_PLAN.md`](MASTER_SPEC_V2_PLAN.md) (baseline WorkshopOS 1.2.41). Board-level repair is out of scope. This file retains the earlier Phase 1–18 product brief.
 
 
 **Basis:** `docs/PLATFORM_ANALYSIS.md` (WorkshopOS 1.2.27 codebase)  

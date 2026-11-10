@@ -275,6 +275,8 @@ public partial class SetupViewModel : ObservableObject
     [ObservableProperty] private string _ownerPassword = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _isHomeWorkshop;
+    [ObservableProperty] private bool _showBeginnerTips = true;
 
     public SetupViewModel(ApiClient api) => _api = api;
     public Action? OnCompleted { get; set; }
@@ -286,9 +288,11 @@ public partial class SetupViewModel : ObservableObject
         IsBusy = true;
         try
         {
+            var style = IsHomeWorkshop ? WorkshopStyles.Home : WorkshopStyles.FullShop;
             await _api.CompleteSetupAsync(new(
                 BusinessName, Phone, Email, Abn, Address, Suburb, State, Postcode, Website,
-                GstRegistered, 0.10m, "AUD", 110m, OwnerName, OwnerEmail, OwnerPassword, "#0F766E"));
+                GstRegistered, 0.10m, "AUD", 110m, OwnerName, OwnerEmail, OwnerPassword, "#0F766E",
+                style, ShowBeginnerTips));
             OnCompleted?.Invoke();
         }
         catch (Exception ex) { Error = ex.Message; }
@@ -353,6 +357,7 @@ public partial class ShellViewModel : ObservableObject
     private DispatcherQueueTimer? _bannerDismissTimer;
 
     [ObservableProperty] private string _productName = "WorkshopOS";
+    [ObservableProperty] private string _brandTitle = "TechBench NQ";
     [ObservableProperty] private string _businessName = string.Empty;
     [ObservableProperty] private string _userDisplay = string.Empty;
     [ObservableProperty] private string _userRole = string.Empty;
@@ -368,6 +373,8 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _bannerMessage = string.Empty;
     [ObservableProperty] private string _notificationsEmpty = "No notifications yet.";
     [ObservableProperty] private bool _showNotificationsEmpty = true;
+    [ObservableProperty] private bool _isHomeMode;
+    [ObservableProperty] private bool _showBeginnerTips = true;
 
     public ObservableCollection<WorkshopOS.Contracts.Operations.NotificationDto> Notifications { get; } = new();
 
@@ -391,6 +398,20 @@ public partial class ShellViewModel : ObservableObject
         ("Fitment", ["fitment"]),
         ("Reports", ["reports"])
     ];
+
+    /// <summary>Slim nav for home / side-hustle profile.</summary>
+    public static readonly (string Title, string[] Keys)[] HomeNavGroups =
+    [
+        ("Home", ["dashboard"]),
+        ("Repairs", ["repairs"]),
+        ("Customers", ["customers"]),
+        ("Quotes", ["quotes"]),
+        ("Parts", ["inventory"]),
+        ("Money", ["reports"])
+    ];
+
+    public (string Title, string[] Keys)[] ActiveNavGroups =>
+        IsHomeMode ? HomeNavGroups : NavGroups;
 
     /// <summary>Module key → permission required to see the tab (owner bypasses).</summary>
     public static readonly IReadOnlyDictionary<string, string> ModulePermission =
@@ -472,6 +493,20 @@ public partial class ShellViewModel : ObservableObject
     {
         try
         {
+            try
+            {
+                var style = await _api.GetAsync<WorkshopStyleSettingsDto>("api/settings/workshop-style");
+                IsHomeMode = WorkshopStyles.IsHome(style.Style);
+                ShowBeginnerTips = style.ShowBeginnerTips;
+                BrandTitle = IsHomeMode ? "Home workshop" : "TechBench NQ";
+            }
+            catch
+            {
+                IsHomeMode = false;
+                ShowBeginnerTips = true;
+                BrandTitle = "TechBench NQ";
+            }
+
             Modules = await _api.GetAsync<IReadOnlyList<ModuleDto>>("api/settings/modules");
             IsOffline = false;
         }

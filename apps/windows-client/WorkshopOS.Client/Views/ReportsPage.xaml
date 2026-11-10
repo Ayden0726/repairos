@@ -3,7 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <StackPanel Padding="24" Spacing="12" MaxWidth="640">
     <Grid>
-      <TextBlock Text="Reports" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="{x:Bind ViewModel.PageTitle, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
       <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshCommand}" HorizontalAlignment="Right" />
     </Grid>
     <TextBlock Text="{x:Bind ViewModel.Summary, Mode=OneWay}" TextWrapping="Wrap" />

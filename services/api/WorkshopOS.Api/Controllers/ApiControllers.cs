@@ -119,6 +119,29 @@ public sealed class SettingsController : ControllerBase
         var id = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
         return _settings.UpdatePosSettingsAsync(request, id, ct);
     }
+
+    [HttpGet("workshop-style")]
+    [Authorize]
+    public Task<WorkshopStyleSettingsDto> GetWorkshopStyle(CancellationToken ct) =>
+        _settings.GetWorkshopStyleAsync(ct);
+
+    [HttpPut("workshop-style")]
+    [Authorize(Policy = "perm:settings.manage")]
+    public Task<WorkshopStyleSettingsDto> PutWorkshopStyle([FromBody] UpdateWorkshopStyleRequest request, CancellationToken ct)
+    {
+        var id = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")!);
+        return _settings.UpdateWorkshopStyleAsync(request, id, ct);
+    }
+
+    [HttpGet("home/money")]
+    [Authorize(Policy = "perm:reports.view")]
+    public Task<HomeMoneySummaryDto> HomeMoney(CancellationToken ct) =>
+        _settings.GetHomeMoneySummaryAsync(ct);
+
+    [HttpGet("job-templates")]
+    [Authorize]
+    public ActionResult<IReadOnlyList<JobTemplateDto>> JobTemplates() =>
+        Ok(WorkshopOS.Contracts.Common.JobTemplates.All);
 }
 
 [ApiController]

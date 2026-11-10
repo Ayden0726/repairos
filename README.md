@@ -2,15 +2,16 @@
 
 Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
 
-**Current version: 1.2.40** (API + Windows client) · Repo: [Ayden0726/repairos](https://github.com/Ayden0726/repairos)
+**Current version: 1.2.41** (API + Windows client) · Repo: [Ayden0726/repairos](https://github.com/Ayden0726/repairos)
 
 Australian English, **AUD**, **GST**, financial year **July–June**.
 
 ## What it is
 
-WorkshopOS runs your shop’s day-to-day work on **your own server**:
+WorkshopOS runs your shop’s day-to-day work on **your own server** — and can also run as a **home / side-hustle** profile with a slimmer nav:
 
 - Repair tickets, customers, devices, quotes, invoices, inventory, purchasing, refurbished stock, calendar, reports, backups, and staff roles
+- **Home / side hustle mode** — Settings → App (or first-run setup): slim nav, guided job intake, job templates, Parts + Money, beginner tips
 - **Business expenses** — GST treatments, suppliers, recurring drafts, CSV export for your accountant ([docs/SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md#using-expenses))
 - **Encrypted API credentials** under **Settings → Integrations** — WooCommerce, POS/Square, OpenAI, Twilio, SMTP, IMEI, shipping ([docs/SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md))
 - **POS register** (admin-enabled) with AU EFTPOS guidance — [docs/POS_EFTPOS.md](docs/POS_EFTPOS.md)
@@ -20,14 +21,15 @@ WorkshopOS runs your shop’s day-to-day work on **your own server**:
 
 Nothing is required from a SaaS cloud — data stays on your machine / LAN.
 
-### What’s new in 1.2.40
+### What’s new in 1.2.41
 
 | Area | Change |
 | --- | --- |
-| Fitment | Parts ↔ device compatibility database + WinUI |
-| Offline | Client mutation queue + server sync outbox ack/replay |
-| Multi-site | Workshop Locations + inventory bins (Settings → Sites) |
-| Scope | Board-level repair **won’t do**; multi-site not SaaS multi-tenant |
-| Version | API + client **1.2.40** |
+| Home profile | Full shop ↔ Home / side hustle toggle (setup + Settings → App) |
+| Slim nav | Home hides POS, bookings, multi-site, staff, fitment, etc. until Full shop |
+| Guided intake | Step labels, job templates, solo (no tech assign) on New repair |
+| Parts / Money | Inventory + Reports retitled; simple money summary API |
+| Tips | Dismissible beginner tips on Home, New repair, Parts |
+| Version | API + client **1.2.41** |
 
-Carries forward 1.2.39: donors, loans, refunds, POS refurbished, repair media, printers.
+Carries forward 1.2.40: fitment, offline sync, multi-site locations/bins.

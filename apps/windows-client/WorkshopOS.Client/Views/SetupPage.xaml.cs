@@ -24,6 +24,12 @@ public sealed partial class SetupPage : Page
             ViewModel.OwnerPassword = box.Password;
     }
 
+    private void WorkshopStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (WorkshopStyleCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            ViewModel.IsHomeWorkshop = string.Equals(tag, "Home", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ThemeLight_Click(object sender, RoutedEventArgs e)
     {
         ThemeService.SetLightOrDark(false);

@@ -19,7 +19,10 @@ public sealed record SetupRequest(
     string OwnerName,
     string OwnerEmail,
     string OwnerPassword,
-    string? AccentColour);
+    string? AccentColour,
+    /// <summary>FullShop (default) or Home — side-hustle / beginner profile.</summary>
+    string? WorkshopStyle = null,
+    bool ShowBeginnerTips = true);
 
 public sealed record LoginRequest(string Email, string Password);
 

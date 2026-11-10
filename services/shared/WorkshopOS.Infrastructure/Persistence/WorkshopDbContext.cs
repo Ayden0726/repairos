@@ -1297,6 +1297,8 @@ public static class SettingKeys
     public const string ServiceCatalogueVersion = "seed.service_catalogue_version";
     public const string PosSettings = "pos.settings";
     public const string DeviceIdentification = "device.identification";
+    /// <summary>JSON <see cref="WorkshopOS.Contracts.Common.WorkshopStyleSettingsDto"/> — FullShop vs Home profile.</summary>
+    public const string WorkshopStyle = "workshop.style";
 }
 
 public static class DbSeed

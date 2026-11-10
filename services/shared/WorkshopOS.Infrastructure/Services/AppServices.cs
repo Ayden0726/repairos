@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WorkshopOS.Application.Abstractions;
 using WorkshopOS.Application.Common;
 using WorkshopOS.Contracts.Auth;
+using WorkshopOS.Contracts.Common;
 using WorkshopOS.Contracts.Operations;
 using WorkshopOS.Domain.Entities;
 using WorkshopOS.Domain.Enums;
@@ -190,8 +191,16 @@ public sealed class SetupService : ISetupService
             Labour = pricingDefaults.Labour with { DefaultLabourFee = 50m }
         };
         await DbSeed.SetSettingAsync(_db, SettingKeys.PricingSettings, pricingDefaults, owner.Id, ct);
+
+        var style = WorkshopStyles.Normalize(request.WorkshopStyle);
+        var styleDto = new WorkshopStyleSettingsDto(style, request.ShowBeginnerTips);
+        await DbSeed.SetSettingAsync(_db, SettingKeys.WorkshopStyle, styleDto, owner.Id, ct);
+        if (WorkshopStyles.IsHome(style))
+            await SettingsService.ApplyHomeModuleVisibilityAsync(_db, owner.Id, ct);
+
         await DbSeed.SetSettingAsync(_db, SettingKeys.SetupCompleted, true, owner.Id, ct);
-        await _audit.WriteAsync(owner.Id, "setup.completed", "Business", owner.Id.ToString(), ip: ip, ct: ct);
+        await _audit.WriteAsync(owner.Id, "setup.completed", "Business", owner.Id.ToString(),
+            newValue: new { style }, ip: ip, ct: ct);
     }
 }
 
@@ -369,10 +378,12 @@ public sealed class SettingsService : ISettingsService
     public async Task<IReadOnlyList<WorkshopOS.Contracts.Common.ModuleDto>> GetModulesAsync(CancellationToken ct = default)
     {
         var visibility = await DbSeed.GetSettingAsync(_db, SettingKeys.ModuleVisibility, new Dictionary<string, bool>(), ct);
+        var style = await GetWorkshopStyleAsync(ct);
+        var home = WorkshopStyles.IsHome(style.Style);
         // Custom PC Builds removed. POS defaults OFF until an admin enables it in Settings.
         WorkshopOS.Contracts.Common.ModuleDto[] modules =
         [
-            new("dashboard", "Main", "Dashboard", 1, IsVisible(visibility, "dashboard"), true),
+            new("dashboard", "Main", home ? "Home" : "Dashboard", 1, IsVisible(visibility, "dashboard"), true),
             new("repairs", "Main", "Repairs", 1, IsVisible(visibility, "repairs"), true),
             new("calendar", "Main", "Bookings", 1, IsVisible(visibility, "calendar"), true),
             new("customers", "Main", "Customers", 1, IsVisible(visibility, "customers"), true),
@@ -380,7 +391,7 @@ public sealed class SettingsService : ISettingsService
             new("invoices", "Main", "Invoices", 1, IsVisible(visibility, "invoices"), true),
             new("expenses", "Main", "Expenses", 1, IsVisible(visibility, "expenses"), true),
             new("pos", "Main", "POS", 6, IsVisible(visibility, "pos", defaultVisible: false), true),
-            new("inventory", "Main", "Inventory", 1, IsVisible(visibility, "inventory"), true),
+            new("inventory", "Main", home ? "Parts" : "Inventory", 1, IsVisible(visibility, "inventory"), true),
             new("purchasing", "Main", "Purchasing", 1, IsVisible(visibility, "purchasing"), true),
             new("used", "Main", "Refurbished", 1, IsVisible(visibility, "used"), true),
             new("donors", "Main", "Donors", 1, IsVisible(visibility, "donors"), true),
@@ -389,7 +400,7 @@ public sealed class SettingsService : ISettingsService
             new("refunds", "Main", "Refunds", 1, IsVisible(visibility, "refunds"), true),
             new("website_inbox", "Main", "Website inbox", 1, IsVisible(visibility, "website_inbox"), true),
             new("fitment", "Main", "Part fitment", 1, IsVisible(visibility, "fitment"), true),
-            new("reports", "Main", "Reports", 1, IsVisible(visibility, "reports"), true),
+            new("reports", "Main", home ? "Money" : "Reports", 1, IsVisible(visibility, "reports"), true),
             new("ai", "More", "AI Analyst", 1, IsVisible(visibility, "ai"), true),
             new("knowledge", "More", "Knowledge", 1, IsVisible(visibility, "knowledge"), true),
             new("notifications", "System", "Notifications", 1, IsVisible(visibility, "notifications"), true),
@@ -398,6 +409,108 @@ public sealed class SettingsService : ISettingsService
             new("settings", "System", "Settings", 1, IsVisible(visibility, "settings"), true)
         ];
         return modules;
+    }
+
+    public Task<WorkshopStyleSettingsDto> GetWorkshopStyleAsync(CancellationToken ct = default) =>
+        DbSeed.GetSettingAsync(_db, SettingKeys.WorkshopStyle,
+            new WorkshopStyleSettingsDto(WorkshopStyles.FullShop, true), ct);
+
+    public async Task<WorkshopStyleSettingsDto> UpdateWorkshopStyleAsync(
+        UpdateWorkshopStyleRequest request, Guid actorId, CancellationToken ct = default)
+    {
+        var style = WorkshopStyles.Normalize(request.Style);
+        var dto = new WorkshopStyleSettingsDto(style, request.ShowBeginnerTips);
+        await DbSeed.SetSettingAsync(_db, SettingKeys.WorkshopStyle, dto, actorId, ct);
+
+        if (WorkshopStyles.IsHome(style))
+            await ApplyHomeModuleVisibilityAsync(_db, actorId, ct);
+        else
+            await ApplyFullShopModuleVisibilityAsync(_db, actorId, ct);
+
+        await _audit.WriteAsync(actorId, "settings.workshop_style.update", "Setting", SettingKeys.WorkshopStyle,
+            newValue: dto, ct: ct);
+        return dto;
+    }
+
+    public async Task<HomeMoneySummaryDto> GetHomeMoneySummaryAsync(CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+        var profile = await GetBusinessAsync(ct);
+
+        var paid = await _db.Payments.AsNoTracking()
+            .Where(p => p.PaidAt >= monthStart)
+            .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+
+        var outstanding = await _db.Invoices.AsNoTracking()
+            .Where(i => i.ArchivedAt == null
+                        && i.Status != "Cancelled"
+                        && i.Status != "Draft"
+                        && i.Total > i.AmountPaid)
+            .SumAsync(i => (decimal?)(i.Total - i.AmountPaid), ct) ?? 0m;
+
+        var partsCost = await _db.InventoryTransactions.AsNoTracking()
+            .Include(t => t.Item)
+            .Where(t => t.CreatedAt >= monthStart && t.QuantityDelta < 0)
+            .SumAsync(t => (decimal?)(Math.Abs(t.QuantityDelta) * t.Item.Cost), ct) ?? 0m;
+
+        var openJobs = await _db.RepairTickets.AsNoTracking()
+            .Include(t => t.Status)
+            .CountAsync(t => t.ArchivedAt == null && !t.Status.IsCompleted && !t.Status.IsCancelled, ct);
+
+        var completed = await _db.RepairTickets.AsNoTracking()
+            .Include(t => t.Status)
+            .CountAsync(t => t.ArchivedAt == null && t.Status.IsCompleted && t.UpdatedAt >= monthStart, ct);
+
+        return new HomeMoneySummaryDto(
+            paid,
+            outstanding,
+            partsCost,
+            paid - partsCost,
+            openJobs,
+            completed,
+            string.IsNullOrWhiteSpace(profile.Currency) ? "AUD" : profile.Currency,
+            monthStart.ToString("MMMM yyyy"));
+    }
+
+    /// <summary>Slim nav for home / side-hustle: jobs, customers, quotes, parts, money.</summary>
+    internal static async Task ApplyHomeModuleVisibilityAsync(WorkshopDbContext db, Guid actorId, CancellationToken ct)
+    {
+        var homeOn = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "dashboard", "repairs", "customers", "quotes", "inventory", "reports",
+            "notifications", "backups", "settings"
+        };
+        var visibility = await DbSeed.GetSettingAsync(db, SettingKeys.ModuleVisibility, new Dictionary<string, bool>(), ct);
+        foreach (var key in new[]
+                 {
+                     "dashboard", "repairs", "calendar", "customers", "quotes", "invoices", "expenses", "pos",
+                     "inventory", "purchasing", "used", "donors", "loans", "warranty_claims", "refunds",
+                     "website_inbox", "fitment", "reports", "ai", "knowledge", "notifications", "backups",
+                     "users", "settings"
+                 })
+        {
+            visibility[key] = homeOn.Contains(key);
+        }
+        await DbSeed.SetSettingAsync(db, SettingKeys.ModuleVisibility, visibility, actorId, ct);
+    }
+
+    /// <summary>Restore typical full-shop visibility (POS stays off until enabled).</summary>
+    internal static async Task ApplyFullShopModuleVisibilityAsync(WorkshopDbContext db, Guid actorId, CancellationToken ct)
+    {
+        var visibility = await DbSeed.GetSettingAsync(db, SettingKeys.ModuleVisibility, new Dictionary<string, bool>(), ct);
+        foreach (var key in new[]
+                 {
+                     "dashboard", "repairs", "calendar", "customers", "quotes", "invoices", "expenses",
+                     "inventory", "purchasing", "used", "donors", "loans", "warranty_claims", "refunds",
+                     "website_inbox", "fitment", "reports", "ai", "knowledge", "notifications", "backups",
+                     "users", "settings"
+                 })
+        {
+            visibility[key] = true;
+        }
+        visibility["pos"] = visibility.TryGetValue("pos", out var pos) && pos;
+        await DbSeed.SetSettingAsync(db, SettingKeys.ModuleVisibility, visibility, actorId, ct);
     }
 
     public async Task<IReadOnlyList<WorkshopOS.Contracts.Common.ModuleDto>> UpdateModulesAsync(

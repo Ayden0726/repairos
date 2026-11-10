@@ -8,8 +8,20 @@
       <ColumnDefinition Width="2*" /><ColumnDefinition Width="320" />
     </Grid.ColumnDefinitions>
     <StackPanel Spacing="8">
-      <TextBlock Text="Inventory" FontSize="22" FontWeight="SemiBold"
+      <TextBlock Text="{x:Bind ViewModel.PageTitle, Mode=OneWay}" FontSize="22" FontWeight="SemiBold"
                  Foreground="{ThemeResource WorkshopTextPrimaryBrush}" />
+      <Border Padding="12" CornerRadius="8" Background="{ThemeResource WorkshopAccentSoftBrush}"
+              Visibility="{x:Bind ViewModel.ShowBeginnerTip, Mode=OneWay}">
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{x:Bind ViewModel.BeginnerTip, Mode=OneWay}" TextWrapping="Wrap" />
+          <Button Grid.Column="1" Content="Got it" Command="{x:Bind ViewModel.DismissBeginnerTipCommand}"
+                  VerticalAlignment="Top" Padding="10,4" />
+        </Grid>
+      </Border>
       <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="180" />
@@ -23,7 +35,8 @@
         <Button Grid.Column="1" Content="Refresh" VerticalAlignment="Bottom"
                 Command="{x:Bind ViewModel.RefreshCommand}" />
         <Button Grid.Column="2" Content="Stocktake" VerticalAlignment="Bottom"
-                Click="Stocktake_Click" />
+                Click="Stocktake_Click"
+                Visibility="{x:Bind ViewModel.ShowStocktake, Mode=OneWay}" />
       </Grid>
       <ListView ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
                 SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=TwoWay}"
