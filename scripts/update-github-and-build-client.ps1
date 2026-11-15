@@ -14,25 +14,26 @@
   powershell -ExecutionPolicy Bypass -File C:\Users\ayden\src\repairos\scripts\update-github-and-build-client.ps1
 
   # First run when the script is not on disk yet (download then run):
-  $r='C:\Users\ayden\src\repairos'; $z="$env:TEMP\WorkshopOS-1.2.41-github-sync.zip"
+  $r='C:\Users\ayden\src\repairos'; $z="$env:TEMP\WorkshopOS-1.2.42-github-sync.zip"
   New-Item -ItemType Directory -Force -Path $r | Out-Null
-  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.41-github-sync.zip' -OutFile $z
+  Invoke-WebRequest -Uri 'http://127.0.0.1:18765/WorkshopOS-1.2.42-github-sync.zip' -OutFile $z
   Expand-Archive -Path $z -DestinationPath $r -Force
   powershell -ExecutionPolicy Bypass -File "$r\scripts\update-github-and-build-client.ps1"
 
 .NOTES
   ASCII-only + UTF-8 BOM for Windows PowerShell 5.1.
   Needs: Git (auth to GitHub), .NET 8 SDK, WinUI workload, Inno Setup 6 for Setup.exe.
+  Prefer scripts\rebuild-client-1.2.42.ps1 when the tree is already on disk (push + tag + build + Release).
 #>
 param(
   [string]$Repo = 'C:\Users\ayden\src\repairos',
   # Windows client version (must match WorkshopOS.Client.csproj <Version>)
-  [string]$Version = '1.2.41',
+  [string]$Version = '1.2.42',
   [string]$Branch = 'main',
   [string]$GitHubUrl = 'https://github.com/Ayden0726/repairos.git',
   # Prefer Ports panel forwarding for 18765 if 127.0.0.1 fails from your PC
-  [string]$AgentSyncUrl = 'http://127.0.0.1:18765/WorkshopOS-1.2.41-github-sync.zip',
-  [string]$ReleaseTag = 'v1.2.41',
+  [string]$AgentSyncUrl = 'http://127.0.0.1:18765/WorkshopOS-1.2.42-github-sync.zip',
+  [string]$ReleaseTag = 'v1.2.42',
   [switch]$SkipGitHubPush,
   [switch]$SkipInstaller,
   [switch]$SkipLaunch,
@@ -83,11 +84,8 @@ if (-not $SkipGitHubPush) {
   git add -A
   git diff --cached --quiet
   if ($LASTEXITCODE -ne 0) {
-    git commit -m @"
-Sync agent workspace to GitHub (client $Version)
-
-Overlay from agent sync zip; Windows client build artifacts follow.
-"@
+    $commitMsg = "WorkshopOS ${Version}: TechBench NQ PIN login + native client`n`nSync agent workspace to GitHub; Windows client build artifacts follow."
+    git commit -m $commitMsg
   } else {
     Write-Host 'No new file changes to commit (tree already matches sync).' -ForegroundColor DarkYellow
   }
@@ -100,12 +98,14 @@ Overlay from agent sync zip; Windows client build artifacts follow.
 
   if (-not $SkipTag -and $ReleaseTag) {
     Write-Host ("Tagging {0} ..." -f $ReleaseTag) -ForegroundColor Yellow
-    git tag -f $ReleaseTag
+    git tag -f $ReleaseTag -m "WorkshopOS / TechBench NQ $Version — PIN login + native WinUI client"
     git push -f origin $ReleaseTag
     if ($LASTEXITCODE -ne 0) {
       Write-Host 'WARN: tag push failed (branch push succeeded). Push tag manually later.' -ForegroundColor Yellow
     } else {
       Write-Host ("OK - tag {0} (GitHub Actions release may run)" -f $ReleaseTag) -ForegroundColor Green
+      Write-Host '     https://github.com/Ayden0726/repairos/actions' -ForegroundColor DarkCyan
+      Write-Host '     https://github.com/Ayden0726/repairos/releases' -ForegroundColor DarkCyan
     }
   }
 } else {

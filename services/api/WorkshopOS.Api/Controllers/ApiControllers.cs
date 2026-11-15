@@ -43,6 +43,20 @@ public sealed class AuthController : ControllerBase
     public Task<AuthResponse> Login([FromBody] LoginRequest request, CancellationToken ct) =>
         _auth.LoginAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), Request.Headers.UserAgent.ToString(), ct);
 
+    [HttpPost("login/pin")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public Task<AuthResponse> LoginPin([FromBody] PinLoginRequest request, CancellationToken ct) =>
+        _auth.LoginWithPinAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), Request.Headers.UserAgent.ToString(), ct);
+
+    [HttpPut("pin")]
+    [Authorize]
+    public async Task<IActionResult> SetPin([FromBody] SetPinRequest request, CancellationToken ct)
+    {
+        await _auth.SetPinAsync(CurrentUserId(), request, ct);
+        return NoContent();
+    }
+
     [HttpPost("refresh")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]

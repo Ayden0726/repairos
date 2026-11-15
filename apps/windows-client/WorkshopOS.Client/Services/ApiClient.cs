@@ -572,14 +572,33 @@ public sealed class ApiClient
     {
         var auth = await PostAsync<WorkshopOS.Contracts.Auth.LoginRequest, WorkshopOS.Contracts.Auth.AuthResponse>(
             "api/auth/login", new(email, password), ct);
+        ApplyAuth(auth, email);
+        return auth;
+    }
+
+    public async Task<WorkshopOS.Contracts.Auth.AuthResponse> LoginWithPinAsync(string pin, CancellationToken ct = default)
+    {
+        var auth = await PostAsync<WorkshopOS.Contracts.Auth.PinLoginRequest, WorkshopOS.Contracts.Auth.AuthResponse>(
+            "api/auth/login/pin", new(pin), ct);
+        ApplyAuth(auth, rememberedEmail: null);
+        return auth;
+    }
+
+    public Task SetPinAsync(string? pin, CancellationToken ct = default) =>
+        PutAsync("api/auth/pin", new WorkshopOS.Contracts.Auth.SetPinRequest(pin), ct);
+
+    private void ApplyAuth(WorkshopOS.Contracts.Auth.AuthResponse auth, string? rememberedEmail)
+    {
         _settings.AccessToken = auth.AccessToken;
         _settings.RefreshToken = auth.RefreshToken;
-        if (_settings.RememberEmail)
-            _settings.RememberedEmail = email;
-        else
-            _settings.RememberedEmail = null;
+        if (rememberedEmail is not null)
+        {
+            if (_settings.RememberEmail)
+                _settings.RememberedEmail = rememberedEmail;
+            else
+                _settings.RememberedEmail = null;
+        }
         _session.User = auth.User;
-        return auth;
     }
 
     public async Task LogoutAsync(CancellationToken ct = default)

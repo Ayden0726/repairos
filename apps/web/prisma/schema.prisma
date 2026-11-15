@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+}
+
+enum DeviceCategory {
+  phone
+  tablet
+  computer
+  other
+}
+
+enum TicketStatus {
+  received
+  diagnosing
+  awaiting_approval
+  awaiting_parts
+  in_progress
+  ready_for_collection
+  collected
+  cancelled
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  pinHash      String?  @map("pin_hash")
+  displayName  String   @map("display_name")
+  role         UserRole @default(owner)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ticketsCreated Ticket[]              @relation("TicketCreator")
+  notes          TicketNote[]
+  statusChanges  TicketStatusHistory[]
+  photos         TicketPhoto[]
+
+  @@map("users")
+}
+
+model Customer {
+  id         String    @id @default(uuid()) @db.Uuid
+  firstName  String    @map("first_name")
+  lastName   String    @default("") @map("last_name")
+  phone      String
+  email      String?
+  notes      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+
+  devices Device[]
+  tickets Ticket[]
+
+  @@index([phone])
+  @@index([firstName, lastName])
+  @@map("customers")
+}
+
+model Device {
+  id         String         @id @default(uuid()) @db.Uuid
+  customerId String         @map("customer_id") @db.Uuid
+  category   DeviceCategory
+  brand      String
+  model      String
+  colour     String?
+  storage    String?
+  imei       String?
+  serial     String?
+  notes      String?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  archivedAt DateTime?      @map("archived_at")
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  tickets  Ticket[]
+
+  @@index([customerId])
+  @@index([imei])
+  @@index([serial])
+  @@map("devices")
+}
+
+model Ticket {
+  id                 String       @id @default(uuid()) @db.Uuid
+  ticketNumber       String       @unique @map("ticket_number")
+  customerId         String       @map("customer_id") @db.Uuid
+  deviceId           String?      @map("device_id") @db.Uuid
+  status             TicketStatus @default(received)
+  reportedFault      String       @map("reported_fault")
+  conditionPowersOn  Boolean?     @map("condition_powers_on")
+  conditionCracks    Boolean?     @map("condition_cracks")
+  conditionScratches Boolean?     @map("condition_scratches")
+  conditionLiquid    Boolean?     @map("condition_liquid")
+  conditionNotes     String?      @map("condition_notes")
+  accessoryCharger   Boolean      @default(false) @map("accessory_charger")
+  accessorySim       Boolean      @default(false) @map("accessory_sim")
+  accessoryCase      Boolean      @default(false) @map("accessory_case")
+  accessoryOther     String?      @map("accessory_other")
+  labourFeeCents     BigInt       @map("labour_fee_cents")
+  estimateCents      BigInt?      @map("estimate_cents")
+  createdById        String       @map("created_by_id") @db.Uuid
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  archivedAt         DateTime?    @map("archived_at")
+
+  customer      Customer              @relation(fields: [customerId], references: [id])
+  device        Device?               @relation(fields: [deviceId], references: [id])
+  createdBy     User                  @relation("TicketCreator", fields: [createdById], references: [id])
+  notes         TicketNote[]
+  statusHistory TicketStatusHistory[]
+  photos        TicketPhoto[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([updatedAt])
+  @@map("tickets")
+}
+
+model TicketNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_notes")
+}
+
+model TicketStatusHistory {
+  id         String        @id @default(uuid()) @db.Uuid
+  ticketId   String        @map("ticket_id") @db.Uuid
+  actorId    String?       @map("actor_id") @db.Uuid
+  fromStatus TicketStatus? @map("from_status")
+  toStatus   TicketStatus  @map("to_status")
+  comment    String?
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_status_history")
+}
+
+model TicketPhoto {
+  id           String   @id @default(uuid()) @db.Uuid
+  ticketId     String   @map("ticket_id") @db.Uuid
+  storedName   String   @map("stored_name")
+  originalName String   @map("original_name")
+  contentType  String   @map("content_type")
+  sizeBytes    Int      @map("size_bytes")
+  uploadedById String   @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation(fields: [uploadedById], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_photos")
+}
+
+model BusinessSettings {
+  id                    Int     @id @default(1)
+  businessName          String  @default("TechBench NQ") @map("business_name")
+  timezone              String  @default("Australia/Brisbane")
+  currency              String  @default("AUD")
+  gstRegistered         Boolean @default(false) @map("gst_registered")
+  gstRateBp             Int     @default(1000) @map("gst_rate_bp")
+  defaultLabourFeeCents BigInt  @default(5000) @map("default_labour_fee_cents")
+  ticketSeqYear         Int     @map("ticket_seq_year")
+  ticketSeqNext         Int     @default(1) @map("ticket_seq_next")
+
+  @@map("business_settings")
+}

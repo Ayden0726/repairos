@@ -266,13 +266,14 @@ public partial class SetupViewModel : ObservableObject
     [ObservableProperty] private string _abn = string.Empty;
     [ObservableProperty] private string _address = string.Empty;
     [ObservableProperty] private string _suburb = string.Empty;
-    [ObservableProperty] private string _state = "VIC";
+    [ObservableProperty] private string _state = "QLD";
     [ObservableProperty] private string _postcode = string.Empty;
     [ObservableProperty] private string _website = string.Empty;
     [ObservableProperty] private bool _gstRegistered = true;
     [ObservableProperty] private string _ownerName = string.Empty;
     [ObservableProperty] private string _ownerEmail = string.Empty;
     [ObservableProperty] private string _ownerPassword = string.Empty;
+    [ObservableProperty] private string _ownerPin = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _isHomeWorkshop;
@@ -289,10 +290,11 @@ public partial class SetupViewModel : ObservableObject
         try
         {
             var style = IsHomeWorkshop ? WorkshopStyles.Home : WorkshopStyles.FullShop;
+            var pin = string.IsNullOrWhiteSpace(OwnerPin) ? null : OwnerPin.Trim();
             await _api.CompleteSetupAsync(new(
                 BusinessName, Phone, Email, Abn, Address, Suburb, State, Postcode, Website,
                 GstRegistered, 0.10m, "AUD", 110m, OwnerName, OwnerEmail, OwnerPassword, "#0F766E",
-                style, ShowBeginnerTips));
+                style, ShowBeginnerTips, pin));
             OnCompleted?.Invoke();
         }
         catch (Exception ex) { Error = ex.Message; }
@@ -307,10 +309,11 @@ public partial class LoginViewModel : ObservableObject
 
     [ObservableProperty] private string _email = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
+    [ObservableProperty] private string _pin = string.Empty;
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _rememberEmail = true;
-    [ObservableProperty] private string _hint = "Sign in with your WorkshopOS account.";
+    [ObservableProperty] private string _hint = "Use a PIN on the bench tablet, or email and password on desktop.";
 
     public LoginViewModel(ApiClient api, IAppSettingsStore settings)
     {
@@ -318,10 +321,7 @@ public partial class LoginViewModel : ObservableObject
         _settings = settings;
         RememberEmail = settings.RememberEmail;
         if (RememberEmail && !string.IsNullOrWhiteSpace(settings.RememberedEmail))
-        {
             Email = settings.RememberedEmail!;
-            Hint = "Welcome back — enter your password to continue.";
-        }
     }
 
     public Action? OnLoggedIn { get; set; }
@@ -329,6 +329,33 @@ public partial class LoginViewModel : ObservableObject
     public bool HasPrefillEmail => !string.IsNullOrWhiteSpace(Email);
 
     partial void OnRememberEmailChanged(bool value) => _settings.RememberEmail = value;
+
+    public void UsePinMode()
+    {
+        Error = null;
+        Hint = "Enter your 4–8 digit workshop PIN.";
+    }
+
+    public void UsePasswordMode()
+    {
+        Error = null;
+        Hint = HasPrefillEmail
+            ? "Welcome back — enter your password to continue."
+            : "Sign in with your TechBench NQ owner email and password.";
+    }
+
+    public void AppendPinDigit(string digit)
+    {
+        Error = null;
+        if (Pin.Length >= 8) return;
+        Pin += digit;
+    }
+
+    public void ClearPin()
+    {
+        Pin = string.Empty;
+        Error = null;
+    }
 
     [RelayCommand]
     private async Task LoginAsync()
@@ -342,6 +369,30 @@ public partial class LoginViewModel : ObservableObject
             OnLoggedIn?.Invoke();
         }
         catch (Exception ex) { Error = ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task LoginWithPinAsync()
+    {
+        Error = null;
+        if (Pin.Length is < 4 or > 8)
+        {
+            Error = "Enter a 4–8 digit PIN.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await _api.LoginWithPinAsync(Pin);
+            OnLoggedIn?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            Pin = string.Empty;
+        }
         finally { IsBusy = false; }
     }
 }

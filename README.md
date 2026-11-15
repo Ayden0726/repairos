@@ -1,35 +1,35 @@
-# WorkshopOS
+# TechBench NQ · WorkshopOS 1.2.42
 
-Self-hosted repair-shop operations for Australian electronics / computer repair businesses.
+Native **Windows desktop app** (WinUI 3) for TechBench NQ repair shops, plus a self-hosted Docker API.
 
-**Current version: 1.2.41** (API + Windows client) · Repo: [Ayden0726/repairos](https://github.com/Ayden0726/repairos)
+- **Shop PCs:** install `WorkshopOS-Setup-1.2.42.exe`
+- **Server:** Docker Compose API on port **5088** + PostgreSQL
+- **Locale:** AUD · Australia-friendly GST settings · home workshop profile from 1.2.41
 
-Australian English, **AUD**, **GST**, financial year **July–June**.
+## Build / install (native)
 
-## What it is
+See **[BUILD_NATIVE.md](./BUILD_NATIVE.md)** and **[WINDOWS_CLIENT_1.2.42_REBUILD.txt](./WINDOWS_CLIENT_1.2.42_REBUILD.txt)**.
 
-WorkshopOS runs your shop’s day-to-day work on **your own server** — and can also run as a **home / side-hustle** profile with a slimmer nav:
+```powershell
+# On Windows — push GitHub (main + v1.2.42) + Setup.exe + Release notes
+powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.42.ps1
+```
 
-- Repair tickets, customers, devices, quotes, invoices, inventory, purchasing, refurbished stock, calendar, reports, backups, and staff roles
-- **Home / side hustle mode** — Settings → App (or first-run setup): slim nav, guided job intake, job templates, Parts + Money, beginner tips
-- **Business expenses** — GST treatments, suppliers, recurring drafts, CSV export for your accountant ([docs/SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md#using-expenses))
-- **Encrypted API credentials** under **Settings → Integrations** — WooCommerce, POS/Square, OpenAI, Twilio, SMTP, IMEI, shipping ([docs/SETTINGS_AND_SECURITY.md](docs/SETTINGS_AND_SECURITY.md))
-- **POS register** (admin-enabled) with AU EFTPOS guidance — [docs/POS_EFTPOS.md](docs/POS_EFTPOS.md)
-- **WordPress / 10Web website API** — WorkshopOS is the source of truth for public quotes, bookings, Sell Your Tech, customer portal, and refurbished listings ([docs/WORDPRESS_INTEGRATION.md](docs/WORDPRESS_INTEGRATION.md))
-- A **Windows desktop app** on each shop PC
-- A **central server** (Docker) on a Linux PC, NAS, VM, WSL, or **Raspberry Pi 3B+** ([docs/RASPBERRY_PI.md](docs/RASPBERRY_PI.md))
+```bash
+# Server (Linux / WSL / NAS)
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
+```
 
-Nothing is required from a SaaS cloud — data stays on your machine / LAN.
+## 1.2.42 highlights
 
-### What’s new in 1.2.41
+- TechBench NQ login with **PIN keypad** or password
+- Optional owner PIN at first-run setup
+- Keeps 1.2.41 home / side-hustle workshop profile (no board-level PCB scope)
 
-| Area | Change |
-| --- | --- |
-| Home profile | Full shop ↔ Home / side hustle toggle (setup + Settings → App) |
-| Slim nav | Home hides POS, bookings, multi-site, staff, fitment, etc. until Full shop |
-| Guided intake | Step labels, job templates, solo (no tech assign) on New repair |
-| Parts / Money | Inventory + Reports retitled; simple money summary API |
-| Tips | Dismissible beginner tips on Home, New repair, Parts |
-| Version | API + client **1.2.41** |
+## Docs
 
-Carries forward 1.2.40: fitment, offline sync, multi-site locations/bins.
+- [docs/INSTALL.md](./docs/INSTALL.md)
+- [SPEC.md](./SPEC.md) (web M1 notes — optional preview in `apps/web`)
+- [docs/GITHUB_SYNC.md](./docs/GITHUB_SYNC.md)
+
+`apps/web` remains available for browser testing; it is **not** the production shop client.

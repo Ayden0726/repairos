@@ -123,6 +123,7 @@ public sealed class WorkshopDbContext : DbContext
             e.Property(x => x.Email).HasMaxLength(320).IsRequired();
             e.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
             e.Property(x => x.PasswordHash).IsRequired();
+            e.Property(x => x.PinHash);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
             e.HasOne(x => x.Role).WithMany(r => r.Users).HasForeignKey(x => x.RoleId);
             e.HasOne(x => x.Location).WithMany(l => l.Users).HasForeignKey(x => x.LocationId);

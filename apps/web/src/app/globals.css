@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Charcoal workshop bench + teal signal — TechBench NQ */
+    --background: 210 18% 8%;
+    --foreground: 165 25% 96%;
+    --card: 210 16% 11%;
+    --card-foreground: 165 25% 96%;
+    --popover: 210 16% 11%;
+    --popover-foreground: 165 25% 96%;
+    --primary: 168 72% 42%;
+    --primary-foreground: 210 20% 8%;
+    --secondary: 210 14% 16%;
+    --secondary-foreground: 165 20% 92%;
+    --muted: 210 12% 14%;
+    --muted-foreground: 200 10% 62%;
+    --accent: 168 28% 18%;
+    --accent-foreground: 168 60% 78%;
+    --destructive: 4 78% 58%;
+    --border: 210 12% 18%;
+    --input: 210 12% 18%;
+    --ring: 168 72% 42%;
+    --radius: 0.85rem;
+    --sidebar: 210 20% 6%;
+    --sidebar-foreground: 165 18% 90%;
+    --sidebar-primary: 168 72% 42%;
+    --sidebar-primary-foreground: 210 20% 8%;
+    --sidebar-accent: 210 14% 12%;
+    --sidebar-accent-foreground: 165 18% 92%;
+    --sidebar-border: 210 12% 14%;
+    --sidebar-ring: 168 72% 42%;
+    --chart-1: 168 72% 42%;
+    --chart-2: 198 55% 48%;
+    --chart-3: 32 80% 55%;
+    --chart-4: 200 40% 55%;
+    --chart-5: 140 35% 45%;
+    --surface-glow: 168 60% 35%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body), system-ui, sans-serif;
+    background-image:
+      radial-gradient(
+        ellipse 90% 55% at 8% -10%,
+        hsl(var(--surface-glow) / 0.22),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 100% 0%,
+        hsl(198 50% 30% / 0.12),
+        transparent 50%
+      ),
+      linear-gradient(180deg, hsl(210 18% 9%), hsl(210 18% 7%));
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  .font-display {
+    font-family: var(--font-display), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .animate-enter {
+    animation: enter-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-enter-delay-1 {
+    animation-delay: 0.06s;
+  }
+  .animate-enter-delay-2 {
+    animation-delay: 0.12s;
+  }
+  .animate-enter-delay-3 {
+    animation-delay: 0.18s;
+  }
+  .animate-enter-delay-4 {
+    animation-delay: 0.24s;
+  }
+
+  .animate-fade {
+    animation: fade-in 0.4s ease both;
+  }
+
+  .pressable {
+    transition:
+      transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.18s ease,
+      background-color 0.18s ease;
+  }
+  .pressable:active {
+    transform: scale(0.97);
+  }
+
+  .glass-panel {
+    background: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(14px);
+    border: 1px solid hsl(var(--border) / 0.9);
+  }
+
+  .bench-grid {
+    background-image:
+      linear-gradient(hsl(210 12% 18% / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(210 12% 18% / 0.35) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}
+
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-enter,
+  .animate-fade,
+  .pressable {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -22,9 +22,17 @@ public sealed record SetupRequest(
     string? AccentColour,
     /// <summary>FullShop (default) or Home — side-hustle / beginner profile.</summary>
     string? WorkshopStyle = null,
-    bool ShowBeginnerTips = true);
+    bool ShowBeginnerTips = true,
+    /// <summary>Optional 4–8 digit owner PIN for tablet sign-in.</summary>
+    string? OwnerPin = null);
 
 public sealed record LoginRequest(string Email, string Password);
+
+/// <summary>Owner/staff PIN sign-in for bench tablets (4–8 digits).</summary>
+public sealed record PinLoginRequest(string Pin);
+
+/// <summary>Set or clear the signed-in user's PIN. Null/empty clears it.</summary>
+public sealed record SetPinRequest(string? Pin);
 
 public sealed record RefreshRequest(string RefreshToken);
 

@@ -9,13 +9,13 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-github.ps1
-  powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-github.ps1 -Tag v1.2.38
+  powershell -ExecutionPolicy Bypass -File .\scripts\sync-to-github.ps1 -Tag v1.2.42
 #>
 param(
   [string]$RemoteUrl = "https://github.com/Ayden0726/repairos.git",
   [string]$Branch = "main",
-  [string]$Tag = "v1.2.38",
-  [string]$Message = "WorkshopOS 1.2.38: encryption rewrap, calendar bookings, IMEI decrypt fix",
+  [string]$Tag = "v1.2.42",
+  [string]$Message = "WorkshopOS 1.2.42: TechBench NQ PIN login + native client",
   [switch]$SkipTag,
   [switch]$DryRun
 )

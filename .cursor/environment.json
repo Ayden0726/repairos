@@ -1,0 +1,5 @@
+{
+  "name": "WorkshopOS",
+  "install": "bash scripts/cloud-install.sh",
+  "start": "bash scripts/cloud-start.sh"
+}

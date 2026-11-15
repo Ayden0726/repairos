@@ -155,6 +155,13 @@ public sealed class SetupService : ISetupService
             Status = UserStatus.Active
         };
         owner.PasswordHash = _tokens.HashPassword(owner, request.OwnerPassword);
+        if (!string.IsNullOrWhiteSpace(request.OwnerPin))
+        {
+            var pin = request.OwnerPin.Trim();
+            if (pin.Length is < 4 or > 8 || !pin.All(char.IsDigit))
+                throw new ValidationAppException("Owner PIN must be 4–8 digits.");
+            owner.PinHash = _tokens.HashPassword(owner, pin);
+        }
         _db.Users.Add(owner);
         await _db.SaveChangesAsync(ct);
 
@@ -232,6 +239,59 @@ public sealed class AuthService : IAuthService
             throw new UnauthorizedAppException();
         }
 
+        return await IssueSessionAsync(user, ip, userAgent, "auth.login", ct);
+    }
+
+    public async Task<AuthResponse> LoginWithPinAsync(PinLoginRequest request, string? ip, string? userAgent, CancellationToken ct = default)
+    {
+        var pin = (request.Pin ?? string.Empty).Trim();
+        if (pin.Length is < 4 or > 8 || !pin.All(char.IsDigit))
+            throw new UnauthorizedAppException();
+
+        // Prefer the shop owner for single-PIN bench tablets; fall back to any active user with a PIN.
+        var candidates = await _db.Users.Include(u => u.Role).ThenInclude(r => r.Permissions)
+            .Where(u => u.ArchivedAt == null && u.Status == UserStatus.Active && u.PinHash != null)
+            .OrderByDescending(u => u.IsOwner)
+            .ThenBy(u => u.CreatedAt)
+            .ToListAsync(ct);
+
+        var user = candidates.FirstOrDefault(u => _tokens.VerifyPin(u, pin));
+        if (user is null)
+        {
+            await _audit.WriteAsync(null, "auth.pin_login_failed", "User", "pin", ip: ip, userAgent: userAgent, ct: ct);
+            throw new UnauthorizedAppException();
+        }
+
+        return await IssueSessionAsync(user, ip, userAgent, "auth.pin_login", ct);
+    }
+
+    public async Task SetPinAsync(Guid userId, SetPinRequest request, CancellationToken ct = default)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.ArchivedAt == null, ct)
+            ?? throw new UnauthorizedAppException();
+        var pin = request.Pin?.Trim();
+        if (string.IsNullOrEmpty(pin))
+        {
+            user.PinHash = null;
+        }
+        else
+        {
+            if (pin.Length is < 4 or > 8 || !pin.All(char.IsDigit))
+                throw new ValidationAppException("PIN must be 4–8 digits.");
+            user.PinHash = _tokens.HashPassword(user, pin);
+        }
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await _audit.WriteAsync(userId, "auth.pin_set", "User", userId.ToString(), ct: ct);
+    }
+
+    private async Task<AuthResponse> IssueSessionAsync(
+        AppUser user,
+        string? ip,
+        string? userAgent,
+        string auditAction,
+        CancellationToken ct)
+    {
         user.LastLoginAt = DateTimeOffset.UtcNow;
         user.LastLoginIp = ip;
         var perms = GetPermissions(user);
@@ -245,7 +305,7 @@ public sealed class AuthService : IAuthService
             CreatedByIp = ip
         });
         await _db.SaveChangesAsync(ct);
-        await _audit.WriteAsync(user.Id, "auth.login", "User", user.Id.ToString(), ip: ip, userAgent: userAgent, ct: ct);
+        await _audit.WriteAsync(user.Id, auditAction, "User", user.Id.ToString(), ip: ip, userAgent: userAgent, ct: ct);
 
         var business = await DbSeed.GetSettingAsync<BusinessProfileDto?>(_db, SettingKeys.BusinessProfile, null, ct);
         return new AuthResponse(access, refresh, expires, ToUserDto(user, perms, business));

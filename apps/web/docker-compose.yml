@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: techbench
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: techbench
+    volumes:
+      - techbench_pg:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techbench -d techbench"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://techbench:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/techbench?schema=public
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET 32+ chars}
+      UPLOAD_ROOT: /data/uploads
+      SEED_DEMO: ${SEED_DEMO:-false}
+      SEED_OWNER_EMAIL: ${SEED_OWNER_EMAIL:-}
+      SEED_OWNER_PASSWORD: ${SEED_OWNER_PASSWORD:-}
+      SEED_OWNER_PIN: ${SEED_OWNER_PIN:-}
+      SEED_OWNER_NAME: ${SEED_OWNER_NAME:-Owner}
+      TZ: Australia/Brisbane
+    ports:
+      - "${WEB_PORT:-3847}:3847"
+    volumes:
+      - techbench_uploads:/data/uploads
+
+volumes:
+  techbench_pg:
+  techbench_uploads:

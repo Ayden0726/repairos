@@ -420,6 +420,9 @@ namespace WorkshopOS.Infrastructure.Persistence.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("text");
 
+                    b.Property<string>("PinHash")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 

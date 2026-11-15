@@ -72,6 +72,9 @@
         <PasswordBox Header="Password" PasswordChanged="OwnerPassword_PasswordChanged" />
         <TextBlock Text="At least 10 characters with upper, lower and a number."
                    Foreground="{ThemeResource WorkshopTextSecondaryBrush}" FontSize="12" />
+        <PasswordBox Header="Workshop PIN (optional, 4–8 digits)" PasswordChanged="OwnerPin_PasswordChanged" />
+        <TextBlock Text="PIN is for quick tablet sign-in on the bench. Leave blank to skip."
+                   Foreground="{ThemeResource WorkshopTextSecondaryBrush}" FontSize="12" />
         <TextBlock Text="{x:Bind ViewModel.Error, Mode=OneWay}"
                    Foreground="{ThemeResource WorkshopDangerBrush}" TextWrapping="Wrap" />
         <Button Content="Complete setup" Command="{x:Bind ViewModel.CompleteCommand}" Style="{StaticResource AccentButtonStyle}" />

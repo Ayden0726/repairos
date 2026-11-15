@@ -24,6 +24,12 @@ public sealed partial class SetupPage : Page
             ViewModel.OwnerPassword = box.Password;
     }
 
+    private void OwnerPin_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is PasswordBox box)
+            ViewModel.OwnerPin = box.Password;
+    }
+
     private void WorkshopStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (WorkshopStyleCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)

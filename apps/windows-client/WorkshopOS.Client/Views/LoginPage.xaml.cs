@@ -10,6 +10,7 @@ namespace WorkshopOS.Client.Views;
 public sealed partial class LoginPage : Page
 {
     public LoginViewModel ViewModel { get; }
+    private bool _pinMode = true;
 
     public LoginPage()
     {
@@ -20,10 +21,8 @@ public sealed partial class LoginPage : Page
         Loaded += (_, _) =>
         {
             SyncThemeToggle();
-            if (ViewModel.HasPrefillEmail)
-                PasswordBox.Focus(FocusState.Programmatic);
-            else
-                EmailBox.Focus(FocusState.Programmatic);
+            ApplyModeUi();
+            RefreshPinDots();
         };
     }
 
@@ -40,6 +39,60 @@ public sealed partial class LoginPage : Page
         if (!ViewModel.LoginCommand.CanExecute(null)) return;
         ViewModel.LoginCommand.Execute(null);
         e.Handled = true;
+    }
+
+    private void ModePin_Click(object sender, RoutedEventArgs e)
+    {
+        _pinMode = true;
+        ViewModel.UsePinMode();
+        ApplyModeUi();
+    }
+
+    private void ModePassword_Click(object sender, RoutedEventArgs e)
+    {
+        _pinMode = false;
+        ViewModel.UsePasswordMode();
+        ApplyModeUi();
+        if (ViewModel.HasPrefillEmail)
+            PasswordBox.Focus(FocusState.Programmatic);
+        else
+            EmailBox.Focus(FocusState.Programmatic);
+    }
+
+    private void ApplyModeUi()
+    {
+        PinPanel.Visibility = _pinMode ? Visibility.Visible : Visibility.Collapsed;
+        PasswordPanel.Visibility = _pinMode ? Visibility.Collapsed : Visibility.Visible;
+        var accent = (Style)Application.Current.Resources["AccentButtonStyle"];
+        PinModeBtn.Style = _pinMode ? accent : null;
+        PasswordModeBtn.Style = _pinMode ? null : accent;
+    }
+
+    private void PinDigit_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string digit })
+        {
+            ViewModel.AppendPinDigit(digit);
+            RefreshPinDots();
+        }
+    }
+
+    private void PinClear_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.ClearPin();
+        RefreshPinDots();
+    }
+
+    private async void PinGo_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.LoginWithPinCommand.ExecuteAsync(null);
+        RefreshPinDots();
+    }
+
+    private void RefreshPinDots()
+    {
+        var n = ViewModel.Pin.Length;
+        PinDots.Text = n == 0 ? "····" : new string('•', Math.Max(4, n));
     }
 
     private void ChangeServer_Click(object sender, RoutedEventArgs e)

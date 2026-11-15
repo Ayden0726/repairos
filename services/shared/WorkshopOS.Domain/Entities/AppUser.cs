@@ -10,6 +10,8 @@ public class AppUser
     public string UserName { get; set; } = string.Empty;
     public string NormalizedUserName { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    /// <summary>Optional bcrypt/Identity hash of a 4–8 digit workshop PIN.</summary>
+    public string? PinHash { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public Guid RoleId { get; set; }

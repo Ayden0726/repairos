@@ -17,10 +17,12 @@ public interface ISetupService
 public interface IAuthService
 {
     Task<AuthResponse> LoginAsync(LoginRequest request, string? ip, string? userAgent, CancellationToken ct = default);
+    Task<AuthResponse> LoginWithPinAsync(PinLoginRequest request, string? ip, string? userAgent, CancellationToken ct = default);
     Task<AuthResponse> RefreshAsync(string refreshToken, string? ip, CancellationToken ct = default);
     Task LogoutAsync(Guid userId, string? refreshToken, CancellationToken ct = default);
     Task<UserDto> GetMeAsync(Guid userId, CancellationToken ct = default);
     Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default);
+    Task SetPinAsync(Guid userId, SetPinRequest request, CancellationToken ct = default);
 }
 
 public interface ISettingsService

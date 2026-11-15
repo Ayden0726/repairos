@@ -32,6 +32,10 @@ public sealed class TokenService
     public bool VerifyPassword(AppUser user, string password) =>
         _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password) != PasswordVerificationResult.Failed;
 
+    public bool VerifyPin(AppUser user, string pin) =>
+        !string.IsNullOrEmpty(user.PinHash)
+        && _passwordHasher.VerifyHashedPassword(user, user.PinHash, pin) != PasswordVerificationResult.Failed;
+
     public (string Token, DateTimeOffset ExpiresAt) CreateAccessToken(AppUser user, IEnumerable<string> permissions)
     {
         var expires = DateTimeOffset.UtcNow.AddMinutes(_options.AccessTokenMinutes);

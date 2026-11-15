@@ -7,7 +7,13 @@ Server install: [docs/INSTALL.md](../../docs/INSTALL.md) (`get-workshopos.sh`).
 
 ---
 
-## Maintainer: build from source
+## Maintainer: build from source (1.2.42)
+
+**Full command sheet:** [`WINDOWS_CLIENT_1.2.42_REBUILD.txt`](../../WINDOWS_CLIENT_1.2.42_REBUILD.txt) · [`BUILD_NATIVE.md`](../../BUILD_NATIVE.md)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.42.ps1
+```
 
 Build and run on **Windows 10 version 1809+** or **Windows 11**, **64-bit only**.  
 This project **cannot** be built on Linux — use a Windows PC or the `windows-latest` GitHub Actions job.
@@ -68,7 +74,7 @@ dotnet run --project WorkshopOS.Client\WorkshopOS.Client.csproj
 
 On launch (**Client 1.2.16+**):
 
-1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.41** (from assembly version). No “Connecting to server…” splash — Bootstrap is never the initial page.
+1. **Always** opens **ServerConnect** (pairing code / Find on network / URL). Banner shows **Client 1.2.42** (from assembly version). No “Connecting to server…” splash — Bootstrap is never the initial page.
 2. After you connect successfully → **Setup** (first-run shop + owner) or **Login**.
 
 Connect options on ServerConnect:

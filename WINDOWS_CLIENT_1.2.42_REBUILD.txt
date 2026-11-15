@@ -1,0 +1,110 @@
+TechBench NQ / WorkshopOS — native Windows app 1.2.42
+=====================================================
+
+This is the REAL desktop app (WinUI 3), not the browser preview.
+
+Architecture
+------------
+  WorkshopOS-Setup-1.2.42.exe   (Windows client)
+           |
+           v
+  Docker server API :5088  +  PostgreSQL
+           |
+           v
+  Pairing code at http://<server>:5088/connect
+
+1.2.42 changes (on 1.2.41 home workshop)
+----------------------------------------
+- TechBench NQ branded login
+- PIN keypad sign-in (tablet) + password (desktop)
+- Optional owner PIN during first-run setup
+- API: POST /api/auth/login/pin , PUT /api/auth/pin
+- Version stamp 1.2.42
+
+=====================================================
+A) INSTALL SERVER (Linux / WSL / NAS) — one command
+=====================================================
+
+curl -fsSL https://raw.githubusercontent.com/Ayden0726/repairos/main/scripts/get-workshopos.sh | bash
+
+# Or from a clone:
+cd docker && docker compose up -d --build
+
+Then open:  http://127.0.0.1:5088/connect
+Note the pairing code (e.g. WOS-AB12).
+
+Windows WSL2 shop PC:
+
+  powershell -ExecutionPolicy Bypass -File .\scripts\install-server-wsl.ps1
+
+=====================================================
+B) BUILD CLIENT + UPDATE GITHUB (Windows 10/11 x64)
+=====================================================
+
+Prereqs (once):
+  - Git for Windows (authenticated to GitHub — gh auth login or GCM)
+  - Visual Studio 2022 + "WinUI application development" workload
+  - .NET 8 SDK x64
+  - Optional: Inno Setup 6 (for Setup.exe)
+  - Optional: GitHub CLI `gh` (to attach zip/Setup.exe to the Release)
+
+From a Developer PowerShell for VS 2022:
+
+  cd C:\Users\ayden\src\repairos
+
+  # Recommended — pushes main, tags v1.2.42, builds Setup.exe, updates Release:
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.42.ps1
+
+  # Local build only (no GitHub):
+  powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-client-1.2.42.ps1 -SkipGitHub
+
+  # Or packaging only:
+  powershell -ExecutionPolicy Bypass -File .\packaging\build-client.ps1 `
+    -Configuration Release -Version 1.2.42
+
+What rebuild-client-1.2.42.ps1 updates on GitHub:
+  - Push branch main to https://github.com/Ayden0726/repairos
+  - Tag v1.2.42 (triggers .github/workflows/release.yml)
+  - Release title/notes for 1.2.42 (when gh is available)
+  - Uploads WorkshopOS-Client-*.zip and WorkshopOS-Setup-*.exe to the Release
+
+Outputs:
+  packaging\dist\WorkshopOS-Client-win-x64-v1.2.42.zip
+  packaging\dist\WorkshopOS-Setup-1.2.42.exe   (if Inno installed)
+  https://github.com/Ayden0726/repairos/releases/tag/v1.2.42
+
+Dev run (no packaging):
+
+  cd apps\windows-client
+  dotnet restore WorkshopOS.Client\WorkshopOS.Client.csproj
+  dotnet run --project WorkshopOS.Client\WorkshopOS.Client.csproj -c Release -p:Platform=x64
+
+=====================================================
+C) USE THE APP
+=====================================================
+
+1. Install/run WorkshopOS-Setup-1.2.42.exe (or unzip the portable zip)
+2. Enter pairing code / Find on network / paste http://127.0.0.1:5088
+3. First run: complete Setup (business + owner + optional PIN)
+4. Sign in with PIN keypad or email/password
+5. Home workshop nav for day-to-day repairs
+
+=====================================================
+D) RELEASE TAG (maintainers)
+=====================================================
+
+Preferred: let rebuild-client-1.2.42.ps1 push main + tag + Release notes.
+
+Manual:
+
+  git tag -f v1.2.42 -m "WorkshopOS / TechBench NQ 1.2.42"
+  git push -u origin main
+  git push -f origin v1.2.42
+
+GitHub Actions workflow `.github/workflows/release.yml` builds
+server tarball + Windows client zip on tag push (needs Windows runner).
+
+Also see docs/GITHUB_SYNC.md.
+
+NOTE: This Linux/cloud agent cannot compile WinUI. Build the client
+on a Windows PC or via GitHub Actions windows-latest.
